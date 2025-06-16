@@ -3,7 +3,7 @@ package router
 import (
 	"net/http"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/kratofl/budget-api/internal/resource/user"
 	"github.com/kratofl/budget-api/internal/router/middleware"
