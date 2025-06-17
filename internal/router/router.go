@@ -20,7 +20,6 @@ func New(l *zerolog.Logger, v *validator.Validate, db *gorm.DB) *chi.Mux {
 	r.Route("/api/v1", func(r chi.Router) {
 		initializeUserRoutes(r, l, v, db)
 	})
-
 	return r
 }
 
