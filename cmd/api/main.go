@@ -27,7 +27,8 @@ func main() {
 	}
 	l, err := logging.New(*c)
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to load logger: %v", err)
+		return
 	}
 	defer l.Close()
 
