@@ -12,13 +12,11 @@ import (
 
 type Handler struct {
 	handler http.Handler
-	logger  *zerolog.Logger
 }
 
-func NewHandler(h http.HandlerFunc, l *zerolog.Logger) *Handler {
+func NewHandler(h http.HandlerFunc) *Handler {
 	return &Handler{
 		handler: h,
-		logger:  l,
 	}
 }
 
@@ -47,6 +45,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w2 := &responseStats{w: w}
 
 	h.handler.ServeHTTP(w2, r2)
+	logger := zerolog.Ctx(r.Context())
 
 	le.Latency = time.Since(start)
 	if rcc.err == nil && rcc.r != nil {
@@ -60,8 +59,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		le.Status = http.StatusOK
 	}
 	le.ResponseHeaderSize, le.ResponseBodySize = w2.size()
-	h.logger.Info().
-		Str("request_id", le.RequestID).
+	logger.Info().
 		Time("received_time", le.ReceivedTime).
 		Str("method", le.RequestMethod).
 		Str("url", le.RequestURL).

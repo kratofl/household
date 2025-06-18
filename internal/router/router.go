@@ -8,25 +8,26 @@ import (
 	"github.com/kratofl/budget-api/internal/resource/user"
 	"github.com/kratofl/budget-api/internal/router/middleware"
 	"github.com/kratofl/budget-api/internal/router/middleware/requestlog"
-	"github.com/rs/zerolog"
+	"github.com/kratofl/budget-api/pkg/config"
 	"gorm.io/gorm"
 )
 
-func New(l *zerolog.Logger, v *validator.Validate, db *gorm.DB) *chi.Mux {
+func New(c *config.Config, v *validator.Validate, db *gorm.DB) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.ContentTypeJSON)
+	r.Use(middleware.LoggingMiddleware(c))
 
 	r.Route("/api/v1", func(r chi.Router) {
-		initializeUserRoutes(r, l, v, db)
+		initializeUserRoutes(r, c, v, db)
 	})
 	return r
 }
 
-func initializeUserRoutes(r chi.Router, l *zerolog.Logger, v *validator.Validate, db *gorm.DB) {
+func initializeUserRoutes(r chi.Router, c *config.Config, v *validator.Validate, db *gorm.DB) {
 	r.Route("/users", func(r chi.Router) {
-		userAPI := user.New(l, v, db)
-		r.Method(http.MethodGet, "/", requestlog.NewHandler(userAPI.List, l))
-		r.Method(http.MethodGet, "/{id}", requestlog.NewHandler(userAPI.Read, l))
+		userAPI := user.New(v, db)
+		r.Method(http.MethodGet, "/", requestlog.NewHandler(userAPI.List))
+		r.Method(http.MethodGet, "/{id}", requestlog.NewHandler(userAPI.Read))
 	})
 }

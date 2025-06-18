@@ -8,34 +8,30 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/kratofl/budget-api/pkg/ctx"
 	e "github.com/kratofl/budget-api/pkg/err"
-	l "github.com/kratofl/budget-api/pkg/logging"
 	v "github.com/kratofl/budget-api/pkg/validator"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 )
 
 type UserAPI struct {
-	logger     *zerolog.Logger
 	validator  *validator.Validate
 	repository *UserRepository
 }
 
-func New(logger *zerolog.Logger, validator *validator.Validate, db *gorm.DB) *UserAPI {
+func New(validator *validator.Validate, db *gorm.DB) *UserAPI {
 	return &UserAPI{
-		logger:     logger,
 		validator:  validator,
 		repository: NewUserRepository(db),
 	}
 }
 
 func (a *UserAPI) List(w http.ResponseWriter, r *http.Request) {
-	reqID := ctx.RequestID(r.Context())
+	logger := zerolog.Ctx(r.Context())
 
 	users, err := a.repository.List()
 	if err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespDBDataAccessFailure)
 		return
 	}
@@ -46,18 +42,18 @@ func (a *UserAPI) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(users.ToDto()); err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
 		return
 	}
 }
 
 func (a *UserAPI) Create(w http.ResponseWriter, r *http.Request) {
-	reqID := ctx.RequestID(r.Context())
+	logger := zerolog.Ctx(r.Context())
 
 	form := &UserCreateUpdateDTO{}
 	if err := json.NewDecoder(r.Body).Decode(form); err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespJSONDecodeFailure)
 		return
 	}
@@ -65,7 +61,7 @@ func (a *UserAPI) Create(w http.ResponseWriter, r *http.Request) {
 	if err := a.validator.Struct(form); err != nil {
 		respBody, err := json.Marshal(v.ToErrResponse(err))
 		if err != nil {
-			a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+			logger.Error().Err(err).Msg("")
 			e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
 			return
 		}
@@ -79,17 +75,17 @@ func (a *UserAPI) Create(w http.ResponseWriter, r *http.Request) {
 
 	user, err := a.repository.Create(newUser)
 	if err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespDBDataInsertFailure)
 		return
 	}
 
-	a.logger.Info().Str(l.KeyReqID, reqID).Str("id", user.Id.String()).Msg("new user created")
+	logger.Info().Str("id", user.Id.String()).Msg("new user created")
 	w.WriteHeader(http.StatusCreated)
 }
 
 func (a *UserAPI) Read(w http.ResponseWriter, r *http.Request) {
-	reqID := ctx.RequestID(r.Context())
+	logger := zerolog.Ctx(r.Context())
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -104,21 +100,21 @@ func (a *UserAPI) Read(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespDBDataAccessFailure)
 		return
 	}
 
 	dto := user.ToDto()
 	if err := json.NewEncoder(w).Encode(dto); err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
 		return
 	}
 }
 
 func (a *UserAPI) Update(w http.ResponseWriter, r *http.Request) {
-	reqID := ctx.RequestID(r.Context())
+	logger := zerolog.Ctx(r.Context())
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -128,7 +124,7 @@ func (a *UserAPI) Update(w http.ResponseWriter, r *http.Request) {
 
 	form := &UserCreateUpdateDTO{}
 	if err := json.NewDecoder(r.Body).Decode(form); err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespJSONDecodeFailure)
 		return
 	}
@@ -136,7 +132,7 @@ func (a *UserAPI) Update(w http.ResponseWriter, r *http.Request) {
 	if err := a.validator.Struct(form); err != nil {
 		respBody, err := json.Marshal(v.ToErrResponse(err))
 		if err != nil {
-			a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+			logger.Error().Err(err).Msg("")
 			e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
 			return
 		}
@@ -150,7 +146,7 @@ func (a *UserAPI) Update(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.repository.Update(user)
 	if err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespDBDataUpdateFailure)
 		return
 	}
@@ -159,11 +155,11 @@ func (a *UserAPI) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.logger.Info().Str(l.KeyReqID, reqID).Str("id", id.String()).Msg("book updated")
+	logger.Info().Str("id", id.String()).Msg("book updated")
 }
 
 func (a *UserAPI) Delete(w http.ResponseWriter, r *http.Request) {
-	reqID := ctx.RequestID(r.Context())
+	logger := zerolog.Ctx(r.Context())
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -173,7 +169,7 @@ func (a *UserAPI) Delete(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := a.repository.Delete(id)
 	if err != nil {
-		a.logger.Error().Str(l.KeyReqID, reqID).Err(err).Msg("")
+		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespDBDataRemoveFailure)
 		return
 	}
@@ -182,5 +178,5 @@ func (a *UserAPI) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.logger.Info().Str(l.KeyReqID, reqID).Str("id", id.String()).Msg("book deleted")
+	logger.Info().Str("id", id.String()).Msg("book deleted")
 }
