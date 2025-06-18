@@ -25,7 +25,7 @@ func main() {
 		log.Fatalf("failed loading env: %v", err)
 		return
 	}
-	l, err := logging.New(*c)
+	l, err := logging.New(c)
 	if err != nil {
 		log.Fatalf("failed to load logger: %v", err)
 		return
@@ -47,7 +47,7 @@ func main() {
 		return
 	}
 
-	r := router.New(&l.Logger, v, db)
+	r := router.New(c, v, db)
 
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%d", c.Server.Port),

@@ -16,7 +16,7 @@ type AppLogger struct {
 	file *os.File
 }
 
-func New(config config.Config) (*AppLogger, error) {
+func New(config *config.Config) (*AppLogger, error) {
 	logLevel := zerolog.InfoLevel
 	if config.Server.Debug {
 		logLevel = zerolog.TraceLevel
