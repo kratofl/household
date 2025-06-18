@@ -33,7 +33,6 @@ func main() {
 	defer l.Close()
 
 	v := validator.New()
-
 	var logLevel gormlogger.LogLevel
 	if c.DB.Debug {
 		logLevel = gormlogger.Info
