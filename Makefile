@@ -1,7 +1,7 @@
 ENV ?= local
 ENV_FILE = .env.$(ENV)
 COMPOSE_FILE = ./deployments/docker-compose.$(ENV).yml
-PROJECT_NAME = budget_app
+PROJECT_NAME = household
 
 .PHONY: up down db logs
 
