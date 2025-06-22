@@ -25,6 +25,7 @@ go.sum
 logs/
 *.log
 *.tmp
+tmp/
 
 # Docker volumes (optional if mounted locally)
 volumes/
