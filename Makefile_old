@@ -1,0 +1,89 @@
+# Liste deiner Microservices
+SERVICES := db budget-api
+ENV ?= prod
+IMAGE_TAG ?= $(ENV)
+PROJECT_NAME = household
+
+# ----------- Build Targets -----------
+
+.PHONY: build-all
+build-all: $(SERVICES)
+
+.PHONY: build
+build:
+	docker build \
+	--target $(ENV) \
+	-t $(PROJECT_NAME)-$(SERVICE):$(IMAGE_TAG) \
+	$(SERVICE)
+
+.PHONY: $(SERVICES)
+$(SERVICES):
+	docker build \
+	--target $(ENV) \
+	-t $@:$(IMAGE_TAG) $@
+
+# ----------- Compose Targets -----------
+
+.PHONY: up
+up:
+	docker compose \
+	-f ./deployments/docker-compose.yml \
+	-f ./deployments/$(ENV)/docker-compose.$(ENV).yml \
+	-p $(PROJECT_NAME) \
+	up $(SERVICES) \
+	-d
+
+.PHONY: down
+down:
+	docker compose \
+	-f ./deployments/docker-compose.yml \
+	-f ./deployments/$(ENV)/docker-compose.$(ENV).yml \
+	-p $(PROJECT_NAME) \
+	down
+
+.PHONY: compose-build
+compose-build:
+	docker compose \
+	-f ./deployments/docker-compose.yml \
+	-f ./deployments/$(ENV)/docker-compose.$(ENV).yml \
+	-p $(PROJECT_NAME) \
+	build \
+	$(SERVICES)
+
+# ----------- Restart & Rebuild Einzelservice -----------
+
+# Rebuild und Restart eines einzelnen Service (z.B. make restart SERVICE=budget-api)
+.PHONY: restart
+restart:
+	docker compose \
+	-f ./deployments/docker-compose.yml \
+	-f ./deployments/$(ENV)/docker-compose.$(ENV).yml \
+	-p $(PROJECT_NAME) \
+	up -d --no-deps --build --force-recreate \
+	$(SERVICE)
+
+# Nur Restart eines einzelnen Service (ohne Rebuild)
+.PHONY: restart-only
+restart-only:
+	docker compose \
+	-f ./deployments/docker-compose.yml \
+	-f ./deployments/$(ENV)/docker-compose.$(ENV).yml \
+	-p $(PROJECT_NAME) \
+	restart \
+	$(SERVICE)
+
+# Nur Rebuild eines einzelnen Service (ohne Restart)
+.PHONY: rebuild
+rebuild:
+	docker compose \
+	-f ./deployments/docker-compose.yml \
+	-f ./deployments/$(ENV)/docker-compose.$(ENV).yml \
+	-p $(PROJECT_NAME) \
+	build \
+	$(SERVICE)
+
+# ----------- Utility -----------
+
+.PHONY: list
+list:
+	@echo "Verfügbare Services: $(SERVICES)"
