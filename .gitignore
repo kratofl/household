@@ -12,6 +12,7 @@ vendor/
 # Go mod cache
 .gocache/
 go.sum
+go.work.sum
 
 # Editor & IDE
 .idea/
