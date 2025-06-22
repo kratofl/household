@@ -1,11 +1,12 @@
-ENV ?= local
+ENV ?= dev
 ENV_FILE = ./deployments/$(ENV)/.env.$(ENV)
 COMPOSE_FILE = ./deployments/$(ENV)/docker-compose.$(ENV).yml
 PROJECT_NAME = household
 
 .PHONY: up down build logs mysql \
         restart-budget_api \
-        rebuild-budget_api
+        rebuild-budget_api \
+
 up:
 	docker compose -p $(PROJECT_NAME) --env-file $(ENV_FILE) -f $(COMPOSE_FILE) up -d
 
