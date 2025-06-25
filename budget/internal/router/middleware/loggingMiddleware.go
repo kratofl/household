@@ -3,10 +3,10 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/kratofl/budget-api/pkg/config"
-	ctxPkg "github.com/kratofl/budget-api/pkg/ctx"
-	e "github.com/kratofl/budget-api/pkg/err"
-	"github.com/kratofl/budget-api/pkg/logging"
+	"github.com/kratofl/household/budget/pkg/config"
+	ctxPkg "github.com/kratofl/household/budget/pkg/ctx"
+	e "github.com/kratofl/household/budget/pkg/err"
+	"github.com/kratofl/household/budget/pkg/logging"
 	"github.com/rs/zerolog"
 )
 

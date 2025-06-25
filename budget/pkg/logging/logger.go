@@ -5,7 +5,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/kratofl/budget-api/pkg/config"
+	"github.com/kratofl/household/budget/pkg/config"
 	"github.com/rs/zerolog"
 )
 

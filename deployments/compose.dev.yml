@@ -1,12 +1,12 @@
-name: ${DEV_PROJECT_NAME}
+name: ${PROJECT_NAME}-dev
 
 services:
   budget-api:
     build:
-      context: ../budget-api
+      context: ../budget
       target: dev
     volumes:
-      - ../budget-api:/app
+      - ../budget:/app
     env_file:
       - ./.env
       - ./.env.dev
