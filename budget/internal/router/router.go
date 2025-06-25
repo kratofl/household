@@ -5,10 +5,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
-	"github.com/kratofl/budget-api/internal/resource/user"
-	"github.com/kratofl/budget-api/internal/router/middleware"
-	"github.com/kratofl/budget-api/internal/router/middleware/requestlog"
-	"github.com/kratofl/budget-api/pkg/config"
+	"github.com/kratofl/household/budget/internal/resource/user"
+	"github.com/kratofl/household/budget/internal/router/middleware"
+	"github.com/kratofl/household/budget/internal/router/middleware/requestlog"
+	"github.com/kratofl/household/budget/pkg/config"
 	"gorm.io/gorm"
 )
 

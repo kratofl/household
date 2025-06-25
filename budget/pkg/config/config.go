@@ -7,8 +7,8 @@ import (
 )
 
 type Config struct {
-	Server ConfigServer `envPrefix:"SERVER_"`
-	DB     ConfigDb     `envPrefix:"DB_"`
+	Server ConfigServer `envPrefix:"BUDGET_API_SERVER_"`
+	DB     ConfigDb     `envPrefix:"BUDGET_API_DB_"`
 }
 
 type ConfigServer struct {

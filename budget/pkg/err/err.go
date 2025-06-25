@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kratofl/budget-api/pkg/ctx"
+	"github.com/kratofl/household/budget/pkg/ctx"
 )
 
 var (

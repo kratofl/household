@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kratofl/budget-api/pkg/ctx"
+	"github.com/kratofl/household/budget/pkg/ctx"
 	"github.com/rs/zerolog"
 )
 

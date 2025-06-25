@@ -11,9 +11,9 @@ import (
 	"syscall"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/kratofl/budget-api/internal/router"
-	"github.com/kratofl/budget-api/pkg/config"
-	"github.com/kratofl/budget-api/pkg/logging"
+	"github.com/kratofl/household/budget/internal/router"
+	"github.com/kratofl/household/budget/pkg/config"
+	"github.com/kratofl/household/budget/pkg/logging"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"

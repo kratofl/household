@@ -1,4 +1,4 @@
-module github.com/kratofl/budget-api
+module github.com/kratofl/household/budget
 
 go 1.24.4
 
