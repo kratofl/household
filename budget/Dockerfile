@@ -1,5 +1,5 @@
 # ---------- Build Stage ----------
-FROM golang:1.24.4-alpine AS builder
+FROM golang:1.24.5-alpine AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -7,7 +7,7 @@ COPY . .
 RUN go build -o app-binary ./cmd/api/main.go
 
 # ---------- Development Stage ----------
-FROM golang:1.24.4-alpine AS dev
+FROM golang:1.24.5-alpine AS dev
 WORKDIR /app
 RUN go install github.com/air-verse/air@latest
 COPY --from=builder /src .
