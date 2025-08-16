@@ -1,21 +1,25 @@
 # ---------- Build Stage ----------
-FROM golang:1.24.5-alpine AS builder
+FROM golang:1.25.0-alpine AS builder
 WORKDIR /src
-COPY go.mod go.sum ./
+
+COPY ../shared ./shared
+COPY ../budget ./budget
+WORKDIR /src/budget
 RUN go mod download
-COPY . .
-RUN go build -o app-binary ./cmd/api/main.go
+RUN go build -o /src/app-binary ./cmd/api/main.go
 
 # ---------- Development Stage ----------
-FROM golang:1.24.5-alpine AS dev
+FROM golang:1.25.0-alpine AS dev
 WORKDIR /app
 RUN go install github.com/air-verse/air@latest
 COPY --from=builder /src .
-COPY .air.toml ./
+# COPY budget/.air.toml /app/budget/:.air.toml
+WORKDIR /app/budget
 ENTRYPOINT ["air", "-c", ".air.toml"]
 
 # ---------- Production/Test Stage ----------
 FROM alpine:3.22 AS release
 WORKDIR /app
-COPY --from=builder /app/app-binary .
+COPY --from=builder /src/app-binary .
 ENTRYPOINT ["./app-binary"]
+

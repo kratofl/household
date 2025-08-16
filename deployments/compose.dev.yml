@@ -3,10 +3,10 @@ name: ${PROJECT_NAME}-dev
 services:
   budget-api:
     build:
-      context: ../budget
       target: dev
     volumes:
-      - ../budget:/app
+      - ../budget:/app/budget
+      - ../shared:/app/shared
     env_file:
       - ./.env
       - ./.env.dev
