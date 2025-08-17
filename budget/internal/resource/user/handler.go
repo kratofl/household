@@ -8,8 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	e "github.com/kratofl/household/budget/pkg/err"
-	v "github.com/kratofl/household/budget/pkg/validator"
+	e "github.com/kratofl/household/shared/pkg/err"
+	v "github.com/kratofl/household/shared/pkg/validator"
 	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 )

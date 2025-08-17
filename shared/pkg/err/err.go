@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kratofl/household/budget/pkg/ctx"
+	"github.com/kratofl/household/shared/pkg/ctx"
 )
 
 var (
@@ -31,7 +31,7 @@ type ProblemDetails struct {
 	Detail    string      `json:"detail,omitempty"`
 	Instance  string      `json:"instance,omitempty"`
 	Errors    interface{} `json:"errors,omitempty"`
-	RequestId string      `json:"requestId"`
+	RequestID string      `json:"requestId"`
 }
 
 func ServerError(w http.ResponseWriter, r *http.Request, title string, detail string) {
@@ -43,7 +43,7 @@ func ServerError(w http.ResponseWriter, r *http.Request, title string, detail st
 		Status:    http.StatusInternalServerError,
 		Title:     title,
 		Detail:    detail,
-		RequestId: ctx.RequestID(r.Context()),
+		RequestID: ctx.RequestID(r.Context()),
 	})
 }
 
@@ -56,7 +56,7 @@ func BadRequest(w http.ResponseWriter, r *http.Request, title string, detail str
 		Status:    http.StatusBadRequest,
 		Title:     title,
 		Detail:    detail,
-		RequestId: ctx.RequestID(r.Context()),
+		RequestID: ctx.RequestID(r.Context()),
 	})
 }
 
@@ -70,7 +70,7 @@ func WriteValidationProblem(w http.ResponseWriter, r *http.Request, title string
 		Status:    http.StatusBadRequest,
 		Title:     title,
 		Detail:    detail,
-		RequestId: ctx.RequestID(r.Context()),
+		RequestID: ctx.RequestID(r.Context()),
 		Errors:    reps,
 	})
 }

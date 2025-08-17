@@ -1,6 +1,5 @@
 name: ${PROJECT_NAME}
 services:
-
   # identity-api:
   #   build:
   #     context: ../identity
@@ -39,7 +38,8 @@ services:
 
   budget-api:
     build:
-      context: ../budget
+      context: ..
+      dockerfile: budget/Dockerfile
     container_name: budget-api
     depends_on:
       - budget-api-db
@@ -72,7 +72,7 @@ services:
     volumes:
       - budget-api_db_data:/var/lib/mysql
     networks:
-      - budget-api 
+      - budget-api
 
   # migrate:
   #   build:

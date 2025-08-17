@@ -8,7 +8,7 @@ import (
 	"github.com/kratofl/household/budget/internal/resource/user"
 	"github.com/kratofl/household/budget/internal/router/middleware"
 	"github.com/kratofl/household/budget/internal/router/middleware/requestlog"
-	"github.com/kratofl/household/budget/pkg/config"
+	"github.com/kratofl/household/shared/pkg/config"
 	"gorm.io/gorm"
 )
 

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	ctxPkg "github.com/kratofl/household/budget/pkg/ctx"
+	ctxPkg "github.com/kratofl/household/shared/pkg/ctx"
 )
 
 const requestIDHeaderKey = "X-Request-ID"
