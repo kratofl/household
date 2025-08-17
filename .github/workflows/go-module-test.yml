@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [budget]
+        service: [shared, budget, identity]
     steps:
       - uses: actions/checkout@v4
 
