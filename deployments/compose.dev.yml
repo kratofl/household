@@ -1,6 +1,16 @@
 name: ${PROJECT_NAME}-dev
 
 services:
+  identity-api:
+    build:
+      target: dev
+    volumes:
+      - ../identity:/app/identity
+      - ../shared:/app/shared
+    env_file:
+      - ./.env
+      - ./.env.dev
+
   budget-api:
     build:
       target: dev

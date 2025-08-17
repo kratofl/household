@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	c, err := config.New()
+	c, err := config.New("BUDGET")
 	if err != nil {
 		log.Fatalf("failed loading env: %v", err)
 		return
