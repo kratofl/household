@@ -22,10 +22,11 @@ help:
 # ----------------------
 .PHONY: core-up core-down
 core-up:
-    docker compose --env-file $(ENV_FILE) --env-file $(ENV_FILE_DEV) -f $(INFRA_FILE) --profile core --profile identity up -d
+	@echo ">> Starting core infra ($(CORE_PROFILES))..."
+	docker compose --env-file $(ENV_FILE) -f $(INFRA_FILE) --profile core --profile identity up -d
 
 core-down:
-    docker compose --env-file $(ENV_FILE) --env-file $(ENV_FILE_DEV) -f $(INFRA_FILE) --profile core --profile identity down
+	docker compose --env-file $(ENV_FILE) -f $(INFRA_FILE) --profile core --profile identity down
 
 # ----------------------
 # SERVICE-DEV (selektiv)
