@@ -7,8 +7,8 @@ import (
 )
 
 type Config struct {
-	Server ConfigServer `envPrefix:"BUDGET_API_SERVER_"`
-	DB     ConfigDb     `envPrefix:"BUDGET_API_DB_"`
+	Server ConfigServer `envPrefix:"API_SERVER_"`
+	DB     ConfigDb     `envPrefix:"API_DB_"`
 }
 
 type ConfigServer struct {
@@ -28,9 +28,11 @@ type ConfigDb struct {
 	Debug    bool   `env:"DEBUG"`
 }
 
-func New() (*Config, error) {
+func New(prefix string) (*Config, error) {
 	var c Config
-	if err := env.Parse(&c); err != nil {
+	if err := env.ParseWithOptions(&c, env.Options{
+		Prefix: prefix + "_",
+	}); err != nil {
 		return nil, err
 	}
 

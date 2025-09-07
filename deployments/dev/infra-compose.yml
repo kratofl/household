@@ -1,0 +1,43 @@
+name: ${PROJECT_NAME}
+
+services:
+  identity-api-db:
+    image: postgres:13.22
+    container_name: identity-api-db
+    environment:
+      POSTGRES_DB: ${IDENTITY_API_DB_DATABASE}
+      POSTGRES_USER: ${IDENTITY_API_DB_USER}
+      POSTGRES_PASSWORD: ${IDENTITY_API_DB_PASSWORD}
+    ports:
+      - "${IDENTITY_API_DB_PORT}:5432"
+    volumes:
+      - identity-api_db_data:/var/lib/postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    profiles: ["core","identity"]
+
+  budget-api-db:
+    image: mysql:latest
+    container_name: budget-api-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${BUDGET_API_MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${BUDGET_API_DB_DATABASE}
+      MYSQL_USER: ${BUDGET_API_DB_USER}
+      MYSQL_PASSWORD: ${BUDGET_API_DB_PASSWORD}
+    ports:
+      - "${BUDGET_API_DB_PORT}:3306"
+    volumes:
+      - budget-api_db_data:/var/lib/mysql
+    networks:
+      - budget-api
+    profiles: ["budget"]
+
+volumes:
+  budget-api_db_data:
+  identity-api_db_data:
+
+networks:
+  backend:
