@@ -4,16 +4,16 @@ WORKDIR /src
 
 COPY ../shared ./shared
 COPY ../budget ./budget
-WORKDIR /src/budget
+COPY ../identity/go.mod ./identity/go.mod
+COPY ./go.work .
 RUN go mod download
-RUN go build -o /src/app-binary ./cmd/api/main.go
+RUN go build -o /src/app-binary ./budget/cmd/api/main.go
 
 # ---------- Development Stage ----------
 FROM golang:1.25.0-alpine AS dev
 WORKDIR /app
 RUN go install github.com/air-verse/air@latest
 COPY --from=builder /src .
-# COPY budget/.air.toml /app/budget/:.air.toml
 WORKDIR /app/budget
 ENTRYPOINT ["air", "-c", ".air.toml"]
 
