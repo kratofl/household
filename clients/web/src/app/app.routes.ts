@@ -3,14 +3,14 @@ import {Routes} from '@angular/router';
 
 export const routes: Routes = [
     {
-        path: 'household',
-        children: [
-            {
-                path: 'budget',
-                loadChildren: () => import('./budget/budget.routes').then(m => m.BudgetRoutes),
-            }
-        ]
+        pathMatch: 'full',
+        path: '',
+        loadComponent: () => import('./app.component').then(m => m.AppComponent), // FIXME own home component
     },
-    { path: '', redirectTo: '/household/budget', pathMatch: 'full' },
-    { path: '**', redirectTo: '/household/budget' },
+    {
+        path: 'budget',
+        loadChildren: () => import('./features/budget/budget.routes').then(m => m.BudgetRoutes),
+    },
+    {path: '**', redirectTo: '/budget/dashboard'},
+    {path: '', redirectTo: '/budget/dashboard', pathMatch: 'full'},
 ];

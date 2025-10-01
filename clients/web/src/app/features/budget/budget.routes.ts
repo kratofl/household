@@ -9,7 +9,7 @@ export const BudgetRoutes: Routes = [
             {
                 path: 'dashboard',
                 loadComponent: () =>
-                    import('./dashboard/dashboard.component').then((m) => m.DashboardComponent),
+                    import('./dashboard/pages/dashboard-page/dashboard-page.component').then((m) => m.DashboardPageComponent),
             },
         ]
     }

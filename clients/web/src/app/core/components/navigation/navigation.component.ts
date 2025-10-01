@@ -1,15 +1,16 @@
-import {Component, inject} from "@angular/core";
+import {ChangeDetectionStrategy, Component, inject} from "@angular/core";
 import {MenuItem} from "primeng/api";
 import {Menu} from "primeng/menu";
 import {FaIconComponent} from "@fortawesome/angular-fontawesome";
 import {faHouse} from "@fortawesome/free-solid-svg-icons";
-import { Router } from '@angular/router';
+import {Router} from '@angular/router';
 
 
 @Component({
     selector: 'app-navigation',
     templateUrl: './navigation.component.html',
     styleUrl: './navigation.component.css',
+    changeDetection: ChangeDetectionStrategy.OnPush,
     imports: [
         Menu,
         FaIconComponent,
@@ -28,7 +29,7 @@ export class NavigationComponent {
                     {
                         label: 'Dashboard',
                         icon: 'pi pi-chart-bar',
-                        command: () => this.router.navigate(['/household/budget/dashboard'])
+                        command: () => this.router.navigate(['/budget/dashboard'])
                     },
                 ]
             },
