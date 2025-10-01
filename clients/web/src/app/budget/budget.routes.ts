@@ -1,7 +1,4 @@
 import {Routes} from '@angular/router';
-import {BudgetComponent} from "./budget.component";
-import {DashboardComponent} from "./dashboard/dashboard.component";
-
 
 export const BudgetRoutes: Routes = [
     {

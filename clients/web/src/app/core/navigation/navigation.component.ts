@@ -1,4 +1,4 @@
-import {Component, inject, OnInit} from "@angular/core";
+import {Component, inject} from "@angular/core";
 import {MenuItem} from "primeng/api";
 import {Menu} from "primeng/menu";
 import {FaIconComponent} from "@fortawesome/angular-fontawesome";
