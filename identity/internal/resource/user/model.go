@@ -14,7 +14,7 @@ type UserCreateUpdateDTO struct {
 }
 
 type User struct {
-	Id           uuid.UUID
+	Id           uuid.UUID `gorm:"primarykey"`
 	Name         string
 	Email        string
 	PasswordHash string
