@@ -1,0 +1,37 @@
+:host {
+    display: flex;
+    height: 100vh;
+}
+
+p-menu{
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    height: 100vh;
+}
+
+:host ::ng-deep .p-menu {
+    height: 100vh;
+}
+
+.navigation-title {
+    display: flex;
+    justify-content: center;
+    padding: 10px 1px 5px 1px;
+    border-bottom: 1px solid var(--p-menu-border-color);
+}
+
+.title {
+    font-size: large;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin: 0 5px;
+}
+
+.item-wrapper {
+    margin-left: 12px;
+}
+
+.sub-title {
+    margin: 0 5px;
+}

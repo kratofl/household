@@ -1,0 +1,13 @@
+.flex {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    background: transparent;
+    min-width: 250px;
+}
+
+.content {
+    overflow-y: auto;
+}
