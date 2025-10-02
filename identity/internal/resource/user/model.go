@@ -8,9 +8,10 @@ type UserDTO struct {
 	Email string `json:"email"`
 }
 
-type UserCreateUpdateDTO struct {
-	Name  string `json:"name" validate:"required,max=255"`
-	Email string `json:"email" validate:"required,max=255"`
+type UserCreateDTO struct {
+	Name     string `json:"name" validate:"required,max=255"`
+	Email    string `json:"email" validate:"required,max=255"`
+	Password string `json:"password" validate:"required,max=255"`
 }
 
 type User struct {
@@ -39,7 +40,7 @@ func (urs Users) ToDto() []*UserDTO {
 	return dtos
 }
 
-func (f *UserCreateUpdateDTO) ToModel() *User {
+func (f *UserCreateDTO) ToModel() *User {
 	return &User{
 		Name:  f.Name,
 		Email: f.Email,

@@ -10,8 +10,10 @@ import (
 	"strconv"
 	"syscall"
 
+	migratePostgres "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/kratofl/household/identity/internal/router"
 	"github.com/kratofl/household/shared/pkg/config"
+	"github.com/kratofl/household/shared/pkg/database"
 	"github.com/kratofl/household/shared/pkg/logging"
 	"github.com/kratofl/household/shared/pkg/validator"
 	"gorm.io/driver/postgres"
@@ -44,6 +46,21 @@ func main() {
 	db, err := gorm.Open(postgres.Open(dbString), &gorm.Config{Logger: gormlogger.Default.LogMode(logLevel)})
 	if err != nil {
 		l.Fatal().Err(err).Msg("DB connection start failure")
+		return
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		l.Fatal().Err(err).Msg("Failed to get sql.DB from gorm.DB")
+		return
+	}
+	driver, err := migratePostgres.WithInstance(sqlDB, &migratePostgres.Config{})
+	if err != nil {
+		l.Fatal().Err(err).Msg("Failed to create migration datbase driver")
+		return
+	}
+	migrateRrr := database.Migrate("file://./database/migrations", c.DB.DBName, driver)
+	if migrateRrr != nil {
+		l.Fatal().Err(migrateRrr).Msg("Failed to migrate database")
 		return
 	}
 

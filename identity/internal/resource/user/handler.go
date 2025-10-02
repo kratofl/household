@@ -51,7 +51,7 @@ func (a *UserAPI) List(w http.ResponseWriter, r *http.Request) {
 func (a *UserAPI) Create(w http.ResponseWriter, r *http.Request) {
 	logger := zerolog.Ctx(r.Context())
 
-	form := &UserCreateUpdateDTO{}
+	form := &UserCreateDTO{}
 	if err := json.NewDecoder(r.Body).Decode(form); err != nil {
 		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespJSONDecodeFailure)
@@ -111,72 +111,4 @@ func (a *UserAPI) Read(w http.ResponseWriter, r *http.Request) {
 		e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
 		return
 	}
-}
-
-func (a *UserAPI) Update(w http.ResponseWriter, r *http.Request) {
-	logger := zerolog.Ctx(r.Context())
-
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		e.BadRequest(w, r, e.RespInvalidURLParamID, "Field 'id' could not be parsed")
-		return
-	}
-
-	form := &UserCreateUpdateDTO{}
-	if err := json.NewDecoder(r.Body).Decode(form); err != nil {
-		logger.Error().Err(err).Msg("")
-		e.ServerError(w, r, "Server run into an error", e.RespJSONDecodeFailure)
-		return
-	}
-
-	if err := a.validator.Struct(form); err != nil {
-		respBody, err := json.Marshal(v.ToErrResponse(err))
-		if err != nil {
-			logger.Error().Err(err).Msg("")
-			e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
-			return
-		}
-
-		e.WriteValidationProblem(w, r, "Validation failed", "See errors", respBody)
-		return
-	}
-
-	user := form.ToModel()
-	user.Id = id
-
-	rows, err := a.repository.Update(user)
-	if err != nil {
-		logger.Error().Err(err).Msg("")
-		e.ServerError(w, r, "Server run into an error", e.RespDBDataUpdateFailure)
-		return
-	}
-	if rows == 0 {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	logger.Info().Str("id", id.String()).Msg("book updated")
-}
-
-func (a *UserAPI) Delete(w http.ResponseWriter, r *http.Request) {
-	logger := zerolog.Ctx(r.Context())
-
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		e.BadRequest(w, r, e.RespInvalidURLParamID, "Field 'id' could not be parsed")
-		return
-	}
-
-	rows, err := a.repository.Delete(id)
-	if err != nil {
-		logger.Error().Err(err).Msg("")
-		e.ServerError(w, r, "Server run into an error", e.RespDBDataRemoveFailure)
-		return
-	}
-	if rows == 0 {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	logger.Info().Str("id", id.String()).Msg("book deleted")
 }
