@@ -1,8 +1,6 @@
 import {ChangeDetectionStrategy, Component, inject} from "@angular/core";
 import {MenuItem} from "primeng/api";
 import {Menu} from "primeng/menu";
-import {FaIconComponent} from "@fortawesome/angular-fontawesome";
-import {faHouse} from "@fortawesome/free-solid-svg-icons";
 import {Router} from '@angular/router';
 
 
@@ -13,7 +11,6 @@ import {Router} from '@angular/router';
     changeDetection: ChangeDetectionStrategy.OnPush,
     imports: [
         Menu,
-        FaIconComponent,
     ],
 })
 export class NavigationComponent {
@@ -35,6 +32,4 @@ export class NavigationComponent {
             },
         ];
     }
-
-    protected readonly faHouse = faHouse;
 }
