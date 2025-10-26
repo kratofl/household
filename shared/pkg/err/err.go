@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kratofl/household/shared/pkg/ctx"
+	"github.com/kratofl/household/shared/pkg/validator"
+	"github.com/rs/zerolog/hlog"
 )
 
 var (
@@ -25,17 +26,17 @@ const (
 )
 
 type ProblemDetails struct {
-	Type      string      `json:"type"`
-	Title     string      `json:"title"`
-	Status    int         `json:"status"`
-	Detail    string      `json:"detail,omitempty"`
-	Instance  string      `json:"instance,omitempty"`
-	Errors    interface{} `json:"errors,omitempty"`
-	RequestID string      `json:"requestId"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Status    int    `json:"status"`
+	Detail    string `json:"detail,omitempty"`
+	Instance  string `json:"instance,omitempty"`
+	Errors    any    `json:"errors,omitempty"`
+	RequestID string `json:"requestId"`
 }
 
 func ServerError(w http.ResponseWriter, r *http.Request, title string, detail string) {
-	w.WriteHeader(http.StatusInternalServerError)
+	reqId, _ := hlog.IDFromRequest(r)
 
 	writeProblemDetails(w, ProblemDetails{
 		Type:      errTypeServerError,
@@ -43,12 +44,12 @@ func ServerError(w http.ResponseWriter, r *http.Request, title string, detail st
 		Status:    http.StatusInternalServerError,
 		Title:     title,
 		Detail:    detail,
-		RequestID: ctx.RequestID(r.Context()),
+		RequestID: reqId.String(),
 	})
 }
 
 func BadRequest(w http.ResponseWriter, r *http.Request, title string, detail string) {
-	w.WriteHeader(http.StatusBadRequest)
+	reqId, _ := hlog.IDFromRequest(r)
 
 	writeProblemDetails(w, ProblemDetails{
 		Type:      errTypeBadRequest,
@@ -56,22 +57,20 @@ func BadRequest(w http.ResponseWriter, r *http.Request, title string, detail str
 		Status:    http.StatusBadRequest,
 		Title:     title,
 		Detail:    detail,
-		RequestID: ctx.RequestID(r.Context()),
+		RequestID: reqId.String(),
 	})
 }
 
-func WriteValidationProblem(w http.ResponseWriter, r *http.Request, title string, detail string, reps []byte) {
-	w.WriteHeader(http.StatusUnprocessableEntity)
-	w.Write(reps)
-
+func WriteValidationProblem(w http.ResponseWriter, r *http.Request, title string, detail string, validationErrors *[]validator.ValidationError) {
+	reqId, _ := hlog.IDFromRequest(r)
 	writeProblemDetails(w, ProblemDetails{
 		Type:      errTypeBadRequest,
 		Instance:  r.URL.Path,
-		Status:    http.StatusBadRequest,
+		Status:    http.StatusUnprocessableEntity,
 		Title:     title,
 		Detail:    detail,
-		RequestID: ctx.RequestID(r.Context()),
-		Errors:    reps,
+		RequestID: reqId.String(),
+		Errors:    validationErrors,
 	})
 }
 

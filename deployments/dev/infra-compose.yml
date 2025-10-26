@@ -2,7 +2,7 @@ name: ${PROJECT_NAME}
 
 services:
   identity-api-db:
-    image: postgres:13.22
+    image: postgres:18.0
     container_name: identity-api-db
     environment:
       POSTGRES_DB: ${IDENTITY_API_DB_DATABASE}

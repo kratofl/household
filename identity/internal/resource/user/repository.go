@@ -1,6 +1,10 @@
 package user
 
 import (
+	"errors"
+	"fmt"
+	"strings"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -41,9 +45,20 @@ func (r *UserRepository) Read(id uuid.UUID) (*User, error) {
 	return user, nil
 }
 
+func (r *UserRepository) ReadByName(username string) (*User, error) {
+	user := &User{}
+	result := r.db.Model(&User{}).Where("name = ?", strings.ToLower(username)).First(user)
+
+	if result.Error != nil {
+		return nil, errors.Join(errors.New("failed to read user by name"), result.Error)
+	}
+
+	return user, nil
+}
+
 func (r *UserRepository) Update(user *User) (int64, error) {
 	result := r.db.Model(&User{}).
-		Select("Title", "Author", "PublishedDate", "ImageURL", "Description", "UpdatedAt").
+		Select("id", "name", "email").
 		Where("id = ?", user.Id).
 		Updates(user)
 
@@ -54,4 +69,26 @@ func (r *UserRepository) Delete(id uuid.UUID) (int64, error) {
 	result := r.db.Where("id = ?", id).Delete(&User{})
 
 	return result.RowsAffected, result.Error
+}
+
+func (r *UserRepository) AnyByName(username string) (bool, error) {
+	var count int64
+	result := r.db.Model(&User{}).Where("name = ?", strings.ToLower(username)).Count(&count)
+
+	if result.Error != nil {
+		return false, fmt.Errorf("failed to count users: %v", result.Error)
+	}
+
+	return count > 0, nil
+}
+
+func (r *UserRepository) AnyByEmail(email string) (bool, error) {
+	var count int64
+	result := r.db.Model(&User{}).Where("email = ?", strings.ToLower(email)).Count(&count)
+
+	if result.Error != nil {
+		return false, fmt.Errorf("failed to count users: %v", result.Error)
+	}
+
+	return count > 0, nil
 }

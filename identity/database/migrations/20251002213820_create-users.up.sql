@@ -1,6 +1,8 @@
 CREATE TABLE users (
-    Id varchar(36),
-    Name varchar(255),
-    Email varchar(255),
-    PasswordHash varchar(255)
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
+    name varchar(255) NOT NULL UNIQUE,
+    email varchar(255) NOT NULL UNIQUE,
+    password_hash varchar(255) NOT NULL NOT EMPTY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

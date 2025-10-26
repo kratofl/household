@@ -64,7 +64,7 @@ func main() {
 		return
 	}
 
-	r := router.New(c, v, db)
+	r := router.New(c, v, db, l)
 
 	s := &http.Server{
 		Addr:         fmt.Sprintf(":%d", c.Server.Port),
