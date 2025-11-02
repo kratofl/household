@@ -22,10 +22,11 @@ help:
 # ----------------------
 .PHONY: core-up core-down
 core-up:
-    docker compose --env-file $(ENV_FILE) --env-file $(ENV_FILE_DEV) -f $(INFRA_FILE) --profile core --profile identity up -d
+	@echo ">> Starting core infra ($(CORE_PROFILES))..."
+	docker compose --env-file $(ENV_FILE) --env-file $(ENV_FILE_DEV) -f $(INFRA_FILE) --profile core --profile identity up -d
 
 core-down:
-    docker compose --env-file $(ENV_FILE) --env-file $(ENV_FILE_DEV) -f $(INFRA_FILE) --profile core --profile identity down
+	docker compose --env-file $(ENV_FILE) --env-file $(ENV_FILE_DEV) -f $(INFRA_FILE) --profile core --profile identity down
 
 # ----------------------
 # SERVICE-DEV (selektiv)
@@ -77,3 +78,20 @@ dev:
 		safe=$$(echo "$(SERVICE)" | sed 's/identity,\\?//; s/,identity//'); \
 		if [ -n "$$safe" ]; then $(MAKE) services-dev SERVICE=$$safe; fi; \
 	fi
+
+# ----------------------
+# migrations
+# ----------------------
+.PHONY: create-migration
+create-migration:
+	@if [ -z "$(service)" ]; then \
+		echo "Please add service (e.g. service=budget)"; exit 1; \
+	fi
+	@if [ -z "$(name)" ]; then \
+		echo "Please add name: make create-migration name=feature_name"; exit 1; \
+	fi
+	@if ! command -v migrate > /dev/null; then \
+		echo "golang-migrate CLI not found, installing..."; \
+		go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest; \
+	fi
+	migrate create -ext sql -dir "$(service)/database/migrations" -format "20060102150405" $(name)

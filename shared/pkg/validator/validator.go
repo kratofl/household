@@ -8,8 +8,16 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-type ErrResponse struct {
-	Errors []string `json:"errors"`
+type ValidationError struct {
+	Pointer string `json:"pointer"`
+	Detail  string `json:"detail"`
+}
+
+func NewValidationError(pointer string, detail string) ValidationError {
+	return ValidationError{
+		Pointer: pointer,
+		Detail:  detail,
+	}
 }
 
 func New() *validator.Validate {
@@ -27,30 +35,49 @@ func New() *validator.Validate {
 	return validate
 }
 
-func ToErrResponse(err error) *ErrResponse {
+func ToErrResponse(err error) *[]ValidationError {
 	if fieldErrors, ok := err.(validator.ValidationErrors); ok {
-		resp := ErrResponse{
-			Errors: make([]string, len(fieldErrors)),
-		}
+		resp := make([]ValidationError, len(fieldErrors))
 
 		for i, err := range fieldErrors {
 			switch err.Tag() {
 			case "required":
-				resp.Errors[i] = fmt.Sprintf("%s is a required field", err.Field())
+				resp[i] = ValidationError{
+					Pointer: err.Field(),
+					Detail:  "is required",
+				}
 			case "max":
-				resp.Errors[i] = fmt.Sprintf("%s must be a maximum of %s in length", err.Field(), err.Param())
+				resp[i] = ValidationError{
+					Pointer: err.Field(),
+					Detail:  fmt.Sprintf("must be a maximum of %s in length", err.Param()),
+				}
 			case "url":
-				resp.Errors[i] = fmt.Sprintf("%s must be a valid URL", err.Field())
+				resp[i] = ValidationError{
+					Pointer: err.Field(),
+					Detail:  "must be a valid URL",
+				}
 			case "alpha_space":
-				resp.Errors[i] = fmt.Sprintf("%s can only contain alphabetic and space characters", err.Field())
+				resp[i] = ValidationError{
+					Pointer: err.Field(),
+					Detail:  "can only contain alphabetic and space characters",
+				}
 			case "datetime":
 				if err.Param() == "2006-01-02" {
-					resp.Errors[i] = fmt.Sprintf("%s must be a valid date", err.Field())
+					resp[i] = ValidationError{
+						Pointer: err.Field(),
+						Detail:  "must be a valid date",
+					}
 				} else {
-					resp.Errors[i] = fmt.Sprintf("%s must follow %s format", err.Field(), err.Param())
+					resp[i] = ValidationError{
+						Pointer: err.Field(),
+						Detail:  fmt.Sprintf("must follow %s format", err.Param()),
+					}
 				}
 			default:
-				resp.Errors[i] = fmt.Sprintf("something wrong on %s; %s", err.Field(), err.Tag())
+				resp[i] = ValidationError{
+					Pointer: err.Field(),
+					Detail:  err.Error(),
+				}
 			}
 		}
 

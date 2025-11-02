@@ -10,24 +10,28 @@ import (
 	"github.com/google/uuid"
 	e "github.com/kratofl/household/shared/pkg/err"
 	v "github.com/kratofl/household/shared/pkg/validator"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 	"gorm.io/gorm"
 )
 
-type UserAPI struct {
+type UserHandler struct {
 	validator  *validator.Validate
 	repository *UserRepository
 }
 
-func New(validator *validator.Validate, db *gorm.DB) *UserAPI {
-	return &UserAPI{
+func New(validator *validator.Validate, db *gorm.DB) *UserHandler {
+	r := NewUserRepository(db)
+	userValidator := NewUserValidator(r)
+	validator.RegisterStructValidationCtx(userValidator.UserCreateStructLevelValidation, UserCreateDTO{})
+
+	return &UserHandler{
 		validator:  validator,
-		repository: NewUserRepository(db),
+		repository: r,
 	}
 }
 
-func (a *UserAPI) List(w http.ResponseWriter, r *http.Request) {
-	logger := zerolog.Ctx(r.Context())
+func (a *UserHandler) List(w http.ResponseWriter, r *http.Request) {
+	logger := hlog.FromRequest(r)
 
 	users, err := a.repository.List()
 	if err != nil {
@@ -48,30 +52,30 @@ func (a *UserAPI) List(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *UserAPI) Create(w http.ResponseWriter, r *http.Request) {
-	logger := zerolog.Ctx(r.Context())
+func (a *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
+	logger := hlog.FromRequest(r)
 
-	form := &UserCreateUpdateDTO{}
+	form := &UserCreateDTO{}
 	if err := json.NewDecoder(r.Body).Decode(form); err != nil {
 		logger.Error().Err(err).Msg("")
 		e.ServerError(w, r, "Server run into an error", e.RespJSONDecodeFailure)
 		return
 	}
 
-	if err := a.validator.Struct(form); err != nil {
-		respBody, err := json.Marshal(v.ToErrResponse(err))
-		if err != nil {
-			logger.Error().Err(err).Msg("")
-			e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
-			return
-		}
+	if err := a.validator.StructCtx(r.Context(), form); err != nil {
+		errResponse := v.ToErrResponse(err)
 
-		e.WriteValidationProblem(w, r, "Validation failed", "See errors", respBody)
+		logger.Info().Msg("Validation failed")
+		e.WriteValidationProblem(w, r, "Validation failed", "See errors", errResponse)
 		return
 	}
 
-	newUser := form.ToModel()
-	newUser.Id = uuid.New()
+	newUser, modelErr := form.ToModel()
+	if modelErr != nil {
+		logger.Error().Err(modelErr).Msg("Parsing UserCreateDTO to User failed")
+		e.ServerError(w, r, "Server run into an error", "Parsing data failed")
+		return
+	}
 
 	user, err := a.repository.Create(newUser)
 	if err != nil {
@@ -84,8 +88,8 @@ func (a *UserAPI) Create(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (a *UserAPI) Read(w http.ResponseWriter, r *http.Request) {
-	logger := zerolog.Ctx(r.Context())
+func (a *UserHandler) Read(w http.ResponseWriter, r *http.Request) {
+	logger := hlog.FromRequest(r)
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -111,72 +115,4 @@ func (a *UserAPI) Read(w http.ResponseWriter, r *http.Request) {
 		e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
 		return
 	}
-}
-
-func (a *UserAPI) Update(w http.ResponseWriter, r *http.Request) {
-	logger := zerolog.Ctx(r.Context())
-
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		e.BadRequest(w, r, e.RespInvalidURLParamID, "Field 'id' could not be parsed")
-		return
-	}
-
-	form := &UserCreateUpdateDTO{}
-	if err := json.NewDecoder(r.Body).Decode(form); err != nil {
-		logger.Error().Err(err).Msg("")
-		e.ServerError(w, r, "Server run into an error", e.RespJSONDecodeFailure)
-		return
-	}
-
-	if err := a.validator.Struct(form); err != nil {
-		respBody, err := json.Marshal(v.ToErrResponse(err))
-		if err != nil {
-			logger.Error().Err(err).Msg("")
-			e.ServerError(w, r, "Server run into an error", e.RespJSONEncodeFailure)
-			return
-		}
-
-		e.WriteValidationProblem(w, r, "Validation failed", "See errors", respBody)
-		return
-	}
-
-	user := form.ToModel()
-	user.Id = id
-
-	rows, err := a.repository.Update(user)
-	if err != nil {
-		logger.Error().Err(err).Msg("")
-		e.ServerError(w, r, "Server run into an error", e.RespDBDataUpdateFailure)
-		return
-	}
-	if rows == 0 {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	logger.Info().Str("id", id.String()).Msg("book updated")
-}
-
-func (a *UserAPI) Delete(w http.ResponseWriter, r *http.Request) {
-	logger := zerolog.Ctx(r.Context())
-
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		e.BadRequest(w, r, e.RespInvalidURLParamID, "Field 'id' could not be parsed")
-		return
-	}
-
-	rows, err := a.repository.Delete(id)
-	if err != nil {
-		logger.Error().Err(err).Msg("")
-		e.ServerError(w, r, "Server run into an error", e.RespDBDataRemoveFailure)
-		return
-	}
-	if rows == 0 {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	logger.Info().Str("id", id.String()).Msg("book deleted")
 }

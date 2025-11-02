@@ -10,9 +10,7 @@ import (
 
 func New(c *config.Config, v *validator.Validate, db *gorm.DB) *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
 	r.Use(middleware.ContentTypeJSON)
-	r.Use(middleware.LoggingMiddleware(c))
 
 	r.Route("/api/v1", func(r chi.Router) {
 	})

@@ -9,12 +9,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const KeyReqID = "request_id"
-
 type AppLogger struct {
 	zerolog.Logger
 	file *os.File
 }
+
+var zeroLogger *zerolog.Logger
 
 func New(config *config.Config) (*AppLogger, error) {
 	logLevel := zerolog.InfoLevel
@@ -36,7 +36,13 @@ func New(config *config.Config) (*AppLogger, error) {
 	multi := zerolog.MultiLevelWriter(os.Stdout, file)
 	logger := zerolog.New(multi).With().Timestamp().Caller().Logger()
 
+	zeroLogger = &logger
+
 	return &AppLogger{Logger: logger, file: file}, nil
+}
+
+func GetInstance() *zerolog.Logger {
+	return zeroLogger
 }
 
 func (l *AppLogger) Close() error {
