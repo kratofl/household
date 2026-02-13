@@ -20,17 +20,21 @@ services:
     profiles: ["core","identity"]
 
   budget-api-db:
-    image: mysql:latest
+    image: postgres:18.0
     container_name: budget-api-db
     environment:
-      MYSQL_ROOT_PASSWORD: ${BUDGET_API_MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${BUDGET_API_DB_DATABASE}
-      MYSQL_USER: ${BUDGET_API_DB_USER}
-      MYSQL_PASSWORD: ${BUDGET_API_DB_PASSWORD}
+      POSTGRES_DB: ${BUDGET_API_DB_DATABASE}
+      POSTGRES_USER: ${BUDGET_API_DB_USER}
+      POSTGRES_PASSWORD: ${BUDGET_API_DB_PASSWORD}
     ports:
-      - "${BUDGET_API_DB_PORT}:3306"
+      - "${BUDGET_API_DB_PORT}:5432"
     volumes:
-      - budget-api_db_data:/var/lib/mysql
+      - budget-api_db_data:/var/lib/postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - budget-api
     profiles: ["budget"]
@@ -41,3 +45,4 @@ volumes:
 
 networks:
   backend:
+  budget-api:

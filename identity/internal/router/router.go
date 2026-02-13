@@ -4,13 +4,14 @@ import (
 	"net/http"
 	"time"
 
+	"household/identity/internal/resource/auth"
+	"household/identity/internal/resource/user"
+	"household/shared/pkg/config"
+	"household/shared/pkg/http/middleware"
+	"household/shared/pkg/logging"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
-	"github.com/kratofl/household/identity/internal/resource/auth"
-	"github.com/kratofl/household/identity/internal/resource/user"
-	"github.com/kratofl/household/shared/pkg/config"
-	"github.com/kratofl/household/shared/pkg/http/middleware"
-	"github.com/kratofl/household/shared/pkg/logging"
 	"github.com/rs/zerolog/hlog"
 	"gorm.io/gorm"
 )

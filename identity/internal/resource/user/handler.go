@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"net/http"
 
+	e "household/shared/pkg/err"
+	v "household/shared/pkg/validator"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	e "github.com/kratofl/household/shared/pkg/err"
-	v "github.com/kratofl/household/shared/pkg/validator"
 	"github.com/rs/zerolog/hlog"
 	"gorm.io/gorm"
 )

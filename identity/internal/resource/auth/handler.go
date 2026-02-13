@@ -5,9 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/kratofl/household/identity/internal/resource/user"
-	e "github.com/kratofl/household/shared/pkg/err"
-	"github.com/kratofl/household/shared/pkg/validator"
+	"household/identity/internal/resource/user"
+	e "household/shared/pkg/err"
+	"household/shared/pkg/validator"
+
 	"github.com/rs/zerolog/hlog"
 	"gorm.io/gorm"
 )

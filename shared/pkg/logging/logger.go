@@ -5,7 +5,8 @@ import (
 	"path"
 	"time"
 
-	"github.com/kratofl/household/shared/pkg/config"
+	"household/shared/pkg/config"
+
 	"github.com/rs/zerolog"
 )
 

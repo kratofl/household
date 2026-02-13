@@ -1,10 +1,11 @@
 package router
 
 import (
+	"household/shared/pkg/config"
+	"household/shared/pkg/http/middleware"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
-	"github.com/kratofl/household/shared/pkg/config"
-	"github.com/kratofl/household/shared/pkg/http/middleware"
 	"gorm.io/gorm"
 )
 

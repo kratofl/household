@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/kratofl/household/shared/pkg/validator"
+	"household/shared/pkg/validator"
+
 	"github.com/rs/zerolog/hlog"
 )
 
