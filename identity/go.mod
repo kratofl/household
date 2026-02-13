@@ -1,4 +1,4 @@
-module github.com/kratofl/household/identity
+module household/identity
 
 go 1.25.0
 

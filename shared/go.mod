@@ -1,4 +1,4 @@
-module github.com/kratofl/household/shared
+module household/shared
 
 go 1.25.0
 

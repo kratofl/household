@@ -10,12 +10,13 @@ import (
 	"strconv"
 	"syscall"
 
+	"household/identity/internal/router"
+	"household/shared/pkg/config"
+	"household/shared/pkg/database"
+	"household/shared/pkg/logging"
+	"household/shared/pkg/validator"
+
 	migratePostgres "github.com/golang-migrate/migrate/v4/database/postgres"
-	"github.com/kratofl/household/identity/internal/router"
-	"github.com/kratofl/household/shared/pkg/config"
-	"github.com/kratofl/household/shared/pkg/database"
-	"github.com/kratofl/household/shared/pkg/logging"
-	"github.com/kratofl/household/shared/pkg/validator"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
