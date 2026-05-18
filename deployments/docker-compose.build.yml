@@ -1,0 +1,16 @@
+services:
+  household-web:
+    build:
+      context: ..
+      dockerfile: clients/web/Dockerfile
+
+  household-api:
+    build:
+      context: ..
+      target: release
+      dockerfile: backend/Dockerfile
+
+  household-updater:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.updater

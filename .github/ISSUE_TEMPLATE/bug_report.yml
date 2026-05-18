@@ -1,0 +1,49 @@
+name: Bug report
+description: Report something that is broken or confusing.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Household. Please do not include secrets, tokens, passwords, or private backup contents.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the shortest steps that reproduce the issue.
+      placeholder: |
+        1. Start the stack with ...
+        2. Open ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag, image tag, or commit SHA.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Install / Docker
+        - Backend API
+        - Web UI
+        - Updates
+        - Documentation
+        - Other
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste only non-sensitive logs.
+      render: shell

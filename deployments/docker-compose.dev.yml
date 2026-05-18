@@ -1,0 +1,71 @@
+name: ${PROJECT_NAME:-household}
+
+services:
+  household-db:
+    image: postgres:18.4-alpine3.23
+    environment:
+      POSTGRES_DB: ${HOUSEHOLD_DB_DATABASE:-household}
+      POSTGRES_USER: ${HOUSEHOLD_DB_USER:-household}
+      POSTGRES_PASSWORD: ${HOUSEHOLD_DB_PASSWORD:-household}
+    ports:
+      - "${HOUSEHOLD_DB_PORT:-5432}:5432"
+    volumes:
+      - household_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d \"$${POSTGRES_DB}\" -U \"$${POSTGRES_USER}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - backend
+    profiles: ["db", "core"]
+
+  loki:
+    image: ${LOKI_IMAGE:-grafana/loki:3.5.12}
+    command: ["-config.file=/etc/loki/loki.yml"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    networks:
+      - backend
+    profiles: ["observability"]
+
+  alloy:
+    image: ${ALLOY_IMAGE:-grafana/alloy:v1.16.1}
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    depends_on:
+      - loki
+    ports:
+      - "${ALLOY_PORT:-12345}:12345"
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend
+    profiles: ["observability"]
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.4.3}
+    depends_on:
+      - loki
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - backend
+    profiles: ["observability"]
+
+volumes:
+  household_db_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  backend:

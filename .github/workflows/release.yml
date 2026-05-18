@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
+  PLATFORMS: linux/amd64,linux/arm64
+  CHANNEL: ${{ github.event.release.prerelease && 'unstable' || 'stable' }}
+
+jobs:
+  build-images:
+    name: Build and publish images
+    runs-on: ubuntu-latest
+    outputs:
+      api_digest: ${{ steps.api.outputs.digest }}
+      web_digest: ${{ steps.web.outputs.digest }}
+      updater_digest: ${{ steps.updater.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API
+        id: api
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: backend/Dockerfile
+          target: release
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-api:${{ github.event.release.tag_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-api:${{ env.CHANNEL }}
+
+      - name: Build and push web
+        id: web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: clients/web/Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-web:${{ github.event.release.tag_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-web:${{ env.CHANNEL }}
+
+      - name: Build and push updater
+        id: updater
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: backend/Dockerfile.updater
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-updater:${{ github.event.release.tag_name }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-updater:${{ env.CHANNEL }}
+
+  publish-bundle:
+    name: Publish install bundle
+    runs-on: ubuntu-latest
+    needs: build-images
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create release bundle
+        run: |
+          mkdir -p dist
+          cp deployments/docker-compose.yml dist/docker-compose.yml
+          cp deployments/.env.example dist/.env.example
+          cp -R deployments/observability dist/observability
+
+          cat > dist/INSTALL.md <<'EOF'
+          # Household release bundle
+
+          1. Copy `.env.example` to `.env`.
+          2. Replace every `change-me` value.
+          3. Set `HOUSEHOLD_SEED_DEMO_USER=true` for first boot.
+          4. Start the stack:
+
+             ```bash
+             docker compose --env-file .env -f docker-compose.yml pull
+             docker compose --env-file .env -f docker-compose.yml up -d
+             ```
+
+          After the first admin account is usable, set `HOUSEHOLD_SEED_DEMO_USER=false` and restart.
+          EOF
+
+          cat > dist/UPGRADE.md <<'EOF'
+          # Upgrade notes
+
+          Create a backup before upgrading. To upgrade manually, set `HOUSEHOLD_VERSION` in `.env`, pull images, and restart the stack.
+
+          ```bash
+          docker compose --env-file .env -f docker-compose.yml pull
+          docker compose --env-file .env -f docker-compose.yml up -d
+          ```
+
+          If you need to roll back, restore the backup and set `HOUSEHOLD_VERSION` back to the previous release tag.
+          EOF
+
+          cat > dist/household-release.json <<JSON
+          {
+            "version": "${{ github.event.release.tag_name }}",
+            "channel": "${{ env.CHANNEL }}",
+            "repository": "${{ github.repository }}",
+            "compose": "docker-compose.yml",
+            "envExample": ".env.example",
+            "platforms": "${{ env.PLATFORMS }}",
+            "images": {
+              "api": {
+                "image": "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-api",
+                "tag": "${{ github.event.release.tag_name }}",
+                "digest": "${{ needs.build-images.outputs.api_digest }}"
+              },
+              "web": {
+                "image": "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-web",
+                "tag": "${{ github.event.release.tag_name }}",
+                "digest": "${{ needs.build-images.outputs.web_digest }}"
+              },
+              "updater": {
+                "image": "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-updater",
+                "tag": "${{ github.event.release.tag_name }}",
+                "digest": "${{ needs.build-images.outputs.updater_digest }}"
+              }
+            },
+            "requiresBackup": true
+          }
+          JSON
+
+          (
+            cd dist
+            find docker-compose.yml .env.example INSTALL.md UPGRADE.md household-release.json observability -type f -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS
+          )
+          tar -C dist -czf household-release-bundle.tar.gz .
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            household-release-bundle.tar.gz \
+            dist/household-release.json \
+            dist/SHA256SUMS \
+            --clobber

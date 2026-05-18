@@ -1,59 +1,40 @@
-# Household
+# Household Web
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.1.4.
+Next.js 16 App Router UI for the Household local-network app.
 
-## Development server
+## Stack
 
-To start a local development server, run:
+- Next.js 16.2.6
+- React 19.2.6
+- Tailwind CSS 4
+- shadcn/ui preset `b6FAZ7jW6a`
 
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Commands
 
 ```bash
-ng generate component component-name
+npm run dev
+npm run lint
+npm run build
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+The UI proxies backend calls through `src/app/api/backend/[...path]/route.ts`.
+
+Default backend target:
 
 ```bash
-ng generate --help
+http://localhost:8090/api/v1
 ```
 
-## Building
-
-To build the project run:
+Override when needed:
 
 ```bash
-ng build
+HOUSEHOLD_API_URL=http://<api-host>:8090/api/v1 npm run dev
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## Current UI
 
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+- Login with Identity access/refresh tokens.
+- User registration request. New users remain pending until approved by an admin.
+- Password change for logged-in users.
+- Active slice navigation.
+- Admin slice toggles backed by Identity modules.
