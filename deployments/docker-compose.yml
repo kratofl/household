@@ -1,0 +1,155 @@
+name: ${PROJECT_NAME:-household}
+
+services:
+  household-web:
+    image: ghcr.io/${HOUSEHOLD_IMAGE_OWNER:-kratofl}/household-web:${HOUSEHOLD_VERSION:-stable}
+    depends_on:
+      household-api:
+        condition: service_healthy
+    environment:
+      HOUSEHOLD_API_URL: http://household-api:${HOUSEHOLD_API_SERVER_PORT:-8090}/api/v1
+      NEXT_PUBLIC_HOUSEHOLD_API_URL: http://household-api:${HOUSEHOLD_API_SERVER_PORT:-8090}/api/v1
+    ports:
+      - "${HOUSEHOLD_WEB_PORT:-3000}:3000"
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  household-api:
+    image: ghcr.io/${HOUSEHOLD_IMAGE_OWNER:-kratofl}/household-api:${HOUSEHOLD_VERSION:-stable}
+    depends_on:
+      household-db:
+        condition: service_healthy
+    environment:
+      HOUSEHOLD_API_SERVER_PORT: ${HOUSEHOLD_API_SERVER_PORT:-8090}
+      HOUSEHOLD_API_SERVER_TIMEOUT_READ: ${HOUSEHOLD_API_SERVER_TIMEOUT_READ:-5s}
+      HOUSEHOLD_API_SERVER_TIMEOUT_WRITE: ${HOUSEHOLD_API_SERVER_TIMEOUT_WRITE:-10s}
+      HOUSEHOLD_API_SERVER_TIMEOUT_IDLE: ${HOUSEHOLD_API_SERVER_TIMEOUT_IDLE:-60s}
+      HOUSEHOLD_API_SERVER_DEBUG: ${HOUSEHOLD_API_SERVER_DEBUG:-false}
+      HOUSEHOLD_API_DB_HOST: household-db
+      HOUSEHOLD_API_DB_PORT: 5432
+      HOUSEHOLD_API_DB_DATABASE: ${HOUSEHOLD_DB_DATABASE:-household}
+      HOUSEHOLD_API_DB_USER: ${HOUSEHOLD_DB_USER:-household}
+      HOUSEHOLD_API_DB_PASSWORD: ${HOUSEHOLD_DB_PASSWORD:?set HOUSEHOLD_DB_PASSWORD}
+      HOUSEHOLD_API_DB_DEBUG: ${HOUSEHOLD_API_DB_DEBUG:-false}
+      HOUSEHOLD_LOG_LEVEL: ${HOUSEHOLD_LOG_LEVEL:-info}
+      HOUSEHOLD_LOG_FILE_ENABLED: ${HOUSEHOLD_LOG_FILE_ENABLED:-false}
+      HOUSEHOLD_LOG_ENVIRONMENT: production
+      HOUSEHOLD_LOG_VERSION: ${HOUSEHOLD_VERSION:-stable}
+      HOUSEHOLD_UPDATES_GITHUB_REPOSITORY: ${HOUSEHOLD_UPDATES_GITHUB_REPOSITORY:-kratofl/household}
+      HOUSEHOLD_UPDATES_UPDATER_URL: http://household-updater:8091
+      HOUSEHOLD_UPDATES_UPDATER_TOKEN: ${HOUSEHOLD_UPDATER_TOKEN:?set HOUSEHOLD_UPDATER_TOKEN}
+      HOUSEHOLD_UPDATES_TIMEOUT: ${HOUSEHOLD_UPDATES_TIMEOUT:-15s}
+      HOUSEHOLD_SEED_DEMO_USER: ${HOUSEHOLD_SEED_DEMO_USER:-false}
+      HOUSEHOLD_SEED_DEMO_USER_NAME: ${HOUSEHOLD_SEED_DEMO_USER_NAME:-admin}
+      HOUSEHOLD_SEED_DEMO_USER_EMAIL: ${HOUSEHOLD_SEED_DEMO_USER_EMAIL:-admin@household.local}
+      HOUSEHOLD_SEED_DEMO_USER_PASSWORD: ${HOUSEHOLD_SEED_DEMO_USER_PASSWORD:-}
+    expose:
+      - "${HOUSEHOLD_API_SERVER_PORT:-8090}"
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${HOUSEHOLD_API_SERVER_PORT:-8090}/healthz >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  household-updater:
+    image: ghcr.io/${HOUSEHOLD_IMAGE_OWNER:-kratofl}/household-updater:${HOUSEHOLD_VERSION:-stable}
+    environment:
+      HOUSEHOLD_UPDATER_TOKEN: ${HOUSEHOLD_UPDATER_TOKEN:?set HOUSEHOLD_UPDATER_TOKEN}
+      HOUSEHOLD_UPDATER_STACK_DIR: /stack
+      HOUSEHOLD_UPDATER_ENV_FILE: /stack/.env
+      HOUSEHOLD_UPDATER_COMPOSE_FILE: /stack/docker-compose.yml
+      HOUSEHOLD_UPDATER_BACKUP_DIR: /stack/backups
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/stack
+    expose:
+      - "8091"
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/healthz >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  household-db:
+    image: postgres:18.4-alpine3.23
+    environment:
+      POSTGRES_DB: ${HOUSEHOLD_DB_DATABASE:-household}
+      POSTGRES_USER: ${HOUSEHOLD_DB_USER:-household}
+      POSTGRES_PASSWORD: ${HOUSEHOLD_DB_PASSWORD:?set HOUSEHOLD_DB_PASSWORD}
+    volumes:
+      - household_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d \"$${POSTGRES_DB}\" -U \"$${POSTGRES_USER}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  loki:
+    image: ${LOKI_IMAGE:-grafana/loki:3.5.12}
+    command: ["-config.file=/etc/loki/loki.yml"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+    networks:
+      - backend
+    profiles: ["observability"]
+
+  alloy:
+    image: ${ALLOY_IMAGE:-grafana/alloy:v1.16.1}
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    depends_on:
+      - loki
+    ports:
+      - "${ALLOY_PORT:-12345}:12345"
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    networks:
+      - backend
+    profiles: ["observability"]
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:12.4.3}
+    depends_on:
+      - loki
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    restart: unless-stopped
+    networks:
+      - backend
+    profiles: ["observability"]
+
+volumes:
+  household_db_data:
+  loki_data:
+  grafana_data:
+
+networks:
+  backend:

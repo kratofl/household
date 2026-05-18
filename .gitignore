@@ -25,14 +25,22 @@ logs/
 *.log
 *.tmp
 tmp/
+backend/tmp/
 
 # Docker volumes (optional if mounted locally)
 volumes/
 mysql_data/
 grafana_data/
+deployments/backups/*
+!deployments/backups/.gitkeep
 
 # Environment config
+.env
 .env.*
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
 
 # Secrets (if external)
 secrets.env

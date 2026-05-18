@@ -1,0 +1,15 @@
+FROM golang:1.26.3-alpine3.23 AS builder
+
+WORKDIR /src
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/household-updater ./cmd/household-updater
+
+FROM docker:29.4.3-cli-alpine3.23
+
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /out/household-updater /usr/local/bin/household-updater
+
+EXPOSE 8091
+ENTRYPOINT ["household-updater"]
