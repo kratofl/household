@@ -6,7 +6,7 @@ RUN go mod download
 COPY backend/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/household-updater ./cmd/household-updater
 
-FROM docker:29.4.3-cli-alpine3.23
+FROM docker:29.5.2-cli-alpine3.23
 
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /out/household-updater /usr/local/bin/household-updater
