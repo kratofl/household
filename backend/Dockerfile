@@ -13,7 +13,7 @@ COPY --from=builder /app .
 WORKDIR /app/backend
 ENTRYPOINT ["air", "-c", ".air.toml"]
 
-FROM alpine:3.23 AS release
+FROM alpine:3.24 AS release
 WORKDIR /app
 RUN apk add --no-cache ca-certificates wget && addgroup -S household && adduser -S household -G household
 COPY --from=builder /app/household-api .
