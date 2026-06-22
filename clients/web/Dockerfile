@@ -1,16 +1,16 @@
-FROM node:24.12.0-alpine3.23 AS deps
+FROM node:26.3.1-alpine3.23 AS deps
 WORKDIR /app
 COPY clients/web/package.json clients/web/package-lock.json ./
 RUN npm ci
 
-FROM node:24.12.0-alpine3.23 AS builder
+FROM node:26.3.1-alpine3.23 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY clients/web ./
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-FROM node:24.12.0-alpine3.23 AS runner
+FROM node:26.3.1-alpine3.23 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
