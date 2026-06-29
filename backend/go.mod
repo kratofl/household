@@ -11,7 +11,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	golang.org/x/crypto v0.51.0
 	gorm.io/driver/postgres v1.6.0
-	gorm.io/gorm v1.31.1
+	gorm.io/gorm v1.31.2
 )
 
 require (
