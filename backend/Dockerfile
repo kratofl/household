@@ -1,4 +1,4 @@
-FROM golang:1.26.3-alpine3.23 AS builder
+FROM golang:1.26.5-alpine3.23 AS builder
 WORKDIR /app
 
 COPY go.work go.work.sum ./
@@ -6,7 +6,7 @@ COPY backend ./backend
 WORKDIR /app/backend
 RUN go build -o /app/household-api ./cmd/household-api
 
-FROM golang:1.26.3-alpine3.23 AS dev
+FROM golang:1.26.5-alpine3.23 AS dev
 WORKDIR /app
 RUN apk add --no-cache git && go install github.com/air-verse/air@latest
 COPY --from=builder /app .
