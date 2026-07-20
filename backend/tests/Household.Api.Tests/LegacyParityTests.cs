@@ -35,7 +35,8 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
 
         Assert.Equal(HttpStatusCode.OK, summaryResponse.StatusCode);
         Assert.Equal(4_200, summary.GetProperty("spentInLimitCents").GetInt64());
-        Assert.Equal(235_800, summary.GetProperty("remainingCents").GetInt64());
+        Assert.Equal(-4_200, summary.GetProperty("remainingCents").GetInt64());
+        Assert.Equal(0, summary.GetProperty("actualIncomeCents").GetInt64());
         Assert.Equal(995_800, summary.GetProperty("accountBalanceCents").GetInt64());
 
         using var plansRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/planned-expenses");
@@ -45,6 +46,17 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         Assert.Contains(plans.EnumerateArray(), plan =>
             plan.GetProperty("id").GetGuid() == LegacyParityFixture.PlannedExpenseId &&
             plan.GetProperty("amountCents").GetInt64() == 80_000);
+
+        using var ledgerRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/ledger/entries");
+        var ledger = await (await fixture.Client.SendAsync(ledgerRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(ledger.EnumerateArray(), entry =>
+            entry.GetProperty("source").GetString() == "legacy_transaction" &&
+            entry.GetProperty("ordinaryImpactCents").GetInt64() == -4_200);
+
+        using var issuesRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/migration-issues");
+        var issues = await (await fixture.Client.SendAsync(issuesRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(issues.EnumerateArray(), issue =>
+            issue.GetProperty("code").GetString() == "legacy_account_balance_not_imported");
     }
 
     [Fact]
@@ -290,6 +302,55 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
             bufferPercentageBasisPoints = 0,
         });
         Assert.Equal(HttpStatusCode.Conflict, (await fixture.Client.SendAsync(currencyRequest)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Manual_ledger_income_and_expenses_need_no_account_and_drive_funded_availability()
+    {
+        using var incomeRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", LegacyParityFixture.LedgerAccessToken);
+        incomeRequest.Content = JsonContent.Create(new
+        {
+            kind = "income",
+            occurredOn = "2026-07-20",
+            description = "Salary received",
+            amountCents = 100_000,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(incomeRequest)).StatusCode);
+
+        using var expenseRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", LegacyParityFixture.LedgerAccessToken);
+        expenseRequest.Content = JsonContent.Create(new
+        {
+            kind = "expense",
+            occurredOn = "2026-07-20",
+            description = "Groceries",
+            amountCents = 25_000,
+            affectsOrdinary = true,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(expenseRequest)).StatusCode);
+
+        using var excludedRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", LegacyParityFixture.LedgerAccessToken);
+        excludedRequest.Content = JsonContent.Create(new
+        {
+            kind = "expense",
+            occurredOn = "2026-07-20",
+            description = "Protected purchase",
+            amountCents = 3_000,
+            affectsOrdinary = false,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(excludedRequest)).StatusCode);
+
+        using var summaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", LegacyParityFixture.LedgerAccessToken);
+        var summary = await (await fixture.Client.SendAsync(summaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(100_000, summary.GetProperty("actualIncomeCents").GetInt64());
+        Assert.Equal(25_000, summary.GetProperty("spentInLimitCents").GetInt64());
+        Assert.Equal(3_000, summary.GetProperty("excludedSpentCents").GetInt64());
+        Assert.Equal(75_000, summary.GetProperty("ordinaryAvailableCents").GetInt64());
+        Assert.Equal(75_000, summary.GetProperty("remainingCents").GetInt64());
+
+        using var entriesRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/ledger/entries", LegacyParityFixture.LedgerAccessToken);
+        var entries = await (await fixture.Client.SendAsync(entriesRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(3, entries.GetArrayLength());
+        Assert.All(entries.EnumerateArray(), entry => Assert.Equal("manual", entry.GetProperty("source").GetString()));
     }
 
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)

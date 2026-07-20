@@ -8,6 +8,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetSettings> Settings => Set<BudgetSettings>();
     public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
     public DbSet<BudgetOpeningAllocation> OpeningAllocations => Set<BudgetOpeningAllocation>();
+    public DbSet<BudgetLedgerEntry> LedgerEntries => Set<BudgetLedgerEntry>();
+    public DbSet<BudgetMigrationIssue> MigrationIssues => Set<BudgetMigrationIssue>();
     public DbSet<BudgetCategory> Categories => Set<BudgetCategory>();
     public DbSet<BudgetAccount> Accounts => Set<BudgetAccount>();
     public DbSet<BudgetTransaction> Transactions => Set<BudgetTransaction>();
@@ -21,11 +23,46 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigureSettings(modelBuilder.Entity<BudgetSettings>());
         ConfigureIncomePlan(modelBuilder.Entity<BudgetIncomePlan>());
         ConfigureOpeningAllocation(modelBuilder.Entity<BudgetOpeningAllocation>());
+        ConfigureLedgerEntry(modelBuilder.Entity<BudgetLedgerEntry>());
+        ConfigureMigrationIssue(modelBuilder.Entity<BudgetMigrationIssue>());
         ConfigureCategory(modelBuilder.Entity<BudgetCategory>());
         ConfigureAccount(modelBuilder.Entity<BudgetAccount>());
         ConfigureTransaction(modelBuilder.Entity<BudgetTransaction>());
         ConfigurePlannedExpense(modelBuilder.Entity<PlannedExpense>());
         ConfigureApplication(modelBuilder.Entity<PlannedExpenseApplication>());
+    }
+
+    private static void ConfigureLedgerEntry(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetLedgerEntry> entity)
+    {
+        entity.ToTable("ledger_entries"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.PeriodId).HasColumnName("period_id");
+        entity.Property(x => x.CategoryId).HasColumnName("category_id");
+        entity.Property(x => x.Kind).HasColumnName("kind");
+        entity.Property(x => x.OccurredOn).HasColumnName("occurred_on");
+        entity.Property(x => x.Description).HasColumnName("description");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.OrdinaryImpactCents).HasColumnName("ordinary_impact_cents");
+        entity.Property(x => x.Source).HasColumnName("source");
+        entity.Property(x => x.SourceRecordId).HasColumnName("source_record_id");
+        entity.Property(x => x.LegacyTransactionId).HasColumnName("legacy_transaction_id");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.OccurredOn });
+        entity.HasIndex(x => x.LegacyTransactionId).IsUnique();
+    }
+
+    private static void ConfigureMigrationIssue(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetMigrationIssue> entity)
+    {
+        entity.ToTable("migration_issues"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.Code).HasColumnName("code");
+        entity.Property(x => x.LegacyRecordType).HasColumnName("legacy_record_type");
+        entity.Property(x => x.LegacyRecordId).HasColumnName("legacy_record_id");
+        entity.Property(x => x.Detail).HasColumnName("detail");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.Code, x.LegacyRecordId }).IsUnique();
     }
 
     private static void ConfigurePeriod(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetPeriod> entity)

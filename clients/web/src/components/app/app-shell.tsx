@@ -64,7 +64,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   applyCurrentPlannedExpenses,
   createBudgetCategory,
-  createBudgetTransaction,
+  createBudgetLedgerEntry,
   createPlannedExpense as createPlannedExpenseRequest,
   loadBudgetSummary,
   loadBudgetSetup,
@@ -1098,6 +1098,7 @@ function BudgetPanel(props: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [description, setDescription] = useState("")
+  const [transactionKind, setTransactionKind] = useState<"income" | "expense">("expense")
   const [amount, setAmount] = useState("")
   const [categoryId, setCategoryId] = useState("")
   const [accountId, setAccountId] = useState("")
@@ -1221,20 +1222,20 @@ function BudgetPanel(props: {
     if (!accessToken) return
     const parsedAmount = Number(amount.replace(",", "."))
     const amountCents = Math.round(parsedAmount * 100)
-    if (!description.trim() || !Number.isFinite(amountCents) || amountCents <= 0 || !accountId) {
+    if (!description.trim() || !Number.isFinite(amountCents) || amountCents <= 0) {
       setError(t("budget.validation"))
       return
     }
     setSaving(true)
     try {
       const category = summary?.categories.find((entry) => entry.id === categoryId)
-      await createBudgetTransaction(accessToken, {
-        accountId,
-        categoryId,
+      await createBudgetLedgerEntry(accessToken, {
+        kind: transactionKind,
+        categoryId: transactionKind === "expense" ? categoryId || undefined : undefined,
         occurredOn,
         description,
         amountCents,
-        includeInLimit: category?.behavior !== "exclude_from_limit",
+        affectsOrdinary: transactionKind === "income" || category?.behavior !== "exclude_from_limit",
       })
       setDescription("")
       setAmount("")
@@ -1584,10 +1585,10 @@ function BudgetPanel(props: {
           <>
             {showOverview ? (
             <div className="grid gap-4 md:grid-cols-4">
-              <Metric label={t("budget.monthlyLimit")} value={currency(summary.period.spendingLimitCents)} />
-              <Metric label={t("budget.spent")} value={currency(summary.spentInLimitCents)} />
-              <Metric label={t("budget.remaining")} value={currency(summary.remainingCents)} />
-              <Metric label={t("budget.accountBalance")} value={currency(summary.accountBalanceCents)} />
+              <Metric label={t("budget.actualIncome")} value={currency(summary.actualIncomeCents)} />
+              <Metric label={t("budget.fundedBuffer")} value={currency(summary.fundedBufferCents)} />
+              <Metric label={t("budget.maximumOrdinary")} value={currency(summary.maximumOrdinaryCents)} />
+              <Metric label={t("budget.remaining")} value={currency(summary.ordinaryAvailableCents)} />
             </div>
             ) : null}
             {showOverview || showTransactions ? (
@@ -1622,9 +1623,45 @@ function BudgetPanel(props: {
               </div>
               ) : null}
               {showTransactions ? (
+              <div className="rounded-lg border bg-muted/10 p-4">
+                <div className="mb-4">
+                  <h3 className="font-medium">{t("budget.ledgerTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.ledgerDescription")}</p>
+                </div>
+                <div className="grid gap-2">
+                  {summary.ledgerEntries.length === 0 ? (
+                    <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                      {t("budget.noTransactions")}
+                    </div>
+                  ) : summary.ledgerEntries.map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between gap-4 rounded-md border bg-background p-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{entry.description}</p>
+                        <p className="text-xs text-muted-foreground">{entry.occurredOn}</p>
+                      </div>
+                      <span className={entry.kind === "income" ? "font-medium text-emerald-600" : "font-medium"}>
+                        {entry.kind === "income" ? "+" : "−"}{currency(entry.amountCents)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              ) : null}
+              {showTransactions ? (
               <div className="rounded-lg border p-4">
                 <h3 className="font-medium">{t("budget.newTransaction")}</h3>
                 <div className="mt-4 grid gap-3">
+                  <div className="grid gap-1.5">
+                    <Label>{t("budget.transactionKind")}</Label>
+                    <FormSelect
+                      value={transactionKind}
+                      onValueChange={(value) => setTransactionKind(value as typeof transactionKind)}
+                      options={[
+                        { value: "expense", label: t("budget.expense") },
+                        { value: "income", label: t("budget.income") },
+                      ]}
+                    />
+                  </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="budget-description">{t("budget.description")}</Label>
                     <Input id="budget-description" value={description} onChange={(event) => setDescription(event.target.value)} />
@@ -1639,6 +1676,7 @@ function BudgetPanel(props: {
                       <Input id="budget-date" type="date" value={occurredOn} onChange={(event) => setOccurredOn(event.target.value)} />
                     </div>
                   </div>
+                  {transactionKind === "expense" ? (
                   <div className="grid gap-1.5">
                     <Label htmlFor="budget-category">{t("budget.category")}</Label>
                     <FormSelect
@@ -1651,18 +1689,7 @@ function BudgetPanel(props: {
                       }))}
                     />
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="budget-account">{t("budget.account")}</Label>
-                    <FormSelect
-                      id="budget-account"
-                      value={accountId}
-                      onValueChange={setAccountId}
-                      options={summary.accounts.map((account) => ({
-                        value: account.id,
-                        label: account.name,
-                      }))}
-                    />
-                  </div>
+                  ) : null}
                   <Button onClick={createTransaction} disabled={saving}>
                     {saving ? t("budget.saving") : t("budget.addTransaction")}
                   </Button>

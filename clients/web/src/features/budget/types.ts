@@ -78,6 +78,33 @@ export type BudgetSummary = {
   accountBalanceCents: number
   accounts: BudgetAccount[]
   plannedExpenses: PlannedExpense[]
+  actualIncomeCents: number
+  fundedBufferCents: number
+  maximumOrdinaryCents: number
+  ordinaryAvailableCents: number
+  ledgerEntries: BudgetLedgerEntry[]
+}
+
+export type BudgetLedgerEntry = {
+  id: string
+  periodId: string
+  categoryId?: string
+  kind: "income" | "expense"
+  occurredOn: string
+  description: string
+  amountCents: number
+  ordinaryImpactCents: number
+  source: string
+  createdAt: string
+}
+
+export type BudgetLedgerEntryInput = {
+  kind: BudgetLedgerEntry["kind"]
+  occurredOn: string
+  description: string
+  amountCents: number
+  categoryId?: string
+  affectsOrdinary?: boolean
 }
 
 export type BudgetTransactionInput = {

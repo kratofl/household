@@ -9,7 +9,7 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
     {
         var (period, categories, accounts) = await EnsureDefaultsAsync(
             ownerId, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
-        var transactions = await database.Transactions.AsNoTracking()
+        var ledgerEntries = await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id)
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -21,20 +21,31 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             .OrderByDescending(x => x.Active).ThenBy(x => x.DueDay).ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
 
-        var spentByCategory = transactions.Where(x => x.CategoryId.HasValue)
+        var spentByCategory = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.CategoryId.HasValue)
             .GroupBy(x => x.CategoryId!.Value).ToDictionary(x => x.Key, x => x.Sum(item => item.AmountCents));
         var categorySummaries = categories.Select(category => new CategorySummary(
             category.Id, category.Name, category.Color, category.Behavior,
             spentByCategory.GetValueOrDefault(category.Id))).ToList();
-        var spent = transactions.Where(x => x.IncludeInLimit).Sum(x => x.AmountCents);
-        var excluded = transactions.Where(x => !x.IncludeInLimit).Sum(x => x.AmountCents);
+        var spent = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents < 0).Sum(x => x.AmountCents);
+        var excluded = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents == 0).Sum(x => x.AmountCents);
+        var income = ledgerEntries.Where(x => x.Kind == BudgetValues.Income).Sum(x => x.AmountCents);
+        var ordinaryImpact = ledgerEntries.Where(x => x.Kind != BudgetValues.Income).Sum(x => x.OrdinaryImpactCents);
+        var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
+        var availability = BudgetAvailability.Calculate(
+            income,
+            ordinaryImpact,
+            settings?.BufferRule ?? BudgetValues.FixedBuffer,
+            settings?.BufferAmountCents ?? 0,
+            settings?.BufferPercentageBasisPoints ?? 0);
         var plannedSummaries = planned.Select(item => new PlannedExpenseSummary(
             item.Id, item.OwnerUserId, item.AccountId, item.CategoryId, item.Name, item.Kind, item.Cadence,
             item.AmountCents, item.DueDay, item.DueMonth, item.IncludeInLimit, item.Active,
             item.CreatedAt, item.UpdatedAt, applied.Contains(item.Id))).ToList();
         return new BudgetSummary(period, categorySummaries, spent, excluded,
-            period.SpendingLimitCents - period.OverspendCarryoverCents - spent,
-            accounts.Sum(x => x.BalanceCents), accounts, plannedSummaries);
+            availability.OrdinaryAvailableCents,
+            accounts.Sum(x => x.BalanceCents), accounts, plannedSummaries,
+            income, availability.FundedBufferCents, availability.MaximumOrdinaryCents,
+            availability.OrdinaryAvailableCents, ledgerEntries);
     }
 
     public async Task<(BudgetPeriod Period, List<BudgetCategory> Categories, List<BudgetAccount> Accounts)> EnsureDefaultsAsync(

@@ -52,6 +52,34 @@ public sealed class BudgetOpeningAllocation
     public DateTime CreatedAt { get; set; }
 }
 
+public sealed class BudgetLedgerEntry
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid PeriodId { get; set; }
+    public Guid? CategoryId { get; set; }
+    public string Kind { get; set; } = "";
+    public DateOnly OccurredOn { get; set; }
+    public string Description { get; set; } = "";
+    public long AmountCents { get; set; }
+    public long OrdinaryImpactCents { get; set; }
+    public string Source { get; set; } = "manual";
+    public Guid? SourceRecordId { get; set; }
+    public Guid? LegacyTransactionId { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class BudgetMigrationIssue
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string Code { get; set; } = "";
+    public string LegacyRecordType { get; set; } = "";
+    public Guid LegacyRecordId { get; set; }
+    public string Detail { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+}
+
 public sealed class BudgetCategory
 {
     public Guid Id { get; set; }
@@ -128,6 +156,8 @@ public static class BudgetValues
     public const string Yearly = "yearly";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
+    public const string Income = "income";
+    public const string Expense = "expense";
 }
 
 public sealed record CategorySummary(Guid Id, string Name, string Color, string Behavior, long SpentCents);
@@ -143,4 +173,9 @@ public sealed record BudgetSummary(
     long RemainingCents,
     long AccountBalanceCents,
     IReadOnlyList<BudgetAccount> Accounts,
-    IReadOnlyList<PlannedExpenseSummary> PlannedExpenses);
+    IReadOnlyList<PlannedExpenseSummary> PlannedExpenses,
+    long ActualIncomeCents,
+    long FundedBufferCents,
+    long MaximumOrdinaryCents,
+    long OrdinaryAvailableCents,
+    IReadOnlyList<BudgetLedgerEntry> LedgerEntries);

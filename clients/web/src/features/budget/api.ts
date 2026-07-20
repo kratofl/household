@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api"
 
 import type {
   BudgetCategoryInput,
+  BudgetLedgerEntryInput,
   BudgetPeriodInput,
   BudgetSummary,
   BudgetSetupInput,
@@ -28,6 +29,10 @@ export function loadBudgetSummary(accessToken: string) {
 
 export function createBudgetTransaction(accessToken: string, body: BudgetTransactionInput) {
   return apiRequest("/budget/transactions", { method: "POST", accessToken, body })
+}
+
+export function createBudgetLedgerEntry(accessToken: string, body: BudgetLedgerEntryInput) {
+  return apiRequest("/budget/ledger/entries", { method: "POST", accessToken, body })
 }
 
 export function updateCurrentBudgetPeriod(accessToken: string, body: BudgetPeriodInput) {

@@ -11,6 +11,7 @@ public static partial class BudgetEndpoints
     {
         var budget = routes.MapGroup("/budget");
         budget.MapBudgetSetupEndpoints();
+        budget.MapBudgetLedgerEndpoints();
         budget.MapGet("/healthz", () => Results.NoContent());
         budget.MapGet("/summary", Summary);
         budget.MapGet("/periods/current", GetCurrentPeriod);
@@ -202,6 +203,20 @@ public static partial class BudgetEndpoints
             };
             database.Transactions.Add(entry);
             await database.SaveChangesAsync(cancellationToken);
+            database.LedgerEntries.Add(new BudgetLedgerEntry
+            {
+                OwnerUserId = user.Id,
+                PeriodId = period.Id,
+                CategoryId = plan.CategoryId,
+                Kind = BudgetValues.Expense,
+                OccurredOn = occurredOn.Value,
+                Description = plan.Name,
+                AmountCents = plan.AmountCents,
+                OrdinaryImpactCents = plan.IncludeInLimit ? -plan.AmountCents : 0,
+                Source = "planned_expense",
+                SourceRecordId = plan.Id,
+                LegacyTransactionId = entry.Id,
+            });
             database.PlannedExpenseApplications.Add(new PlannedExpenseApplication
             {
                 OwnerUserId = user.Id, PlannedExpenseId = plan.Id, PeriodId = period.Id, TransactionId = entry.Id,
@@ -251,6 +266,20 @@ public static partial class BudgetEndpoints
         };
         database.Transactions.Add(entry);
         account.BalanceCents -= request.AmountCents;
+        await database.SaveChangesAsync(cancellationToken);
+        database.LedgerEntries.Add(new BudgetLedgerEntry
+        {
+            OwnerUserId = user.Id,
+            PeriodId = period.Id,
+            CategoryId = category?.Id,
+            Kind = BudgetValues.Expense,
+            OccurredOn = occurredOn,
+            Description = request.Description.Trim(),
+            AmountCents = request.AmountCents,
+            OrdinaryImpactCents = entry.IncludeInLimit ? -request.AmountCents : 0,
+            Source = "compatibility_transaction",
+            LegacyTransactionId = entry.Id,
+        });
         await database.SaveChangesAsync(cancellationToken);
         return Results.Created($"/api/v1/budget/transactions/{entry.Id}", entry);
     }
