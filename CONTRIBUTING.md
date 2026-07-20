@@ -14,7 +14,7 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 Prerequisites:
 
-- Go 1.26.x
+- .NET 10 SDK
 - Node.js 24.x and npm
 - Docker Engine with the Docker Compose plugin
 - Optional: `air` for backend hot reload
@@ -35,7 +35,7 @@ Start the local development stack:
 make dev
 ```
 
-This starts Postgres in Docker, then runs the Go API and Next.js locally. Local development seeds an admin user with `admin` / `admin` unless `HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD` overrides the password.
+This starts PostgreSQL in Docker, then runs the .NET API and Next.js locally. Local development seeds an admin user with `admin` / `admin` unless `HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD` overrides the password.
 
 More details:
 
@@ -65,8 +65,8 @@ make compose-config
 ## Project boundaries
 
 - Backend code lives in `backend/`.
-- Feature modules live under `backend/internal/features/<feature>`.
-- Shared backend platform code lives under `backend/internal/platform`.
+- Feature modules live under `backend/src/Household.Api/Features/<Feature>`.
+- Shared backend platform code lives under `backend/src/Household.Api/Platform`.
 - Feature data should stay in feature-owned Postgres schemas, such as `identity`, `budget`, and `audit`.
 - The web UI lives in `clients/web/`.
 - Docker and operations files live in `deployments/`.
@@ -75,18 +75,18 @@ Keep feature code inside the owning feature unless a helper is genuinely reusabl
 
 ## Backend conventions
 
-- API entry point: `backend/cmd/household-api`.
-- Updater entry point: `backend/cmd/household-updater`.
-- Route registration happens through feature `RegisterRoutes` implementations.
+- API entry point: `backend/src/Household.Api`.
+- Updater entry point: `backend/src/Household.Updater`.
+- Route registration happens through feature-owned endpoint mapping extensions.
 - Migrations run on API startup.
 - Use table-driven Go tests for pure logic.
 - Use `httptest` and small fakes for handler behavior where possible.
-- Run `gofmt` on changed Go files.
+- Keep nullable analysis and warnings-as-errors clean.
 
 Create feature migrations with:
 
 ```bash
-make create-migration feature=budget name=add_accounts
+make create-migration feature=budget name=AddAccounts
 ```
 
 ## Frontend conventions

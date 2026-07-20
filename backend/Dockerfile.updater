@@ -1,15 +1,14 @@
-FROM golang:1.26.3-alpine3.23 AS builder
-
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 WORKDIR /src
-COPY backend/go.mod backend/go.sum ./
-RUN go mod download
-COPY backend/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/household-updater ./cmd/household-updater
+COPY backend/Directory.Build.props backend/Household.slnx ./
+COPY backend/src/Household.Updater/Household.Updater.csproj src/Household.Updater/
+RUN dotnet restore src/Household.Updater/Household.Updater.csproj
+COPY backend/src/Household.Updater/ src/Household.Updater/
+RUN dotnet publish src/Household.Updater/Household.Updater.csproj --no-restore --configuration Release --output /app
 
-FROM docker:29.4.3-cli-alpine3.23
-
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /out/household-updater /usr/local/bin/household-updater
-
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
+RUN apk add --no-cache docker-cli ca-certificates wget
+COPY --from=build /app /app
+WORKDIR /app
 EXPOSE 8091
-ENTRYPOINT ["household-updater"]
+ENTRYPOINT ["dotnet", "Household.Updater.dll"]

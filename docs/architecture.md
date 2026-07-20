@@ -1,78 +1,51 @@
 # Architecture
 
-Household is moving toward a modular monolith: one backend process, one database, and feature-owned packages and schemas.
+Household is a modular monolith: one ASP.NET Core API process, one PostgreSQL database, and feature-owned modules and schemas.
 
 ## Runtime shape
 
-| Component | Path/service | Responsibility |
+| Module | Path/service | Responsibility |
 | --- | --- | --- |
 | Web UI | `clients/web` / `household-web` | Next.js UI and browser-to-backend proxy. |
-| API | `backend/cmd/household-api` / `household-api` | Go HTTP API, migrations, auth, features. |
-| Updater | `backend/cmd/household-updater` / `household-updater` | Internal sidecar for release updates. |
-| Database | `household-db` | Shared Postgres database with feature schemas. |
+| API | `backend/src/Household.Api` / `household-api` | .NET 10 HTTP API, EF Core migrations, authentication, and feature modules. |
+| Updater | `backend/src/Household.Updater` / `household-updater` | Internal .NET sidecar for release updates. |
+| Database | `household-db` | Shared PostgreSQL database with feature-owned schemas. |
 
 ## Backend layout
 
 ```text
 backend/
-  cmd/
-    household-api/
-    household-updater/
-  internal/
-    features/
-      identity/
-      budget/
-      auditlog/
-      updates/
-    platform/
-      audit/
-      config/
-      database/
-      http/
-      logging/
-      migrations/
-      validation/
+  src/
+    Household.Api/
+      Features/
+        Identity/
+        Budget/
+        Audit/
+        Updates/
+      Platform/
+    Household.Updater/
+  tests/
+    Household.Api.Tests/
 ```
 
-Feature packages register routes through a `RegisterRoutes` method. Platform packages contain shared concerns such as config loading, logging, HTTP middleware, database setup, audit persistence, and migration orchestration.
+Each feature owns its entities, EF Core context and migrations, application behavior, and endpoint registration. Platform code is limited to hosting, configuration, problem responses, and migration orchestration.
 
-## API routing
+Identity exposes a small internal current-user interface. Other features use that interface for authentication and ownership and do not query Identity tables directly.
 
-The API exposes `/healthz` and feature routes under `/api/v1`.
+## HTTP and database seams
 
-Implemented feature areas include:
+The API exposes `/healthz` and feature routes under `/api/v1`. Browser code calls `src/lib/api.ts`; the Next.js route proxy forwards `/api/backend/*` to the one API process.
 
-| Area | Current routes/status |
-| --- | --- |
-| Identity | Auth authorize/refresh/logout, users, password change, modules, active modules. |
-| Budget | Schema and health route scaffold; product behavior is still under development. |
-| Updates | Admin release candidates, updater status, and update job start. |
-| Audit log | Internal audit persistence for admin/update actions. |
+Feature data remains separated by PostgreSQL schema:
 
-## Database model
+| Feature/platform area | Schema | EF migration history |
+| --- | --- | --- |
+| Identity | `identity` | `identity.__EFMigrationsHistory` |
+| Budget | `budget` | `budget.__EFMigrationsHistory` |
+| Audit | `audit` | `audit.__EFMigrationsHistory` |
 
-Household uses one Postgres database. Features own their schemas:
-
-| Feature/platform area | Schema |
-| --- | --- |
-| Identity | `identity` |
-| Budget | `budget` |
-| Audit | `audit` |
-
-Migrations live next to the owning feature or platform package and run on API startup.
-
-## Frontend layout
-
-The web app is a Next.js App Router project in `clients/web`.
-
-Browser code calls `src/lib/api.ts`, which sends requests to `/api/backend/*`. The route handler at `src/app/api/backend/[...path]/route.ts` forwards those requests to the Go API. This keeps local-network installs simple and avoids browser CORS configuration.
+The adoption migrations are intentionally compatible with the previous Go-era schemas. Existing users, bcrypt password hashes, opaque token hashes, sessions, modules, audit records, and prototype Budget records remain readable during cutover.
 
 ## Update architecture
 
-The API checks GitHub Releases and asks the updater sidecar to apply updates. The updater can edit the stack env file, create backups, pull images, and restart services because it mounts the Docker socket.
-
-That Docker socket access is powerful. The updater is internal-only in Compose and protected by `HOUSEHOLD_UPDATER_TOKEN`.
-
-## Current product status
-
-Identity, admin user flow, module toggles, update checks, and the shell of budget are the active foundation. Budget planning, expense tracking, and other household modules are still planned or in progress. Public docs should distinguish current behavior from planned behavior.
+The API checks GitHub Releases and asks the updater sidecar to apply an update. The updater edits the stack environment, creates a database backup, pulls images, and restarts the API and web containers. It is internal-only, mounts the Docker socket, and requires `HOUSEHOLD_UPDATER_TOKEN`.

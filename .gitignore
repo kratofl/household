@@ -1,7 +1,9 @@
-# Go Build Artifacts
+# Build artifacts
 /bin/
 /build/
 /dist/
+**/bin/
+**/obj/
 *.exe
 *.test
 *.out
@@ -15,6 +17,7 @@ vendor/
 # Editor & IDE
 .idea/
 .vscode/
+.vs/
 *.swp
 *.swo
 *.DS_Store

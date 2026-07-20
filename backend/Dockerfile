@@ -1,22 +1,24 @@
-FROM golang:1.26.3-alpine3.23 AS builder
-WORKDIR /app
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS restore
+WORKDIR /src
+COPY backend/Directory.Build.props backend/Household.slnx ./
+COPY backend/src/Household.Api/Household.Api.csproj src/Household.Api/
+COPY backend/src/Household.Updater/Household.Updater.csproj src/Household.Updater/
+COPY backend/tests/Household.Api.Tests/Household.Api.Tests.csproj tests/Household.Api.Tests/
+RUN dotnet restore src/Household.Api/Household.Api.csproj
 
-COPY go.work go.work.sum ./
-COPY backend ./backend
-WORKDIR /app/backend
-RUN go build -o /app/household-api ./cmd/household-api
+FROM restore AS build
+COPY backend/src/Household.Api/ src/Household.Api/
+RUN dotnet publish src/Household.Api/Household.Api.csproj --no-restore --configuration Release --output /app
 
-FROM golang:1.26.3-alpine3.23 AS dev
-WORKDIR /app
-RUN apk add --no-cache git && go install github.com/air-verse/air@latest
-COPY --from=builder /app .
-WORKDIR /app/backend
-ENTRYPOINT ["air", "-c", ".air.toml"]
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS dev
+WORKDIR /src
+COPY backend/ ./
+RUN dotnet restore src/Household.Api/Household.Api.csproj
+ENTRYPOINT ["dotnet", "watch", "--project", "src/Household.Api/Household.Api.csproj", "run", "--no-restore"]
 
-FROM alpine:3.23 AS release
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS release
 WORKDIR /app
-RUN apk add --no-cache ca-certificates wget && addgroup -S household && adduser -S household -G household
-COPY --from=builder /app/household-api .
-COPY --from=builder /app/backend/internal ./internal
-USER household
-ENTRYPOINT ["./household-api"]
+RUN apk add --no-cache ca-certificates wget
+COPY --from=build /app .
+USER $APP_UID
+ENTRYPOINT ["dotnet", "Household.Api.dll"]
