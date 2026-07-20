@@ -7,6 +7,9 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetPeriod> Periods => Set<BudgetPeriod>();
     public DbSet<BudgetSettings> Settings => Set<BudgetSettings>();
     public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
+    public DbSet<BudgetIncomePlanPause> IncomePlanPauses => Set<BudgetIncomePlanPause>();
+    public DbSet<BudgetIncomePlanStop> IncomePlanStops => Set<BudgetIncomePlanStop>();
+    public DbSet<BudgetIncomeOccurrenceOverride> IncomeOccurrenceOverrides => Set<BudgetIncomeOccurrenceOverride>();
     public DbSet<BudgetOpeningAllocation> OpeningAllocations => Set<BudgetOpeningAllocation>();
     public DbSet<BudgetLedgerEntry> LedgerEntries => Set<BudgetLedgerEntry>();
     public DbSet<BudgetMigrationIssue> MigrationIssues => Set<BudgetMigrationIssue>();
@@ -25,6 +28,9 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigurePeriod(modelBuilder.Entity<BudgetPeriod>());
         ConfigureSettings(modelBuilder.Entity<BudgetSettings>());
         ConfigureIncomePlan(modelBuilder.Entity<BudgetIncomePlan>());
+        ConfigureIncomePlanPause(modelBuilder.Entity<BudgetIncomePlanPause>());
+        ConfigureIncomePlanStop(modelBuilder.Entity<BudgetIncomePlanStop>());
+        ConfigureIncomeOccurrenceOverride(modelBuilder.Entity<BudgetIncomeOccurrenceOverride>());
         ConfigureOpeningAllocation(modelBuilder.Entity<BudgetOpeningAllocation>());
         ConfigureLedgerEntry(modelBuilder.Entity<BudgetLedgerEntry>());
         ConfigureMigrationIssue(modelBuilder.Entity<BudgetMigrationIssue>());
@@ -156,14 +162,61 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     {
         entity.ToTable("income_plans"); entity.HasKey(x => x.Id);
         entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.SeriesId).HasColumnName("series_id");
         entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
         entity.Property(x => x.Name).HasColumnName("name");
         entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
         entity.Property(x => x.Cadence).HasColumnName("cadence");
+        entity.Property(x => x.IntervalUnit).HasColumnName("interval_unit");
+        entity.Property(x => x.IntervalCount).HasColumnName("interval_count");
+        entity.Property(x => x.Weekdays).HasColumnName("weekdays");
         entity.Property(x => x.StartDate).HasColumnName("start_date");
+        entity.Property(x => x.EffectiveFrom).HasColumnName("effective_from");
+        entity.Property(x => x.EffectiveTo).HasColumnName("effective_to");
+        entity.Property(x => x.ChangeReason).HasColumnName("change_reason");
         entity.Property(x => x.Active).HasColumnName("active");
         Timestamps(entity);
-        entity.HasIndex(x => new { x.OwnerUserId, x.Name });
+        entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.EffectiveFrom });
+    }
+
+    private static void ConfigureIncomePlanPause(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePlanPause> entity)
+    {
+        entity.ToTable("income_plan_pauses"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.SeriesId).HasColumnName("series_id");
+        entity.Property(x => x.From).HasColumnName("pause_from");
+        entity.Property(x => x.Through).HasColumnName("pause_through");
+        entity.Property(x => x.Reason).HasColumnName("reason");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.From });
+    }
+
+    private static void ConfigureIncomePlanStop(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePlanStop> entity)
+    {
+        entity.ToTable("income_plan_stops"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.SeriesId).HasColumnName("series_id");
+        entity.Property(x => x.EffectiveOn).HasColumnName("effective_on");
+        entity.Property(x => x.Reason).HasColumnName("reason");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.EffectiveOn });
+    }
+
+    private static void ConfigureIncomeOccurrenceOverride(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomeOccurrenceOverride> entity)
+    {
+        entity.ToTable("income_occurrence_overrides"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.SeriesId).HasColumnName("series_id");
+        entity.Property(x => x.ScheduledOn).HasColumnName("scheduled_on");
+        entity.Property(x => x.OccurredOn).HasColumnName("occurred_on");
+        entity.Property(x => x.Name).HasColumnName("name");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.Reason).HasColumnName("reason");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.ScheduledOn, x.CreatedAt });
     }
 
     private static void ConfigureOpeningAllocation(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetOpeningAllocation> entity)

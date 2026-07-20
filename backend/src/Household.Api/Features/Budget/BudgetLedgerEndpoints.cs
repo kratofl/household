@@ -201,18 +201,29 @@ public static class BudgetLedgerEndpoints
 
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         var (currentPeriod, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, today, cancellationToken);
+        var projectedPeriod = !periodId.HasValue || periodId == currentPeriod.Id
+            ? currentPeriod
+            : await database.Periods.AsNoTracking().SingleOrDefaultAsync(
+                x => x.OwnerUserId == user.Id && x.Id == periodId, cancellationToken);
         var applied = (await database.PlannedExpenseApplications.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.PeriodId == currentPeriod.Id)
             .Select(x => x.PlannedExpenseId).ToListAsync(cancellationToken)).ToHashSet();
         var plans = await database.PlannedExpenses.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.Active).ToListAsync(cancellationToken);
-        var expected = periodId.HasValue && periodId != currentPeriod.Id
+        var expectedExpenses = periodId.HasValue && periodId != currentPeriod.Id
             ? []
             : plans.Where(x => !applied.Contains(x.Id)).Select(plan => (Plan: plan, Date: BudgetService.OccurrenceDate(currentPeriod, plan)))
                 .Where(x => x.Date.HasValue)
                 .Select(x => new BudgetTimelineItem(
                     $"expected:{x.Plan.Id}:{currentPeriod.Id}", "expected", BudgetValues.Expense, "expected", x.Date!.Value,
                     x.Plan.Name, x.Plan.AmountCents, x.Plan.IncludeInLimit ? -x.Plan.AmountCents : 0, x.Plan.CategoryId,
-                    "", null, "planned_expense", [])).ToList();
-        var result = actual.Concat(expected).Where(item =>
+                "", null, "planned_expense", [])).ToList();
+        var expectedIncome = projectedPeriod is null
+            ? []
+            : (await new BudgetIncomePlanProjector(database).LoadAsync(
+                    user.Id, projectedPeriod.StartDate, projectedPeriod.EndDate, cancellationToken))
+                .Occurrences.Select(x => new BudgetTimelineItem(
+                    x.Id, "expected", BudgetValues.Income, "expected", x.OccurredOn,
+                    x.Name, x.AmountCents, x.AmountCents, null, "", null, "income_plan", [])).ToList();
+        var result = actual.Concat(expectedExpenses).Concat(expectedIncome).Where(item =>
                 (string.IsNullOrWhiteSpace(query) || item.Description.Contains(query, StringComparison.OrdinalIgnoreCase) || item.Merchant.Contains(query, StringComparison.OrdinalIgnoreCase)) &&
                 (string.IsNullOrWhiteSpace(status) || item.Status == status) &&
                 (string.IsNullOrWhiteSpace(kind) || item.Kind == kind) &&

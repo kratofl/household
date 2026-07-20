@@ -31,14 +31,55 @@ public sealed class BudgetSettings
 public sealed class BudgetIncomePlan
 {
     public Guid Id { get; set; }
+    public Guid SeriesId { get; set; }
     public Guid OwnerUserId { get; set; }
     public string Name { get; set; } = "";
     public long AmountCents { get; set; }
     public string Cadence { get; set; } = BudgetValues.Monthly;
+    public string IntervalUnit { get; set; } = BudgetValues.Month;
+    public int IntervalCount { get; set; } = 1;
+    public string Weekdays { get; set; } = "";
     public DateOnly StartDate { get; set; }
+    public DateOnly EffectiveFrom { get; set; }
+    public DateOnly? EffectiveTo { get; set; }
+    public string ChangeReason { get; set; } = "";
     public bool Active { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public sealed class BudgetIncomePlanPause
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid SeriesId { get; set; }
+    public DateOnly From { get; set; }
+    public DateOnly Through { get; set; }
+    public string Reason { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class BudgetIncomePlanStop
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid SeriesId { get; set; }
+    public DateOnly EffectiveOn { get; set; }
+    public string Reason { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class BudgetIncomeOccurrenceOverride
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid SeriesId { get; set; }
+    public DateOnly ScheduledOn { get; set; }
+    public DateOnly OccurredOn { get; set; }
+    public string Name { get; set; } = "";
+    public long AmountCents { get; set; }
+    public string Reason { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
 }
 
 public sealed class BudgetOpeningAllocation
@@ -200,7 +241,16 @@ public static class BudgetValues
     public const string FixedCost = "fixed_cost";
     public const string Subscription = "subscription";
     public const string Monthly = "monthly";
+    public const string Daily = "daily";
+    public const string Weekly = "weekly";
+    public const string Quarterly = "quarterly";
     public const string Yearly = "yearly";
+    public const string Custom = "custom";
+    public const string Day = "day";
+    public const string Week = "week";
+    public const string Month = "month";
+    public const string Quarter = "quarter";
+    public const string Year = "year";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";

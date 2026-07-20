@@ -10,6 +10,8 @@ import type {
   BudgetSetupInput,
   BudgetSetupState,
   BudgetTransactionInput,
+  IncomePlanInput,
+  IncomePlanProjection,
   PlannedExpenseInput,
 } from "./types"
 
@@ -79,4 +81,24 @@ export function updatePlannedExpense(accessToken: string, id: string, body: Plan
 
 export function applyCurrentPlannedExpenses(accessToken: string) {
   return apiRequest("/budget/planned-expenses/apply-current", { method: "POST", accessToken })
+}
+
+export function loadIncomePlans(accessToken: string, from: string, through: string) {
+  return apiRequest<IncomePlanProjection>(`/budget/income-plans?from=${from}&through=${through}`, { accessToken })
+}
+
+export function createIncomePlan(accessToken: string, body: IncomePlanInput) {
+  return apiRequest("/budget/income-plans", { method: "POST", accessToken, body })
+}
+
+export function editIncomePlan(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}`, { method: "PATCH", accessToken, body })
+}
+
+export function pauseIncomePlan(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/pauses`, { method: "POST", accessToken, body })
+}
+
+export function stopIncomePlan(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/stop`, { method: "POST", accessToken, body })
 }

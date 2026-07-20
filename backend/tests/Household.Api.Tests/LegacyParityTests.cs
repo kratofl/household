@@ -520,6 +520,87 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Recurring_income_keeps_versioned_history_and_skips_paused_or_stopped_occurrences()
+    {
+        const string token = LegacyParityFixture.IncomeAccessToken;
+        using var createRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans", token);
+        createRequest.Content = JsonContent.Create(new
+        {
+            name = "Contract work", amountCents = 100_000, cadence = "custom", intervalUnit = "week",
+            intervalCount = 2, weekdays = new[] { 1, 4 }, startDate = "2026-07-06",
+        });
+        var createResponse = await fixture.Client.SendAsync(createRequest);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var seriesId = created.GetProperty("seriesId").GetGuid();
+
+        using var pauseRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/income-plans/{seriesId}/pauses", token);
+        pauseRequest.Content = JsonContent.Create(new { from = "2026-07-20", through = "2026-07-23", reason = "Client holiday" });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(pauseRequest)).StatusCode);
+
+        using var occurrenceEdit = Authenticated(HttpMethod.Patch, $"/api/v1/budget/income-plans/{seriesId}", token);
+        occurrenceEdit.Content = JsonContent.Create(new
+        {
+            scope = "occurrence", scheduledOn = "2026-07-09", occurredOn = "2026-07-10",
+            amountCents = 120_000, reason = "Invoice paid a day later",
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(occurrenceEdit)).StatusCode);
+
+        using var futureEdit = Authenticated(HttpMethod.Patch, $"/api/v1/budget/income-plans/{seriesId}", token);
+        futureEdit.Content = JsonContent.Create(new
+        {
+            scope = "future", effectiveOn = "2026-08-03", amountCents = 150_000,
+            reason = "New contract rate",
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(futureEdit)).StatusCode);
+
+        using var stopRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/income-plans/{seriesId}/stop", token);
+        stopRequest.Content = JsonContent.Create(new { effectiveOn = "2026-08-18", reason = "Contract ended" });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(stopRequest)).StatusCode);
+
+        using var listRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/income-plans?from=2026-07-01&through=2026-09-30", token);
+        var projection = await (await fixture.Client.SendAsync(listRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var plan = Assert.Single(
+            projection.GetProperty("plans").EnumerateArray(),
+            x => x.GetProperty("seriesId").GetGuid() == seriesId);
+        Assert.Equal("2026-08-18", plan.GetProperty("stoppedOn").GetString());
+        Assert.Equal(2, plan.GetProperty("versions").GetArrayLength());
+        Assert.Equal("2026-08-02", plan.GetProperty("versions")[0].GetProperty("effectiveTo").GetString());
+
+        var occurrences = projection.GetProperty("occurrences").EnumerateArray()
+            .Where(x => x.GetProperty("seriesId").GetGuid() == seriesId).ToList();
+        Assert.Equal(
+            ["2026-07-06", "2026-07-10", "2026-08-03", "2026-08-06", "2026-08-17"],
+            occurrences.Select(x => x.GetProperty("occurredOn").GetString()));
+        Assert.Equal(100_000, occurrences[0].GetProperty("amountCents").GetInt64());
+        Assert.True(occurrences[1].GetProperty("overridden").GetBoolean());
+        Assert.Equal(120_000, occurrences[1].GetProperty("amountCents").GetInt64());
+        Assert.All(occurrences.Skip(2), occurrence => Assert.Equal(150_000, occurrence.GetProperty("amountCents").GetInt64()));
+
+        using var timelineRequest = Authenticated(
+            HttpMethod.Get, "/api/v1/budget/timeline?kind=income&status=expected&origin=income_plan", token);
+        var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(timeline.EnumerateArray(), item =>
+            item.GetProperty("description").GetString() == "Contract work" &&
+            item.GetProperty("occurredOn").GetString() == "2026-07-10" &&
+            item.GetProperty("amountCents").GetInt64() == 120_000);
+    }
+
+    [Fact]
+    public async Task Recurring_income_api_accepts_each_standard_cadence()
+    {
+        foreach (var cadence in new[] { "daily", "weekly", "monthly", "quarterly", "yearly" })
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans", LegacyParityFixture.IncomeAccessToken);
+            request.Content = JsonContent.Create(new
+            {
+                name = $"{cadence} income", amountCents = 1_000, cadence, intervalCount = 1, startDate = "2026-07-01",
+            });
+            Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(request)).StatusCode);
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

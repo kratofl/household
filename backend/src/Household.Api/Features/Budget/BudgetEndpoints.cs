@@ -12,6 +12,7 @@ public static partial class BudgetEndpoints
         var budget = routes.MapGroup("/budget");
         budget.MapBudgetSetupEndpoints();
         budget.MapBudgetLedgerEndpoints();
+        budget.MapBudgetIncomePlanEndpoints();
         budget.MapGet("/healthz", () => Results.NoContent());
         budget.MapGet("/summary", Summary);
         budget.MapGet("/periods/current", GetCurrentPeriod);

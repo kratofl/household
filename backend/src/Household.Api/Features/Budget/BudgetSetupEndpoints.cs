@@ -84,14 +84,8 @@ public static partial class BudgetSetupEndpoints
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (includeInitialValues && isFirstSetup)
         {
-            database.IncomePlans.AddRange((request.IncomePlans ?? []).Select(plan => new BudgetIncomePlan
-            {
-                OwnerUserId = user.Id,
-                Name = plan.Name.Trim(),
-                AmountCents = plan.AmountCents,
-                Cadence = BudgetValues.Monthly,
-                StartDate = today,
-            }));
+            database.IncomePlans.AddRange((request.IncomePlans ?? []).Select(plan =>
+                InitialIncomePlanVersion(plan, user.Id, today)));
             database.OpeningAllocations.AddRange((request.OpeningAllocations ?? []).Where(item => item.AmountCents > 0).Select(item =>
                 new BudgetOpeningAllocation
                 {
@@ -115,7 +109,8 @@ public static partial class BudgetSetupEndpoints
         CancellationToken cancellationToken)
     {
         var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
-        var incomePlans = await database.IncomePlans.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        var incomePlans = await database.IncomePlans.AsNoTracking().Where(
+                x => x.OwnerUserId == ownerId && x.Active && x.EffectiveTo == null)
             .OrderBy(x => x.Name).Select(x => new InitialIncomePlan(x.Id, x.Name, x.AmountCents)).ToListAsync(cancellationToken);
         var openingAllocations = await database.OpeningAllocations.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.OccurredOn).ThenBy(x => x.Name)
@@ -137,6 +132,24 @@ public static partial class BudgetSetupEndpoints
         await database.PlannedExpenses.AnyAsync(x => x.OwnerUserId == ownerId, cancellationToken) ||
         await database.IncomePlans.AnyAsync(x => x.OwnerUserId == ownerId, cancellationToken) ||
         await database.OpeningAllocations.AnyAsync(x => x.OwnerUserId == ownerId, cancellationToken);
+
+    private static BudgetIncomePlan InitialIncomePlanVersion(InitialIncomePlanRequest plan, Guid ownerId, DateOnly today)
+    {
+        var seriesId = Guid.NewGuid();
+        return new BudgetIncomePlan
+        {
+            Id = seriesId,
+            SeriesId = seriesId,
+            OwnerUserId = ownerId,
+            Name = plan.Name.Trim(),
+            AmountCents = plan.AmountCents,
+            Cadence = BudgetValues.Monthly,
+            IntervalUnit = BudgetValues.Month,
+            IntervalCount = 1,
+            StartDate = today,
+            EffectiveFrom = today,
+        };
+    }
 
     private static IResult? Validate(BudgetSetupRequest request)
     {

@@ -64,6 +64,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   applyCurrentPlannedExpenses,
   createBudgetCategory,
+  createIncomePlan,
   createBudgetLedgerEntry,
   correctBudgetLedgerEntry,
   createPlannedExpense as createPlannedExpenseRequest,
@@ -71,8 +72,12 @@ import {
   loadBudgetSetup,
   loadBudgetLedgerDetails,
   loadBudgetTimeline,
+  loadIncomePlans,
+  editIncomePlan,
+  pauseIncomePlan,
   refundBudgetLedgerEntry,
   saveBudgetSetup,
+  stopIncomePlan,
   updateBudgetCategory,
   updateCurrentBudgetPeriod,
   updateBudgetSettings,
@@ -85,6 +90,9 @@ import type {
   BudgetSetupState,
   BudgetSummary,
   BudgetTimelineItem,
+  ExpectedIncomeOccurrence,
+  IncomePlan,
+  IncomePlanProjection,
   PlannedExpense,
 } from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
@@ -1126,6 +1134,21 @@ function BudgetPanel(props: {
   const [plannedCadence, setPlannedCadence] = useState<PlannedExpense["cadence"]>("monthly")
   const [plannedDueDay, setPlannedDueDay] = useState("1")
   const [plannedDueMonth, setPlannedDueMonth] = useState(String(new Date().getMonth() + 1))
+  const [incomeProjection, setIncomeProjection] = useState<IncomePlanProjection | null>(null)
+  const [incomeName, setIncomeName] = useState("")
+  const [incomeAmount, setIncomeAmount] = useState("")
+  const [incomeCadence, setIncomeCadence] = useState<IncomePlan["cadence"]>("monthly")
+  const [incomeUnit, setIncomeUnit] = useState<IncomePlan["intervalUnit"]>("month")
+  const [incomeInterval, setIncomeInterval] = useState("1")
+  const [incomeWeekdays, setIncomeWeekdays] = useState<number[]>([])
+  const [incomeStart, setIncomeStart] = useState(() => new Date().toISOString().slice(0, 10))
+  const [incomeStop, setIncomeStop] = useState("")
+  const [incomeAction, setIncomeAction] = useState<{ kind: "occurrence" | "future" | "effective_date" | "pause" | "stop"; seriesId: string; occurrence?: ExpectedIncomeOccurrence } | null>(null)
+  const [incomeActionDate, setIncomeActionDate] = useState("")
+  const [incomeActionThrough, setIncomeActionThrough] = useState("")
+  const [incomeActionName, setIncomeActionName] = useState("")
+  const [incomeActionAmount, setIncomeActionAmount] = useState("")
+  const [incomeActionReason, setIncomeActionReason] = useState("")
   const [baseCurrency, setBaseCurrency] = useState("EUR")
   const [periodStartDay, setPeriodStartDay] = useState("1")
   const [bufferRule, setBufferRule] = useState<BudgetSetupState["bufferRule"]>("fixed")
@@ -1214,6 +1237,14 @@ function BudgetPanel(props: {
     setTimeline(await loadBudgetTimeline(accessToken, parameters.toString()))
   }, [accessToken, timelineKind, timelineQuery, timelineStatus])
 
+  const loadRecurringIncome = useCallback(async () => {
+    if (!accessToken) return
+    const from = summary?.period.startDate ?? new Date().toISOString().slice(0, 10)
+    const end = new Date(`${from}T00:00:00Z`)
+    end.setUTCFullYear(end.getUTCFullYear() + 1)
+    setIncomeProjection(await loadIncomePlans(accessToken, from, end.toISOString().slice(0, 10)))
+  }, [accessToken, summary?.period.startDate])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1256,6 +1287,14 @@ function BudgetPanel(props: {
     const timer = window.setTimeout(() => void loadTimeline(), 150)
     return () => window.clearTimeout(timer)
   }, [accessToken, loadTimeline, selectedBudgetView])
+
+  useEffect(() => {
+    if (!accessToken || selectedBudgetView !== "planning") return
+    const timer = window.setTimeout(() => {
+      void loadRecurringIncome().catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [accessToken, loadRecurringIncome, selectedBudgetView, t])
 
   const createTransaction = async () => {
     if (!accessToken) return
@@ -1441,6 +1480,85 @@ function BudgetPanel(props: {
     try {
       await applyCurrentPlannedExpenses(accessToken)
       await loadSummary()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const createRecurringIncome = async () => {
+    if (!accessToken) return
+    const amountCents = parseEuroCents(incomeAmount)
+    const intervalCount = Number(incomeInterval)
+    if (!incomeName.trim() || !amountCents || !incomeStart || !Number.isInteger(intervalCount) || intervalCount <= 0) {
+      setError(t("budget.incomePlanValidation"))
+      return
+    }
+    setSaving(true)
+    try {
+      await createIncomePlan(accessToken, {
+        name: incomeName.trim(),
+        amountCents,
+        cadence: incomeCadence,
+        intervalUnit: incomeUnit,
+        intervalCount,
+        weekdays: incomeCadence === "custom" && incomeUnit === "week" ? incomeWeekdays : [],
+        startDate: incomeStart,
+        stopDate: incomeStop || undefined,
+      })
+      setIncomeName("")
+      setIncomeAmount("")
+      setIncomeStop("")
+      await loadRecurringIncome()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openIncomePlanAction = (
+    kind: "occurrence" | "future" | "effective_date" | "pause" | "stop",
+    plan: IncomePlan,
+    occurrence?: ExpectedIncomeOccurrence,
+  ) => {
+    setIncomeAction({ kind, seriesId: plan.seriesId, occurrence })
+    setIncomeActionDate(occurrence?.occurredOn ?? new Date().toISOString().slice(0, 10))
+    setIncomeActionThrough(occurrence?.occurredOn ?? new Date().toISOString().slice(0, 10))
+    setIncomeActionName(occurrence?.name ?? plan.name)
+    setIncomeActionAmount(centsToInput(occurrence?.amountCents ?? plan.amountCents))
+    setIncomeActionReason("")
+  }
+
+  const submitIncomePlanAction = async () => {
+    if (!accessToken || !incomeAction || !incomeActionReason.trim()) {
+      setError(t("budget.incomeActionValidation"))
+      return
+    }
+    const amountCents = parseEuroCents(incomeActionAmount)
+    setSaving(true)
+    try {
+      if (incomeAction.kind === "pause") {
+        await pauseIncomePlan(accessToken, incomeAction.seriesId, {
+          from: incomeActionDate, through: incomeActionThrough, reason: incomeActionReason,
+        })
+      } else if (incomeAction.kind === "stop") {
+        await stopIncomePlan(accessToken, incomeAction.seriesId, {
+          effectiveOn: incomeActionDate, reason: incomeActionReason,
+        })
+      } else {
+        if (!amountCents || !incomeActionName.trim()) throw new Error(t("budget.incomePlanValidation"))
+        await editIncomePlan(accessToken, incomeAction.seriesId, {
+          scope: incomeAction.kind,
+          scheduledOn: incomeAction.occurrence?.scheduledOn,
+          effectiveOn: incomeAction.kind === "occurrence" ? undefined : incomeActionDate,
+          occurredOn: incomeAction.kind === "occurrence" ? incomeActionDate : undefined,
+          name: incomeActionName.trim(), amountCents, reason: incomeActionReason,
+        })
+      }
+      setIncomeAction(null)
+      await Promise.all([loadRecurringIncome(), loadTimeline()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -2038,6 +2156,139 @@ function BudgetPanel(props: {
             </div>
             ) : null}
             {showPlanning ? (
+            <div className="space-y-5">
+            <div className="rounded-lg border p-4">
+              <div>
+                <h3 className="font-medium">{t("budget.incomePlansTitle")}</h3>
+                <p className="text-sm text-muted-foreground">{t("budget.incomePlansDescription")}</p>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Input value={incomeName} onChange={(event) => setIncomeName(event.target.value)} placeholder={t("budget.incomeName")} />
+                <Input inputMode="decimal" value={incomeAmount} onChange={(event) => setIncomeAmount(event.target.value)} placeholder={t("budget.amount")} />
+                <FormSelect
+                  value={incomeCadence}
+                  onValueChange={(value) => setIncomeCadence(value as IncomePlan["cadence"])}
+                  options={[
+                    { value: "daily", label: t("budget.daily") },
+                    { value: "weekly", label: t("budget.weekly") },
+                    { value: "monthly", label: t("budget.monthly") },
+                    { value: "quarterly", label: t("budget.quarterly") },
+                    { value: "yearly", label: t("budget.yearly") },
+                    { value: "custom", label: t("budget.custom") },
+                  ]}
+                />
+                <Input type="date" value={incomeStart} onChange={(event) => setIncomeStart(event.target.value)} aria-label={t("budget.startDate")} />
+                <Input type="date" value={incomeStop} onChange={(event) => setIncomeStop(event.target.value)} aria-label={t("budget.optionalStopDate")} />
+                {incomeCadence === "custom" ? (
+                  <>
+                    <Input inputMode="numeric" min={1} value={incomeInterval} onChange={(event) => setIncomeInterval(event.target.value)} aria-label={t("budget.intervalCount")} />
+                    <FormSelect
+                      value={incomeUnit}
+                      onValueChange={(value) => setIncomeUnit(value as IncomePlan["intervalUnit"])}
+                      options={[
+                        { value: "day", label: t("budget.days") },
+                        { value: "week", label: t("budget.weeks") },
+                        { value: "month", label: t("budget.months") },
+                        { value: "quarter", label: t("budget.quarters") },
+                        { value: "year", label: t("budget.years") },
+                      ]}
+                    />
+                  </>
+                ) : null}
+                <Button onClick={createRecurringIncome} disabled={saving}>{t("budget.addIncomePlan")}</Button>
+              </div>
+              {incomeCadence === "custom" && incomeUnit === "week" ? (
+                <div className="mt-3 flex flex-wrap gap-2" aria-label={t("budget.weekdays")}>
+                  {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={incomeWeekdays.includes(day) ? "default" : "outline"}
+                      onClick={() => setIncomeWeekdays((current) => current.includes(day) ? current.filter((value) => value !== day) : [...current, day])}
+                    >
+                      {new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-US", { weekday: "short" }).format(new Date(Date.UTC(2026, 6, 5 + day)))}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-5 grid gap-3 xl:grid-cols-2">
+                {(incomeProjection?.plans ?? []).length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    {t("budget.noIncomePlans")}
+                  </div>
+                ) : incomeProjection?.plans.map((plan) => (
+                  <div key={plan.seriesId} className={`rounded-md border p-3 ${plan.stoppedOn ? "opacity-60" : ""}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{plan.name} · {currency(plan.amountCents)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {plan.cadence === "custom"
+                            ? `${t("budget.every")} ${plan.intervalCount} ${plan.intervalUnit}`
+                            : t(plan.cadence === "daily" ? "budget.daily" : plan.cadence === "weekly" ? "budget.weekly" : plan.cadence === "quarterly" ? "budget.quarterly" : plan.cadence === "yearly" ? "budget.yearly" : "budget.monthly")}
+                          {plan.stoppedOn ? ` · ${t("budget.stoppedOn")} ${plan.stoppedOn}` : ""}
+                          {` · ${plan.versions.length} ${t("budget.versions")}`}
+                        </p>
+                      </div>
+                      {!plan.stoppedOn ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openIncomePlanAction("future", plan)}>{t("budget.editFuture")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => openIncomePlanAction("effective_date", plan)}>{t("budget.editEffective")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => openIncomePlanAction("pause", plan)}>{t("budget.pause")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => openIncomePlanAction("stop", plan)}>{t("budget.stop")}</Button>
+                        </div>
+                      ) : null}
+                    </div>
+                    {plan.pauses.length > 0 ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {plan.pauses.map((pause) => `${t("budget.paused")} ${pause.from}–${pause.through}`).join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5">
+                <h4 className="text-sm font-medium">{t("budget.upcomingIncome")}</h4>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {(incomeProjection?.occurrences ?? []).slice(0, 18).map((occurrence) => {
+                    const plan = incomeProjection?.plans.find((item) => item.seriesId === occurrence.seriesId)
+                    return (
+                      <div key={occurrence.id} className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                        <div>
+                          <p className="font-medium">{occurrence.name}</p>
+                          <p className="text-xs text-muted-foreground">{occurrence.occurredOn}{occurrence.overridden ? ` · ${t("budget.overridden")}` : ""}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>{currency(occurrence.amountCents)}</span>
+                          {plan && !plan.stoppedOn ? (
+                            <Button size="sm" variant="ghost" onClick={() => openIncomePlanAction("occurrence", plan, occurrence)}>{t("budget.editOccurrence")}</Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              {incomeAction ? (
+                <div className="mt-5 grid gap-3 rounded-md border bg-muted/10 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {incomeAction.kind !== "stop" && incomeAction.kind !== "pause" ? (
+                    <>
+                      <Input value={incomeActionName} onChange={(event) => setIncomeActionName(event.target.value)} placeholder={t("budget.incomeName")} />
+                      <Input inputMode="decimal" value={incomeActionAmount} onChange={(event) => setIncomeActionAmount(event.target.value)} placeholder={t("budget.amount")} />
+                    </>
+                  ) : null}
+                  <Input type="date" value={incomeActionDate} onChange={(event) => setIncomeActionDate(event.target.value)} aria-label={t("budget.effectiveDate")} />
+                  {incomeAction.kind === "pause" ? (
+                    <Input type="date" value={incomeActionThrough} onChange={(event) => setIncomeActionThrough(event.target.value)} aria-label={t("budget.pauseThrough")} />
+                  ) : null}
+                  <Input value={incomeActionReason} onChange={(event) => setIncomeActionReason(event.target.value)} placeholder={t("budget.reason")} />
+                  <div className="flex gap-2">
+                    <Button onClick={submitIncomePlanAction} disabled={saving}>{t("budget.confirmAction")}</Button>
+                    <Button variant="outline" onClick={() => setIncomeAction(null)}>{t("budget.cancel")}</Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <div className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -2139,6 +2390,7 @@ function BudgetPanel(props: {
                   ))
                 )}
               </div>
+            </div>
             </div>
             ) : null}
             {showSaving || showWishlist || showReports ? (

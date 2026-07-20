@@ -174,3 +174,44 @@ export type PlannedExpenseInput = {
   includeInLimit: boolean
   active: boolean
 }
+
+export type IncomePlan = {
+  seriesId: string
+  name: string
+  amountCents: number
+  cadence: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"
+  intervalUnit: "day" | "week" | "month" | "quarter" | "year"
+  intervalCount: number
+  weekdays: number[]
+  startDate: string
+  stoppedOn?: string
+  pauses: Array<{ id: string; from: string; through: string; reason: string }>
+  versions: Array<{ id: string; effectiveFrom: string; effectiveTo?: string; changeReason: string }>
+}
+
+export type ExpectedIncomeOccurrence = {
+  id: string
+  seriesId: string
+  versionId: string
+  scheduledOn: string
+  occurredOn: string
+  name: string
+  amountCents: number
+  overridden: boolean
+}
+
+export type IncomePlanProjection = {
+  plans: IncomePlan[]
+  occurrences: ExpectedIncomeOccurrence[]
+}
+
+export type IncomePlanInput = {
+  name: string
+  amountCents: number
+  cadence: IncomePlan["cadence"]
+  intervalUnit: IncomePlan["intervalUnit"]
+  intervalCount: number
+  weekdays: number[]
+  startDate: string
+  stopDate?: string
+}
