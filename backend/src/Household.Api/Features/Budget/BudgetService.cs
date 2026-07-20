@@ -14,6 +14,12 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id)
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
+        var voidedIds = (await database.LedgerActions.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Void && ledgerEntries.Select(entry => entry.Id).Contains(x.LedgerEntryId))
+            .Select(x => x.LedgerEntryId).ToListAsync(cancellationToken)).ToHashSet();
+        var effectiveIds = BudgetLedgerState.EffectiveIds(
+            ledgerEntries.Select(x => new LedgerStateEntry(x.Id, x.CorrectsEntryId)).ToList(), voidedIds).ToHashSet();
+        var effectiveEntries = ledgerEntries.Where(x => effectiveIds.Contains(x.Id)).ToList();
         var applications = await database.PlannedExpenseApplications.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id)
             .Select(x => x.PlannedExpenseId).ToListAsync(cancellationToken);
@@ -22,15 +28,18 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             .OrderByDescending(x => x.Active).ThenBy(x => x.DueDay).ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
 
-        var spentByCategory = ledgerEntries.SelectMany(x => x.Splits).Where(x => x.CategoryId.HasValue)
-            .GroupBy(x => x.CategoryId!.Value).ToDictionary(x => x.Key, x => x.Sum(item => item.AmountCents));
+        var spentByCategory = effectiveEntries.SelectMany(entry => entry.Splits.Select(split => new { entry.Kind, Split = split }))
+            .Where(x => x.Split.CategoryId.HasValue && x.Kind is BudgetValues.Expense or BudgetValues.Refund)
+            .GroupBy(x => x.Split.CategoryId!.Value)
+            .ToDictionary(x => x.Key, x => x.Sum(item => item.Kind == BudgetValues.Refund ? -item.Split.AmountCents : item.Split.AmountCents));
         var categorySummaries = categories.Select(category => new CategorySummary(
             category.Id, category.Name, category.Color, category.Icon, category.Behavior, category.ArchivedAt is not null,
             spentByCategory.GetValueOrDefault(category.Id))).ToList();
-        var spent = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents < 0).Sum(x => x.AmountCents);
-        var excluded = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents == 0).Sum(x => x.AmountCents);
-        var income = ledgerEntries.Where(x => x.Kind == BudgetValues.Income).Sum(x => x.AmountCents);
-        var ordinaryImpact = ledgerEntries.Where(x => x.Kind != BudgetValues.Income).Sum(x => x.OrdinaryImpactCents);
+        var spent = effectiveEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents < 0).Sum(x => x.AmountCents)
+            - effectiveEntries.Where(x => x.Kind == BudgetValues.Refund && x.OrdinaryImpactCents > 0).Sum(x => x.AmountCents);
+        var excluded = effectiveEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents == 0).Sum(x => x.AmountCents);
+        var income = effectiveEntries.Where(x => x.Kind == BudgetValues.Income).Sum(x => x.AmountCents);
+        var ordinaryImpact = effectiveEntries.Where(x => x.Kind != BudgetValues.Income).Sum(x => x.OrdinaryImpactCents);
         var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
         var availability = BudgetAvailability.Calculate(
             income,

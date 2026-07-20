@@ -128,6 +128,22 @@ export type BudgetLedgerEntryInput = {
   }>
 }
 
+export type BudgetTimelineItem = {
+  id: string
+  entryType: "actual" | "expected"
+  kind: "income" | "expense" | "refund"
+  status: "actual" | "expected" | "corrected" | "voided"
+  occurredOn: string
+  description: string
+  amountCents: number
+  ordinaryImpactCents: number
+  categoryId?: string
+  merchant: string
+  merchantBrandKey?: string
+  origin: string
+  splits: BudgetLedgerEntry["splits"]
+}
+
 export type BudgetTransactionInput = {
   accountId: string
   categoryId: string

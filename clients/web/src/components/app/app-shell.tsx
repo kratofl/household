@@ -65,19 +65,26 @@ import {
   applyCurrentPlannedExpenses,
   createBudgetCategory,
   createBudgetLedgerEntry,
+  correctBudgetLedgerEntry,
   createPlannedExpense as createPlannedExpenseRequest,
   loadBudgetSummary,
   loadBudgetSetup,
+  loadBudgetLedgerDetails,
+  loadBudgetTimeline,
+  refundBudgetLedgerEntry,
   saveBudgetSetup,
   updateBudgetCategory,
   updateCurrentBudgetPeriod,
   updateBudgetSettings,
   updatePlannedExpense as updatePlannedExpenseRequest,
+  voidBudgetLedgerEntry,
 } from "@/features/budget/api"
 import type {
   BudgetCategory,
+  BudgetLedgerEntry,
   BudgetSetupState,
   BudgetSummary,
+  BudgetTimelineItem,
   PlannedExpense,
 } from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
@@ -1128,6 +1135,16 @@ function BudgetPanel(props: {
   const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
   const [openingName, setOpeningName] = useState("")
   const [openingAmount, setOpeningAmount] = useState("")
+  const [timeline, setTimeline] = useState<BudgetTimelineItem[]>([])
+  const [timelineQuery, setTimelineQuery] = useState("")
+  const [timelineKind, setTimelineKind] = useState("all")
+  const [timelineStatus, setTimelineStatus] = useState("all")
+  const [selectedTimeline, setSelectedTimeline] = useState<BudgetTimelineItem | null>(null)
+  const [selectedDetails, setSelectedDetails] = useState<{ entry: BudgetLedgerEntry; auditHistory: unknown } | null>(null)
+  const [timelineAction, setTimelineAction] = useState<"correction" | "void" | "refund" | null>(null)
+  const [actionReason, setActionReason] = useState("")
+  const [actionDescription, setActionDescription] = useState("")
+  const [actionAmount, setActionAmount] = useState("")
 
   const currency = useCallback(
     (cents: number) =>
@@ -1188,6 +1205,15 @@ function BudgetPanel(props: {
     hydrateSetup(data)
   }, [accessToken, hydrateSetup])
 
+  const loadTimeline = useCallback(async () => {
+    if (!accessToken) return
+    const parameters = new URLSearchParams()
+    if (timelineQuery.trim()) parameters.set("query", timelineQuery.trim())
+    if (timelineKind !== "all") parameters.set("kind", timelineKind)
+    if (timelineStatus !== "all") parameters.set("status", timelineStatus)
+    setTimeline(await loadBudgetTimeline(accessToken, parameters.toString()))
+  }, [accessToken, timelineKind, timelineQuery, timelineStatus])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1224,6 +1250,12 @@ function BudgetPanel(props: {
 
     return () => window.clearTimeout(timer)
   }, [selectedBudgetView])
+
+  useEffect(() => {
+    if (!accessToken || selectedBudgetView !== "transactions") return
+    const timer = window.setTimeout(() => void loadTimeline(), 150)
+    return () => window.clearTimeout(timer)
+  }, [accessToken, loadTimeline, selectedBudgetView])
 
   const createTransaction = async () => {
     if (!accessToken) return
@@ -1271,7 +1303,7 @@ function BudgetPanel(props: {
       setAmount("")
       setMerchant("")
       setSplitAmount("")
-      await loadSummary()
+      await Promise.all([loadSummary(), loadTimeline()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1457,6 +1489,63 @@ function BudgetPanel(props: {
         : await saveBudgetSetup(accessToken, body)
       hydrateSetup(data)
       await Promise.all([loadSummary(), loadSetup()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const selectTimelineItem = async (item: BudgetTimelineItem) => {
+    setSelectedTimeline(item)
+    setTimelineAction(null)
+    setActionReason("")
+    setActionDescription(item.description)
+    setActionAmount(centsToInput(item.amountCents))
+    if (!accessToken || item.entryType !== "actual") {
+      setSelectedDetails(null)
+      return
+    }
+    try {
+      setSelectedDetails(await loadBudgetLedgerDetails(accessToken, item.id))
+    } catch {
+      setSelectedDetails(null)
+    }
+  }
+
+  const submitTimelineAction = async () => {
+    if (!accessToken || !selectedTimeline || !timelineAction) return
+    const amountCents = parseEuroCents(actionAmount)
+    if (!actionReason.trim() || (timelineAction !== "void" && (amountCents === null || amountCents <= 0))) {
+      setError(t("budget.timelineActionValidation"))
+      return
+    }
+    setSaving(true)
+    try {
+      if (timelineAction === "void") {
+        await voidBudgetLedgerEntry(accessToken, selectedTimeline.id, actionReason)
+      } else if (timelineAction === "refund") {
+        await refundBudgetLedgerEntry(accessToken, selectedTimeline.id, {
+          occurredOn,
+          amountCents,
+          description: actionReason,
+        })
+      } else {
+        await correctBudgetLedgerEntry(accessToken, selectedTimeline.id, {
+          reason: actionReason,
+          description: actionDescription.trim(),
+          occurredOn: selectedTimeline.occurredOn,
+          amountCents,
+          categoryId: selectedTimeline.splits.length === 1 ? selectedTimeline.splits[0].categoryId : selectedTimeline.categoryId,
+          affectsOrdinary: selectedTimeline.ordinaryImpactCents !== 0,
+          merchant: selectedTimeline.merchant,
+        })
+      }
+      setTimelineAction(null)
+      setSelectedTimeline(null)
+      setSelectedDetails(null)
+      setActionReason("")
+      await Promise.all([loadSummary(), loadTimeline()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1664,17 +1753,60 @@ function BudgetPanel(props: {
                   <h3 className="font-medium">{t("budget.ledgerTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.ledgerDescription")}</p>
                 </div>
+                <div className="mb-4 grid gap-2 md:grid-cols-[minmax(10rem,1fr)_9rem_9rem_auto]">
+                  <Input
+                    value={timelineQuery}
+                    onChange={(event) => setTimelineQuery(event.target.value)}
+                    placeholder={t("budget.searchTimeline")}
+                  />
+                  <FormSelect
+                    value={timelineKind}
+                    onValueChange={setTimelineKind}
+                    options={[
+                      { value: "all", label: t("budget.filterAllKinds") },
+                      { value: "income", label: t("budget.income") },
+                      { value: "expense", label: t("budget.expense") },
+                      { value: "refund", label: t("budget.refund") },
+                    ]}
+                  />
+                  <FormSelect
+                    value={timelineStatus}
+                    onValueChange={setTimelineStatus}
+                    options={[
+                      { value: "all", label: t("budget.filterAllStatuses") },
+                      { value: "expected", label: t("budget.statusExpected") },
+                      { value: "actual", label: t("budget.statusActual") },
+                      { value: "corrected", label: t("budget.statusCorrected") },
+                      { value: "voided", label: t("budget.statusVoided") },
+                    ]}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setTimelineQuery("")
+                      setTimelineKind("all")
+                      setTimelineStatus("all")
+                    }}
+                  >
+                    {t("budget.resetFilters")}
+                  </Button>
+                </div>
                 <div className="grid gap-2">
-                  {summary.ledgerEntries.length === 0 ? (
+                  {timeline.length === 0 ? (
                     <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
                       {t("budget.noTransactions")}
                     </div>
-                  ) : summary.ledgerEntries.map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between gap-4 rounded-md border bg-background p-3">
+                  ) : timeline.map((entry) => (
+                    <Button
+                      variant="ghost"
+                      key={entry.id}
+                      onClick={() => selectTimelineItem(entry)}
+                      className="h-auto w-full items-center justify-between gap-4 rounded-md border bg-background p-3 text-left hover:bg-accent"
+                    >
                       <div className="min-w-0">
                         <p className="truncate font-medium">{entry.description}</p>
                         <p className="text-xs text-muted-foreground">
-                          {[entry.occurredOn, entry.merchantNormalized].filter(Boolean).join(" · ")}
+                          {[entry.occurredOn, entry.merchant, entry.status].filter(Boolean).join(" · ")}
                         </p>
                         {entry.splits.length > 0 ? (
                           <p className="mt-1 truncate text-xs text-muted-foreground">
@@ -1682,12 +1814,62 @@ function BudgetPanel(props: {
                           </p>
                         ) : null}
                       </div>
-                      <span className={entry.kind === "income" ? "font-medium text-emerald-600" : "font-medium"}>
-                        {entry.kind === "income" ? "+" : "−"}{currency(entry.amountCents)}
+                      <span className={entry.kind === "income" || entry.kind === "refund" ? "font-medium text-emerald-600" : "font-medium"}>
+                        {entry.kind === "income" || entry.kind === "refund" ? "+" : "−"}{currency(entry.amountCents)}
                       </span>
-                    </div>
+                    </Button>
                   ))}
                 </div>
+                {selectedTimeline ? (
+                  <div className="mt-4 rounded-md border bg-background p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-medium">{selectedTimeline.description}</h4>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedTimeline.origin} · {selectedTimeline.status} · {t("budget.ordinaryImpact")}: {currency(selectedTimeline.ordinaryImpactCents)}
+                        </p>
+                      </div>
+                      {selectedTimeline.entryType === "actual" && selectedTimeline.status === "actual" && selectedTimeline.kind !== "refund" ? (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedTimeline.splits.length <= 1 ? (
+                            <Button size="sm" variant="outline" onClick={() => setTimelineAction("correction")}>{t("budget.correct")}</Button>
+                          ) : null}
+                          <Button size="sm" variant="outline" onClick={() => setTimelineAction("void")}>{t("budget.void")}</Button>
+                          {selectedTimeline.kind === "expense" ? (
+                            <Button size="sm" variant="outline" onClick={() => setTimelineAction("refund")}>{t("budget.refund")}</Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    {selectedTimeline.splits.length > 0 ? (
+                      <div className="mt-3 grid gap-1 text-sm">
+                        {selectedTimeline.splits.map((split) => (
+                          <div key={split.id} className="flex justify-between gap-3">
+                            <span>{split.categoryNameSnapshot}</span>
+                            <span>{currency(split.amountCents)} · {currency(split.ordinaryImpactCents)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {selectedDetails ? (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        {t("budget.auditAvailable")}: {JSON.stringify(selectedDetails.auditHistory)}
+                      </p>
+                    ) : null}
+                    {timelineAction ? (
+                      <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2">
+                        {timelineAction === "correction" ? (
+                          <Input value={actionDescription} onChange={(event) => setActionDescription(event.target.value)} placeholder={t("budget.description")} />
+                        ) : null}
+                        {timelineAction !== "void" ? (
+                          <Input inputMode="decimal" value={actionAmount} onChange={(event) => setActionAmount(event.target.value)} placeholder={t("budget.amount")} />
+                        ) : null}
+                        <Input value={actionReason} onChange={(event) => setActionReason(event.target.value)} placeholder={t("budget.reason")} />
+                        <Button onClick={submitTimelineAction} disabled={saving}>{t("budget.confirmAction")}</Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               ) : null}
               {showTransactions ? (

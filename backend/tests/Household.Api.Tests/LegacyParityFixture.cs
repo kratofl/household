@@ -15,6 +15,7 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public const string FreshAccessToken = "fresh-access-token";
     public const string LedgerAccessToken = "ledger-access-token";
     public const string SplitAccessToken = "split-access-token";
+    public const string TimelineAccessToken = "timeline-access-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
     public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
@@ -73,6 +74,7 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         command.Parameters.AddWithValue("freshAccessHash", HashToken(FreshAccessToken));
         command.Parameters.AddWithValue("ledgerAccessHash", HashToken(LedgerAccessToken));
         command.Parameters.AddWithValue("splitAccessHash", HashToken(SplitAccessToken));
+        command.Parameters.AddWithValue("timelineAccessHash", HashToken(TimelineAccessToken));
         await command.ExecuteNonQueryAsync();
     }
 
@@ -161,6 +163,11 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b4c', '019bd5e4-6c31-7c48-8471-a42157389b4b', @splitAccessHash,
                 'split-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b4d', 'timeline', 'timeline@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b4e', '019bd5e4-6c31-7c48-8471-a42157389b4d', @timelineAccessHash,
+                'timeline-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
 
         CREATE SCHEMA budget;
         CREATE TABLE budget.periods (

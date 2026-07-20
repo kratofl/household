@@ -2,9 +2,11 @@ import { apiRequest } from "@/lib/api"
 
 import type {
   BudgetCategoryInput,
+  BudgetLedgerEntry,
   BudgetLedgerEntryInput,
   BudgetPeriodInput,
   BudgetSummary,
+  BudgetTimelineItem,
   BudgetSetupInput,
   BudgetSetupState,
   BudgetTransactionInput,
@@ -33,6 +35,26 @@ export function createBudgetTransaction(accessToken: string, body: BudgetTransac
 
 export function createBudgetLedgerEntry(accessToken: string, body: BudgetLedgerEntryInput) {
   return apiRequest("/budget/ledger/entries", { method: "POST", accessToken, body })
+}
+
+export function loadBudgetTimeline(accessToken: string, query = "") {
+  return apiRequest<BudgetTimelineItem[]>(`/budget/timeline${query ? `?${query}` : ""}`, { accessToken })
+}
+
+export function loadBudgetLedgerDetails(accessToken: string, id: string) {
+  return apiRequest<{ entry: BudgetLedgerEntry; auditHistory: unknown }>(`/budget/ledger/entries/${id}`, { accessToken })
+}
+
+export function correctBudgetLedgerEntry(accessToken: string, id: string, body: unknown) {
+  return apiRequest(`/budget/ledger/entries/${id}/corrections`, { method: "POST", accessToken, body })
+}
+
+export function voidBudgetLedgerEntry(accessToken: string, id: string, reason: string) {
+  return apiRequest(`/budget/ledger/entries/${id}/voids`, { method: "POST", accessToken, body: { reason } })
+}
+
+export function refundBudgetLedgerEntry(accessToken: string, id: string, body: unknown) {
+  return apiRequest(`/budget/ledger/entries/${id}/refunds`, { method: "POST", accessToken, body })
 }
 
 export function updateCurrentBudgetPeriod(accessToken: string, body: BudgetPeriodInput) {

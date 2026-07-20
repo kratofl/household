@@ -431,6 +431,95 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Timeline_corrections_voids_refunds_and_expected_items_remain_auditable()
+    {
+        const string token = LegacyParityFixture.TimelineAccessToken;
+        using var defaultsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var defaults = await (await fixture.Client.SendAsync(defaultsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var categoryId = defaults.GetProperty("categories")[0].GetProperty("id").GetGuid();
+        var accountId = defaults.GetProperty("accounts")[0].GetProperty("id").GetGuid();
+
+        var originalId = await PostExpense("Original expense", 10_000);
+        using var correctionRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/ledger/entries/{originalId}/corrections", token);
+        correctionRequest.Content = JsonContent.Create(new
+        {
+            reason = "Receipt showed a different total",
+            description = "Corrected expense",
+            occurredOn = "2026-07-20",
+            amountCents = 12_000,
+            categoryId,
+            affectsOrdinary = true,
+            merchant = "REWE",
+        });
+        var correctionResponse = await fixture.Client.SendAsync(correctionRequest);
+        var correction = await correctionResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, correctionResponse.StatusCode);
+        var correctionId = correction.GetProperty("id").GetGuid();
+
+        using var refundRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/ledger/entries/{correctionId}/refunds", token);
+        refundRequest.Content = JsonContent.Create(new { occurredOn = "2026-07-21", amountCents = 2_000, description = "Partial refund" });
+        var refundResponse = await fixture.Client.SendAsync(refundRequest);
+        var refund = await refundResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, refundResponse.StatusCode);
+        Assert.Equal(correctionId, refund.GetProperty("relatedEntryId").GetGuid());
+        Assert.Equal(2_000, refund.GetProperty("ordinaryImpactCents").GetInt64());
+
+        var voidCandidateId = await PostExpense("Duplicate expense", 5_000);
+        using var voidRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/ledger/entries/{voidCandidateId}/voids", token);
+        voidRequest.Content = JsonContent.Create(new { reason = "Duplicate import" });
+        Assert.Equal(HttpStatusCode.NoContent, (await fixture.Client.SendAsync(voidRequest)).StatusCode);
+
+        using var planRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/planned-expenses", token);
+        planRequest.Content = JsonContent.Create(new
+        {
+            accountId,
+            categoryId,
+            name = "Expected insurance",
+            kind = "fixed_cost",
+            cadence = "monthly",
+            amountCents = 3_000,
+            dueDay = 25,
+            includeInLimit = true,
+            active = true,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(planRequest)).StatusCode);
+
+        using var timelineRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline", token);
+        var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(timeline.EnumerateArray(), item => item.GetProperty("id").GetString() == originalId.ToString() && item.GetProperty("status").GetString() == "corrected");
+        Assert.Contains(timeline.EnumerateArray(), item => item.GetProperty("id").GetString() == voidCandidateId.ToString() && item.GetProperty("status").GetString() == "voided");
+        Assert.Contains(timeline.EnumerateArray(), item => item.GetProperty("entryType").GetString() == "expected" && item.GetProperty("description").GetString() == "Expected insurance");
+
+        using var filteredRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline?query=refund&kind=refund&status=actual&impact=included", token);
+        var filtered = await (await fixture.Client.SendAsync(filteredRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Single(filtered.EnumerateArray());
+
+        using var detailsRequest = Authenticated(HttpMethod.Get, $"/api/v1/budget/ledger/entries/{originalId}", token);
+        var details = await (await fixture.Client.SendAsync(detailsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(originalId, details.GetProperty("entry").GetProperty("id").GetGuid());
+        Assert.Contains(details.GetProperty("auditHistory").GetProperty("corrections").EnumerateArray(), item =>
+            item.GetProperty("id").GetGuid() == correctionId && item.GetProperty("changeReason").GetString() == "Receipt showed a different total");
+
+        using var summaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var summary = await (await fixture.Client.SendAsync(summaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(10_000, summary.GetProperty("spentInLimitCents").GetInt64());
+        Assert.Equal(-10_000, summary.GetProperty("ordinaryAvailableCents").GetInt64());
+
+        async Task<Guid> PostExpense(string description, long amountCents)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+            request.Content = JsonContent.Create(new
+            {
+                kind = "expense", occurredOn = "2026-07-20", description, amountCents, categoryId, affectsOrdinary = true,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var entry = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return entry.GetProperty("id").GetGuid();
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

@@ -12,6 +12,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetMigrationIssue> MigrationIssues => Set<BudgetMigrationIssue>();
     public DbSet<BudgetLedgerSplit> LedgerSplits => Set<BudgetLedgerSplit>();
     public DbSet<BudgetCategoryVersion> CategoryVersions => Set<BudgetCategoryVersion>();
+    public DbSet<BudgetLedgerAction> LedgerActions => Set<BudgetLedgerAction>();
     public DbSet<BudgetCategory> Categories => Set<BudgetCategory>();
     public DbSet<BudgetAccount> Accounts => Set<BudgetAccount>();
     public DbSet<BudgetTransaction> Transactions => Set<BudgetTransaction>();
@@ -29,6 +30,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigureMigrationIssue(modelBuilder.Entity<BudgetMigrationIssue>());
         ConfigureLedgerSplit(modelBuilder.Entity<BudgetLedgerSplit>());
         ConfigureCategoryVersion(modelBuilder.Entity<BudgetCategoryVersion>());
+        ConfigureLedgerAction(modelBuilder.Entity<BudgetLedgerAction>());
         ConfigureCategory(modelBuilder.Entity<BudgetCategory>());
         ConfigureAccount(modelBuilder.Entity<BudgetAccount>());
         ConfigureTransaction(modelBuilder.Entity<BudgetTransaction>());
@@ -54,10 +56,25 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.MerchantBrandKey).HasColumnName("merchant_brand_key");
         entity.Property(x => x.SourceRecordId).HasColumnName("source_record_id");
         entity.Property(x => x.LegacyTransactionId).HasColumnName("legacy_transaction_id");
+        entity.Property(x => x.CorrectsEntryId).HasColumnName("corrects_entry_id");
+        entity.Property(x => x.RelatedEntryId).HasColumnName("related_entry_id");
+        entity.Property(x => x.ChangeReason).HasColumnName("change_reason");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
         entity.HasIndex(x => new { x.OwnerUserId, x.OccurredOn });
         entity.HasIndex(x => x.LegacyTransactionId).IsUnique();
         entity.HasMany(x => x.Splits).WithOne().HasForeignKey(x => x.LedgerEntryId);
+    }
+
+    private static void ConfigureLedgerAction(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetLedgerAction> entity)
+    {
+        entity.ToTable("ledger_actions"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.LedgerEntryId).HasColumnName("ledger_entry_id");
+        entity.Property(x => x.Kind).HasColumnName("kind");
+        entity.Property(x => x.Reason).HasColumnName("reason");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.LedgerEntryId, x.Kind });
     }
 
     private static void ConfigureLedgerSplit(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetLedgerSplit> entity)

@@ -69,8 +69,21 @@ public sealed class BudgetLedgerEntry
     public string? MerchantBrandKey { get; set; }
     public Guid? SourceRecordId { get; set; }
     public Guid? LegacyTransactionId { get; set; }
+    public Guid? CorrectsEntryId { get; set; }
+    public Guid? RelatedEntryId { get; set; }
+    public string ChangeReason { get; set; } = "";
     public DateTime CreatedAt { get; set; }
     public List<BudgetLedgerSplit> Splits { get; set; } = [];
+}
+
+public sealed class BudgetLedgerAction
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid LedgerEntryId { get; set; }
+    public string Kind { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
 }
 
 public sealed class BudgetLedgerSplit
@@ -192,6 +205,8 @@ public static class BudgetValues
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";
     public const string Expense = "expense";
+    public const string Refund = "refund";
+    public const string Void = "void";
 }
 
 public sealed record CategorySummary(Guid Id, string Name, string Color, string Icon, string Behavior, bool Archived, long SpentCents);
