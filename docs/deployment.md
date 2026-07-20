@@ -5,7 +5,7 @@ The production deployment is a Docker Compose stack made of:
 | Service | Purpose | Host exposure |
 | --- | --- | --- |
 | `household-web` | Next.js web UI and backend proxy | Published on `HOUSEHOLD_WEB_PORT`, default `3000` |
-| `household-api` | Go modular-monolith API | Internal Compose network only |
+| `household-api` | ASP.NET Core modular-monolith API | Internal Compose network only |
 | `household-updater` | Internal update sidecar | Internal Compose network only |
 | `household-db` | Postgres database | Internal Compose network only |
 

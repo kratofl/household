@@ -17,7 +17,7 @@ Prerequisites:
 - .NET 10 SDK
 - Node.js 24.x and npm
 - Docker Engine with the Docker Compose plugin
-- Optional: `air` for backend hot reload
+- .NET 10 SDK for backend development and hot reload
 
 Bootstrap a clean clone:
 
@@ -79,8 +79,8 @@ Keep feature code inside the owning feature unless a helper is genuinely reusabl
 - Updater entry point: `backend/src/Household.Updater`.
 - Route registration happens through feature-owned endpoint mapping extensions.
 - Migrations run on API startup.
-- Use table-driven Go tests for pure logic.
-- Use `httptest` and small fakes for handler behavior where possible.
+- Use focused xUnit theory tests for pure domain logic.
+- Exercise public backend behavior through authenticated HTTP integration tests against production PostgreSQL migrations.
 - Keep nullable analysis and warnings-as-errors clean.
 
 Create feature migrations with:

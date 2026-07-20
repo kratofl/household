@@ -14,6 +14,10 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public const string RefreshToken = "legacy-refresh-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
+    public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
+    public static readonly Guid CategoryId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b43");
+    public static readonly Guid AccountId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b44");
+    public static readonly Guid PlannedExpenseId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b46");
 
     private readonly string containerName = $"household-api-tests-{Guid.NewGuid():N}";
     private string connectionString = "";
@@ -178,5 +182,9 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b45', '019bd5e4-6c31-7c48-8471-a42157389b3f',
                 '019bd5e4-6c31-7c48-8471-a42157389b42', '019bd5e4-6c31-7c48-8471-a42157389b44',
                 '019bd5e4-6c31-7c48-8471-a42157389b43', '2026-07-10', 'Groceries', 4200, true);
+        INSERT INTO budget.planned_expenses (id, owner_user_id, account_id, category_id, name, kind, cadence, amount_cents, due_day, include_in_limit, active)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b46', '019bd5e4-6c31-7c48-8471-a42157389b3f',
+                '019bd5e4-6c31-7c48-8471-a42157389b44', '019bd5e4-6c31-7c48-8471-a42157389b43',
+                'Legacy rent', 'fixed_cost', 'monthly', 80000, 5, true, true);
         """;
 }

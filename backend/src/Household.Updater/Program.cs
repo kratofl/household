@@ -11,6 +11,7 @@ public partial class Program
         builder.WebHost.UseUrls(Environment.GetEnvironmentVariable("HOUSEHOLD_UPDATER_LISTEN_ADDR") is { Length: > 0 } address
             ? NormalizeAddress(address)
             : "http://0.0.0.0:8091");
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<UpdateCoordinator>();
         var app = builder.Build();
         app.MapGet("/healthz", () => Results.NoContent());
@@ -44,7 +45,7 @@ public partial class Program
 public sealed record UpdateRequest(string Version, string? Channel);
 public sealed record UpdateStatus(string State, string? Version = null, string? Channel = null, string? Message = null, DateTime? StartedAt = null, DateTime? EndedAt = null);
 
-public sealed class UpdateCoordinator(ILogger<UpdateCoordinator> logger)
+public sealed class UpdateCoordinator(ILogger<UpdateCoordinator> logger, TimeProvider timeProvider)
 {
     private readonly object gate = new();
     private UpdateStatus status = new("idle");
@@ -55,7 +56,7 @@ public sealed class UpdateCoordinator(ILogger<UpdateCoordinator> logger)
         lock (gate)
         {
             if (status.State == "running") return false;
-            status = new UpdateStatus("running", request.Version.Trim(), request.Channel, "starting", DateTime.UtcNow);
+            status = new UpdateStatus("running", request.Version.Trim(), request.Channel, "starting", timeProvider.GetUtcNow().UtcDateTime);
         }
         _ = Task.Run(() => RunAsync(request));
         return true;
@@ -73,19 +74,19 @@ public sealed class UpdateCoordinator(ILogger<UpdateCoordinator> logger)
             await UpdateVersion(environment, request.Version.Trim());
             Directory.CreateDirectory(backups);
             SetMessage("creating backup");
-            var backup = Path.Combine(backups, $"household-before-{Clean(request.Version)}-{DateTime.UtcNow:yyyyMMddHHmmss}.dump");
+            var backup = Path.Combine(backups, $"household-before-{Clean(request.Version)}-{timeProvider.GetUtcNow():yyyyMMddHHmmss}.dump");
             await Run(stack, backup, "docker", "compose", "--env-file", environment, "-f", compose,
                 "exec", "-T", "household-db", "sh", "-c", "pg_dump -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -Fc");
             SetMessage("pulling images");
             await Run(stack, null, "docker", "compose", "--env-file", environment, "-f", compose, "pull", "household-api", "household-web");
             SetMessage("restarting stack");
             await Run(stack, null, "docker", "compose", "--env-file", environment, "-f", compose, "up", "-d", "household-api", "household-web");
-            lock (gate) status = status with { State = "succeeded", Message = "update applied", EndedAt = DateTime.UtcNow };
+            lock (gate) status = status with { State = "succeeded", Message = "update applied", EndedAt = timeProvider.GetUtcNow().UtcDateTime };
         }
         catch (Exception error)
         {
             logger.LogError(error, "Household update failed");
-            lock (gate) status = status with { State = "failed", Message = error.Message, EndedAt = DateTime.UtcNow };
+            lock (gate) status = status with { State = "failed", Message = error.Message, EndedAt = timeProvider.GetUtcNow().UtcDateTime };
         }
     }
 
@@ -105,9 +106,20 @@ public sealed class UpdateCoordinator(ILogger<UpdateCoordinator> logger)
         foreach (var argument in arguments) info.ArgumentList.Add(argument);
         using var process = Process.Start(info) ?? throw new InvalidOperationException($"Could not start {executable}.");
         await using var output = outputPath is null ? null : File.Create(outputPath);
-        var outputTask = output is null ? process.StandardOutput.ReadToEndAsync() : process.StandardOutput.BaseStream.CopyToAsync(output);
-        var errorTask = process.StandardError.ReadToEndAsync();
-        await Task.WhenAll(outputTask, errorTask, process.WaitForExitAsync());
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        Task outputTask = output is null
+            ? process.StandardOutput.ReadToEndAsync(timeout.Token)
+            : process.StandardOutput.BaseStream.CopyToAsync(output, timeout.Token);
+        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await Task.WhenAll(outputTask, errorTask, process.WaitForExitAsync(timeout.Token));
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"{executable} exceeded the 10 minute update step limit.");
+        }
         if (process.ExitCode != 0) throw new InvalidOperationException($"{executable} failed: {await errorTask}");
     }
 
