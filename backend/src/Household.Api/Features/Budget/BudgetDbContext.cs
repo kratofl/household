@@ -10,6 +10,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetOpeningAllocation> OpeningAllocations => Set<BudgetOpeningAllocation>();
     public DbSet<BudgetLedgerEntry> LedgerEntries => Set<BudgetLedgerEntry>();
     public DbSet<BudgetMigrationIssue> MigrationIssues => Set<BudgetMigrationIssue>();
+    public DbSet<BudgetLedgerSplit> LedgerSplits => Set<BudgetLedgerSplit>();
+    public DbSet<BudgetCategoryVersion> CategoryVersions => Set<BudgetCategoryVersion>();
     public DbSet<BudgetCategory> Categories => Set<BudgetCategory>();
     public DbSet<BudgetAccount> Accounts => Set<BudgetAccount>();
     public DbSet<BudgetTransaction> Transactions => Set<BudgetTransaction>();
@@ -25,6 +27,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigureOpeningAllocation(modelBuilder.Entity<BudgetOpeningAllocation>());
         ConfigureLedgerEntry(modelBuilder.Entity<BudgetLedgerEntry>());
         ConfigureMigrationIssue(modelBuilder.Entity<BudgetMigrationIssue>());
+        ConfigureLedgerSplit(modelBuilder.Entity<BudgetLedgerSplit>());
+        ConfigureCategoryVersion(modelBuilder.Entity<BudgetCategoryVersion>());
         ConfigureCategory(modelBuilder.Entity<BudgetCategory>());
         ConfigureAccount(modelBuilder.Entity<BudgetAccount>());
         ConfigureTransaction(modelBuilder.Entity<BudgetTransaction>());
@@ -45,11 +49,47 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
         entity.Property(x => x.OrdinaryImpactCents).HasColumnName("ordinary_impact_cents");
         entity.Property(x => x.Source).HasColumnName("source");
+        entity.Property(x => x.MerchantRaw).HasColumnName("merchant_raw");
+        entity.Property(x => x.MerchantNormalized).HasColumnName("merchant_normalized");
+        entity.Property(x => x.MerchantBrandKey).HasColumnName("merchant_brand_key");
         entity.Property(x => x.SourceRecordId).HasColumnName("source_record_id");
         entity.Property(x => x.LegacyTransactionId).HasColumnName("legacy_transaction_id");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
         entity.HasIndex(x => new { x.OwnerUserId, x.OccurredOn });
         entity.HasIndex(x => x.LegacyTransactionId).IsUnique();
+        entity.HasMany(x => x.Splits).WithOne().HasForeignKey(x => x.LedgerEntryId);
+    }
+
+    private static void ConfigureLedgerSplit(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetLedgerSplit> entity)
+    {
+        entity.ToTable("ledger_splits"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.LedgerEntryId).HasColumnName("ledger_entry_id");
+        entity.Property(x => x.CategoryId).HasColumnName("category_id");
+        entity.Property(x => x.CategoryVersionId).HasColumnName("category_version_id");
+        entity.Property(x => x.CategoryNameSnapshot).HasColumnName("category_name_snapshot");
+        entity.Property(x => x.CategoryColorSnapshot).HasColumnName("category_color_snapshot");
+        entity.Property(x => x.CategoryIconSnapshot).HasColumnName("category_icon_snapshot");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.OrdinaryImpactCents).HasColumnName("ordinary_impact_cents");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.LedgerEntryId });
+    }
+
+    private static void ConfigureCategoryVersion(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetCategoryVersion> entity)
+    {
+        entity.ToTable("category_versions"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.CategoryId).HasColumnName("category_id");
+        entity.Property(x => x.Name).HasColumnName("name");
+        entity.Property(x => x.Color).HasColumnName("color");
+        entity.Property(x => x.Icon).HasColumnName("icon");
+        entity.Property(x => x.Behavior).HasColumnName("behavior");
+        entity.Property(x => x.Archived).HasColumnName("archived");
+        entity.Property(x => x.EffectiveFrom).HasColumnName("effective_from").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.CategoryId, x.EffectiveFrom });
     }
 
     private static void ConfigureMigrationIssue(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetMigrationIssue> entity)
@@ -129,8 +169,10 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
         entity.Property(x => x.Name).HasColumnName("name");
         entity.Property(x => x.Color).HasColumnName("color");
+        entity.Property(x => x.Icon).HasColumnName("icon");
         entity.Property(x => x.Behavior).HasColumnName("behavior");
         entity.Property(x => x.Protected).HasColumnName("protected");
+        entity.Property(x => x.ArchivedAt).HasColumnName("archived_at").HasColumnType("timestamp without time zone");
         Timestamps(entity);
         entity.HasIndex(x => new { x.OwnerUserId, x.Name }).IsUnique();
     }

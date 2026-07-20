@@ -44,7 +44,9 @@ export type BudgetCategory = {
   id: string
   name: string
   color: string
+  icon: string
   behavior: "include_in_limit" | "exclude_from_limit"
+  archived: boolean
   spentCents: number
 }
 
@@ -95,6 +97,18 @@ export type BudgetLedgerEntry = {
   amountCents: number
   ordinaryImpactCents: number
   source: string
+  merchantRaw: string
+  merchantNormalized: string
+  merchantBrandKey?: string
+  splits: Array<{
+    id: string
+    categoryId?: string
+    categoryNameSnapshot: string
+    categoryColorSnapshot: string
+    categoryIconSnapshot: string
+    amountCents: number
+    ordinaryImpactCents: number
+  }>
   createdAt: string
 }
 
@@ -105,6 +119,13 @@ export type BudgetLedgerEntryInput = {
   amountCents: number
   categoryId?: string
   affectsOrdinary?: boolean
+  merchant?: string
+  splits?: Array<{
+    categoryId: string
+    amountCents?: number
+    useRemaining: boolean
+    affectsOrdinary: boolean
+  }>
 }
 
 export type BudgetTransactionInput = {
@@ -121,7 +142,9 @@ export type BudgetPeriodInput = {
   overspendCarryoverCents: number
 }
 
-export type BudgetCategoryInput = Pick<BudgetCategory, "name" | "color" | "behavior">
+export type BudgetCategoryInput = Pick<BudgetCategory, "name" | "color" | "icon" | "behavior"> & {
+  archived?: boolean
+}
 
 export type PlannedExpenseInput = {
   accountId: string

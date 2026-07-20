@@ -10,6 +10,7 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
         var (period, categories, accounts) = await EnsureDefaultsAsync(
             ownerId, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
         var ledgerEntries = await database.LedgerEntries.AsNoTracking()
+            .Include(x => x.Splits)
             .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id)
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -21,10 +22,10 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             .OrderByDescending(x => x.Active).ThenBy(x => x.DueDay).ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
 
-        var spentByCategory = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.CategoryId.HasValue)
+        var spentByCategory = ledgerEntries.SelectMany(x => x.Splits).Where(x => x.CategoryId.HasValue)
             .GroupBy(x => x.CategoryId!.Value).ToDictionary(x => x.Key, x => x.Sum(item => item.AmountCents));
         var categorySummaries = categories.Select(category => new CategorySummary(
-            category.Id, category.Name, category.Color, category.Behavior,
+            category.Id, category.Name, category.Color, category.Icon, category.Behavior, category.ArchivedAt is not null,
             spentByCategory.GetValueOrDefault(category.Id))).ToList();
         var spent = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents < 0).Sum(x => x.AmountCents);
         var excluded = ledgerEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents == 0).Sum(x => x.AmountCents);

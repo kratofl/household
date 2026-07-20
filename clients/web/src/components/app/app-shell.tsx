@@ -1099,6 +1099,10 @@ function BudgetPanel(props: {
   const [error, setError] = useState<string | null>(null)
   const [description, setDescription] = useState("")
   const [transactionKind, setTransactionKind] = useState<"income" | "expense">("expense")
+  const [merchant, setMerchant] = useState("")
+  const [splitMode, setSplitMode] = useState(false)
+  const [splitCategoryId, setSplitCategoryId] = useState("")
+  const [splitAmount, setSplitAmount] = useState("")
   const [amount, setAmount] = useState("")
   const [categoryId, setCategoryId] = useState("")
   const [accountId, setAccountId] = useState("")
@@ -1107,6 +1111,7 @@ function BudgetPanel(props: {
   const [carryover, setCarryover] = useState("")
   const [categoryName, setCategoryName] = useState("")
   const [categoryColor, setCategoryColor] = useState("#64748b")
+  const [categoryIcon, setCategoryIcon] = useState("tag")
   const [categoryBehavior, setCategoryBehavior] = useState<BudgetCategory["behavior"]>("include_in_limit")
   const [plannedName, setPlannedName] = useState("")
   const [plannedAmount, setPlannedAmount] = useState("")
@@ -1165,6 +1170,7 @@ function BudgetPanel(props: {
       const data = await loadBudgetSummary(accessToken)
       setSummary(data)
       setCategoryId((current) => current || data.categories[0]?.id || "")
+      setSplitCategoryId((current) => current || data.categories[1]?.id || data.categories[0]?.id || "")
       setAccountId((current) => current || data.accounts[0]?.id || "")
       setLimit(centsToInput(data.period.spendingLimitCents))
       setCarryover(centsToInput(data.period.overspendCarryoverCents))
@@ -1196,6 +1202,7 @@ function BudgetPanel(props: {
         setSummary(data)
         hydrateSetup(setupData)
         setCategoryId((current) => current || data.categories[0]?.id || "")
+        setSplitCategoryId((current) => current || data.categories[1]?.id || data.categories[0]?.id || "")
         setAccountId((current) => current || data.accounts[0]?.id || "")
         setLimit(centsToInput(data.period.spendingLimitCents))
         setCarryover(centsToInput(data.period.overspendCarryoverCents))
@@ -1229,6 +1236,12 @@ function BudgetPanel(props: {
     setSaving(true)
     try {
       const category = summary?.categories.find((entry) => entry.id === categoryId)
+      const secondCategory = summary?.categories.find((entry) => entry.id === splitCategoryId)
+      const firstSplitCents = splitMode ? parseEuroCents(splitAmount) : null
+      if (splitMode && (!firstSplitCents || firstSplitCents >= amountCents || !splitCategoryId || splitCategoryId === categoryId)) {
+        setError(t("budget.splitValidation"))
+        return
+      }
       await createBudgetLedgerEntry(accessToken, {
         kind: transactionKind,
         categoryId: transactionKind === "expense" ? categoryId || undefined : undefined,
@@ -1236,9 +1249,28 @@ function BudgetPanel(props: {
         description,
         amountCents,
         affectsOrdinary: transactionKind === "income" || category?.behavior !== "exclude_from_limit",
+        merchant,
+        splits:
+          transactionKind === "expense" && splitMode && firstSplitCents
+            ? [
+                {
+                  categoryId,
+                  amountCents: firstSplitCents,
+                  useRemaining: false,
+                  affectsOrdinary: category?.behavior !== "exclude_from_limit",
+                },
+                {
+                  categoryId: splitCategoryId,
+                  useRemaining: true,
+                  affectsOrdinary: secondCategory?.behavior !== "exclude_from_limit",
+                },
+              ]
+            : undefined,
       })
       setDescription("")
       setAmount("")
+      setMerchant("")
+      setSplitAmount("")
       await loadSummary()
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
@@ -1277,10 +1309,12 @@ function BudgetPanel(props: {
       await createBudgetCategory(accessToken, {
         name: categoryName,
         color: categoryColor,
+        icon: categoryIcon,
         behavior: categoryBehavior,
       })
       setCategoryName("")
       setCategoryColor("#64748b")
+      setCategoryIcon("tag")
       setCategoryBehavior("include_in_limit")
       await loadSummary()
     } catch (err) {
@@ -1298,7 +1332,9 @@ function BudgetPanel(props: {
       await updateBudgetCategory(accessToken, category.id, {
         name: nextCategory.name,
         color: nextCategory.color,
+        icon: nextCategory.icon,
         behavior: nextCategory.behavior,
+        archived: nextCategory.archived,
       })
       await loadSummary()
     } catch (err) {
@@ -1637,7 +1673,14 @@ function BudgetPanel(props: {
                     <div key={entry.id} className="flex items-center justify-between gap-4 rounded-md border bg-background p-3">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{entry.description}</p>
-                        <p className="text-xs text-muted-foreground">{entry.occurredOn}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[entry.occurredOn, entry.merchantNormalized].filter(Boolean).join(" · ")}
+                        </p>
+                        {entry.splits.length > 0 ? (
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {entry.splits.map((split) => `${split.categoryNameSnapshot} ${currency(split.amountCents)}`).join(" · ")}
+                          </p>
+                        ) : null}
                       </div>
                       <span className={entry.kind === "income" ? "font-medium text-emerald-600" : "font-medium"}>
                         {entry.kind === "income" ? "+" : "−"}{currency(entry.amountCents)}
@@ -1666,6 +1709,11 @@ function BudgetPanel(props: {
                     <Label htmlFor="budget-description">{t("budget.description")}</Label>
                     <Input id="budget-description" value={description} onChange={(event) => setDescription(event.target.value)} />
                   </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="budget-merchant">{t("budget.merchant")}</Label>
+                    <Input id="budget-merchant" value={merchant} onChange={(event) => setMerchant(event.target.value)} />
+                    <p className="text-xs text-muted-foreground">{t("budget.merchantHint")}</p>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-1.5">
                       <Label htmlFor="budget-amount">{t("budget.amount")}</Label>
@@ -1677,18 +1725,46 @@ function BudgetPanel(props: {
                     </div>
                   </div>
                   {transactionKind === "expense" ? (
+                  <>
                   <div className="grid gap-1.5">
                     <Label htmlFor="budget-category">{t("budget.category")}</Label>
                     <FormSelect
                       id="budget-category"
                       value={categoryId}
                       onValueChange={setCategoryId}
-                      options={summary.categories.map((category) => ({
+                      options={summary.categories.filter((category) => !category.archived).map((category) => ({
                         value: category.id,
                         label: category.name,
                       }))}
                     />
                   </div>
+                  <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                    <div>
+                      <Label htmlFor="budget-split-mode">{t("budget.splitTransaction")}</Label>
+                      <p className="text-xs text-muted-foreground">{t("budget.splitHint")}</p>
+                    </div>
+                    <Switch id="budget-split-mode" checked={splitMode} onCheckedChange={setSplitMode} />
+                  </div>
+                  {splitMode ? (
+                    <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-2">
+                      <div className="grid gap-1.5">
+                        <Label>{t("budget.firstSplitAmount")}</Label>
+                        <Input inputMode="decimal" value={splitAmount} onChange={(event) => setSplitAmount(event.target.value)} />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label>{t("budget.remainingCategory")}</Label>
+                        <FormSelect
+                          value={splitCategoryId}
+                          onValueChange={setSplitCategoryId}
+                          options={summary.categories.filter((category) => !category.archived).map((category) => ({
+                            value: category.id,
+                            label: category.name,
+                          }))}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                  </>
                   ) : null}
                   <Button onClick={createTransaction} disabled={saving}>
                     {saving ? t("budget.saving") : t("budget.addTransaction")}
@@ -1720,9 +1796,10 @@ function BudgetPanel(props: {
               {showCategories ? (
               <div className="rounded-lg border p-4">
                 <h3 className="font-medium">{t("budget.categoriesTitle")}</h3>
-                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(8rem,1fr)_7rem_10rem_auto]">
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(8rem,1fr)_7rem_8rem_10rem_auto]">
                   <Input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder={t("budget.categoryName")} />
                   <Input type="color" value={categoryColor} onChange={(event) => setCategoryColor(event.target.value)} aria-label={t("budget.categoryColor")} />
+                  <Input value={categoryIcon} onChange={(event) => setCategoryIcon(event.target.value)} placeholder={t("budget.categoryIcon")} />
                   <FormSelect
                     value={categoryBehavior}
                     onValueChange={(value) => setCategoryBehavior(value as BudgetCategory["behavior"])}
@@ -1735,7 +1812,7 @@ function BudgetPanel(props: {
                 </div>
                 <div className="mt-4 grid gap-2">
                   {summary.categories.map((category) => (
-                    <div key={category.id} className="grid gap-2 rounded-md border p-3 lg:grid-cols-[minmax(8rem,1fr)_7rem_10rem_auto]">
+                    <div key={category.id} className={`grid gap-2 rounded-md border p-3 lg:grid-cols-[minmax(8rem,1fr)_7rem_8rem_10rem_auto_auto] ${category.archived ? "opacity-60" : ""}`}>
                       <Input
                         value={category.name}
                         disabled={category.name === "Nicht speichern"}
@@ -1748,6 +1825,11 @@ function BudgetPanel(props: {
                         onChange={(event) => updateCategory(category, { color: event.target.value })}
                         aria-label={t("budget.categoryColor")}
                       />
+                      <Input
+                        value={category.icon}
+                        onChange={(event) => updateCategory(category, { icon: event.target.value })}
+                        aria-label={t("budget.categoryIcon")}
+                      />
                       <FormSelect
                         value={category.behavior}
                         onValueChange={(value) => updateCategory(category, { behavior: value as BudgetCategory["behavior"] })}
@@ -1759,6 +1841,13 @@ function BudgetPanel(props: {
                       <div className="flex items-center justify-end text-sm text-muted-foreground">
                         {currency(category.spentCents)}
                       </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => updateCategory(category, { archived: !category.archived })}
+                        disabled={saving || category.name === "Nicht speichern"}
+                      >
+                        {category.archived ? t("budget.restoreCategory") : t("budget.archiveCategory")}
+                      </Button>
                     </div>
                   ))}
                 </div>

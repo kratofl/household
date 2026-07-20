@@ -353,6 +353,84 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         Assert.All(entries.EnumerateArray(), entry => Assert.Equal("manual", entry.GetProperty("source").GetString()));
     }
 
+    [Fact]
+    public async Task Category_versions_exact_splits_and_merchant_suggestions_preserve_history_without_financial_authority()
+    {
+        var foodId = await CreateCategory("Food", "#16a34a", "basket");
+        var funId = await CreateCategory("Fun", "#7c3aed", "sparkles");
+
+        using var entryRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", LegacyParityFixture.SplitAccessToken);
+        entryRequest.Content = JsonContent.Create(new
+        {
+            kind = "expense",
+            occurredOn = "2026-07-20",
+            description = "Shared Disney purchase",
+            merchant = "  Disney+ ",
+            amountCents = 10_001,
+            affectsOrdinary = true,
+            splits = new object[]
+            {
+                new { categoryId = foodId, amountCents = 3_333, useRemaining = false, affectsOrdinary = true },
+                new { categoryId = funId, amountCents = (long?)null, useRemaining = true, affectsOrdinary = false },
+            },
+        });
+        var entryResponse = await fixture.Client.SendAsync(entryRequest);
+        var entry = await entryResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, entryResponse.StatusCode);
+        Assert.Equal("DISNEY PLUS", entry.GetProperty("merchantNormalized").GetString());
+        Assert.Equal("disney-plus", entry.GetProperty("merchantBrandKey").GetString());
+        Assert.Equal(-3_333, entry.GetProperty("ordinaryImpactCents").GetInt64());
+        Assert.Equal([3_333L, 6_668L], entry.GetProperty("splits").EnumerateArray().Select(x => x.GetProperty("amountCents").GetInt64()));
+
+        using var updateRequest = Authenticated(HttpMethod.Patch, $"/api/v1/budget/categories/{foodId}", LegacyParityFixture.SplitAccessToken);
+        updateRequest.Content = JsonContent.Create(new
+        {
+            name = "Groceries",
+            color = "#15803d",
+            icon = "shopping-cart",
+            behavior = "exclude_from_limit",
+            archived = true,
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(updateRequest)).StatusCode);
+
+        using var historyRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/ledger/entries", LegacyParityFixture.SplitAccessToken);
+        var history = await (await fixture.Client.SendAsync(historyRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var historicalSplit = history[0].GetProperty("splits").EnumerateArray().Single(x => x.GetProperty("categoryId").GetGuid() == foodId);
+        Assert.Equal("Food", historicalSplit.GetProperty("categoryNameSnapshot").GetString());
+        Assert.Equal("#16a34a", historicalSplit.GetProperty("categoryColorSnapshot").GetString());
+        Assert.Equal("basket", historicalSplit.GetProperty("categoryIconSnapshot").GetString());
+        Assert.Equal(-3_333, historicalSplit.GetProperty("ordinaryImpactCents").GetInt64());
+
+        using var archivedEntry = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", LegacyParityFixture.SplitAccessToken);
+        archivedEntry.Content = JsonContent.Create(new
+        {
+            kind = "expense",
+            occurredOn = "2026-07-21",
+            description = "Should fail",
+            amountCents = 100,
+            categoryId = foodId,
+            affectsOrdinary = true,
+        });
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.SendAsync(archivedEntry)).StatusCode);
+
+        using var suggestionsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/merchants/suggestions?query=disney", LegacyParityFixture.SplitAccessToken);
+        var suggestions = await (await fixture.Client.SendAsync(suggestionsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(suggestions.GetProperty("merchants").EnumerateArray(), merchant =>
+            merchant.GetProperty("brandKey").GetString() == "disney-plus");
+        Assert.Contains(suggestions.GetProperty("categorySuggestions").EnumerateArray(), suggestion =>
+            suggestion.GetProperty("categoryId").GetGuid() == funId || suggestion.GetProperty("categoryId").GetGuid() == foodId);
+
+        async Task<Guid> CreateCategory(string name, string color, string icon)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/categories", LegacyParityFixture.SplitAccessToken);
+            request.Content = JsonContent.Create(new { name, color, icon, behavior = "include_in_limit" });
+            var response = await fixture.Client.SendAsync(request);
+            var category = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return category.GetProperty("id").GetGuid();
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

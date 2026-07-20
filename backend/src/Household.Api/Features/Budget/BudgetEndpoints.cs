@@ -17,6 +17,7 @@ public static partial class BudgetEndpoints
         budget.MapGet("/periods/current", GetCurrentPeriod);
         budget.MapPatch("/periods/current", UpdateCurrentPeriod);
         budget.MapPost("/categories", CreateCategory);
+        budget.MapGet("/categories", ListCategories);
         budget.MapPatch("/categories/{categoryId:guid}", UpdateCategory);
         budget.MapGet("/planned-expenses", ListPlannedExpenses);
         budget.MapPost("/planned-expenses", CreatePlannedExpense);
@@ -82,6 +83,7 @@ public static partial class BudgetEndpoints
         HttpContext context,
         IIdentityAccess identity,
         BudgetDbContext database,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         var user = await identity.CurrentUserAsync(context, cancellationToken);
@@ -93,10 +95,16 @@ public static partial class BudgetEndpoints
             OwnerUserId = user.Id,
             Name = validation.Name,
             Color = validation.Color,
+            Icon = validation.Icon,
             Behavior = validation.Behavior,
         };
         database.Categories.Add(category);
-        try { await database.SaveChangesAsync(cancellationToken); }
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+            database.CategoryVersions.Add(CategoryVersion(category, user.Id, timeProvider));
+            await database.SaveChangesAsync(cancellationToken);
+        }
         catch (DbUpdateException) { return HttpResults.Problem(400, "Invalid category", "Category could not be created"); }
         return Results.Created($"/api/v1/budget/categories/{category.Id}", category);
     }
@@ -107,6 +115,7 @@ public static partial class BudgetEndpoints
         HttpContext context,
         IIdentityAccess identity,
         BudgetDbContext database,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         var user = await identity.CurrentUserAsync(context, cancellationToken);
@@ -116,10 +125,31 @@ public static partial class BudgetEndpoints
         var category = await database.Categories.SingleOrDefaultAsync(
             x => x.Id == categoryId && x.OwnerUserId == user.Id, cancellationToken);
         if (category is null) return HttpResults.Problem(404, "Not found", "Category was not found");
-        category.Name = validation.Name; category.Color = validation.Color; category.Behavior = validation.Behavior;
+        if (category.Protected && request.Archived == true)
+            return HttpResults.Problem(409, "Protected category", "The protected category cannot be archived");
+        category.Name = validation.Name;
+        category.Color = validation.Color;
+        category.Icon = validation.Icon;
+        category.Behavior = validation.Behavior;
+        category.ArchivedAt = request.Archived == true
+            ? DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified)
+            : null;
+        database.CategoryVersions.Add(CategoryVersion(category, user.Id, timeProvider));
         try { await database.SaveChangesAsync(cancellationToken); }
         catch (DbUpdateException) { return HttpResults.Problem(400, "Invalid category", "Category could not be updated"); }
         return Results.Ok(category);
+    }
+
+    private static async Task<IResult> ListCategories(
+        HttpContext context,
+        IIdentityAccess identity,
+        BudgetDbContext database,
+        CancellationToken cancellationToken)
+    {
+        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        if (user is null) return Unauthorized();
+        return Results.Ok(await database.Categories.AsNoTracking().Where(x => x.OwnerUserId == user.Id)
+            .OrderBy(x => x.ArchivedAt != null).ThenBy(x => x.Name).ToListAsync(cancellationToken));
     }
 
     private static async Task<IResult> ListPlannedExpenses(
@@ -284,17 +314,31 @@ public static partial class BudgetEndpoints
         return Results.Created($"/api/v1/budget/transactions/{entry.Id}", entry);
     }
 
-    private static (string Name, string Color, string Behavior, IResult? Error) ValidateCategory(CategoryRequest request)
+    private static (string Name, string Color, string Icon, string Behavior, IResult? Error) ValidateCategory(CategoryRequest request)
     {
         var name = request.Name?.Trim() ?? "";
-        if (name.Length == 0) return ("", "", "", HttpResults.Problem(422, "Validation failed", "category name is required"));
+        if (name.Length == 0) return ("", "", "", "", HttpResults.Problem(422, "Validation failed", "category name is required"));
         var color = string.IsNullOrWhiteSpace(request.Color) ? "#64748b" : request.Color.Trim();
-        if (!HexColor().IsMatch(color)) return ("", "", "", HttpResults.Problem(422, "Validation failed", "category color must be a #RRGGBB value"));
+        if (!HexColor().IsMatch(color)) return ("", "", "", "", HttpResults.Problem(422, "Validation failed", "category color must be a #RRGGBB value"));
+        var icon = string.IsNullOrWhiteSpace(request.Icon) ? "tag" : request.Icon.Trim().ToLowerInvariant();
+        if (!IconName().IsMatch(icon)) return ("", "", "", "", HttpResults.Problem(422, "Validation failed", "category icon is invalid"));
         var behavior = string.IsNullOrWhiteSpace(request.Behavior) ? BudgetValues.IncludeInLimit : request.Behavior.Trim();
         if (behavior is not (BudgetValues.IncludeInLimit or BudgetValues.ExcludeFromLimit))
-            return ("", "", "", HttpResults.Problem(422, "Validation failed", "category behavior is invalid"));
-        return (name, color, behavior, null);
+            return ("", "", "", "", HttpResults.Problem(422, "Validation failed", "category behavior is invalid"));
+        return (name, color, icon, behavior, null);
     }
+
+    private static BudgetCategoryVersion CategoryVersion(BudgetCategory category, Guid ownerId, TimeProvider timeProvider) => new()
+    {
+        OwnerUserId = ownerId,
+        CategoryId = category.Id,
+        Name = category.Name,
+        Color = category.Color,
+        Icon = category.Icon,
+        Behavior = category.Behavior,
+        Archived = category.ArchivedAt is not null,
+        EffectiveFrom = DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified),
+    };
 
     private static async Task<(PlannedExpense? Value, IResult? Error)> ParsePlannedExpense(
         PlannedExpenseRequest request, Guid ownerId, BudgetDbContext database, CancellationToken cancellationToken)
@@ -334,9 +378,11 @@ public static partial class BudgetEndpoints
     private static IResult Unauthorized() => HttpResults.Problem(401, "Unauthorized", "Invalid bearer token");
     [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
     private static partial Regex HexColor();
+    [GeneratedRegex("^[a-z0-9-]{1,64}$")]
+    private static partial Regex IconName();
 
     private sealed record UpdatePeriodRequest(long SpendingLimitCents, long OverspendCarryoverCents);
-    private sealed record CategoryRequest(string? Name, string? Color, string? Behavior);
+    private sealed record CategoryRequest(string? Name, string? Color, string? Icon, string? Behavior, bool? Archived);
     private sealed record CreateTransactionRequest(Guid AccountId, Guid? CategoryId, string? OccurredOn, string? Description, long AmountCents, bool? IncludeInLimit);
     private sealed record PlannedExpenseRequest(Guid AccountId, Guid? CategoryId, string? Name, string? Kind, string? Cadence, long AmountCents, int DueDay, int? DueMonth, bool? IncludeInLimit, bool? Active);
 }

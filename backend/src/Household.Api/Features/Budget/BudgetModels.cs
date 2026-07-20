@@ -64,9 +64,41 @@ public sealed class BudgetLedgerEntry
     public long AmountCents { get; set; }
     public long OrdinaryImpactCents { get; set; }
     public string Source { get; set; } = "manual";
+    public string MerchantRaw { get; set; } = "";
+    public string MerchantNormalized { get; set; } = "";
+    public string? MerchantBrandKey { get; set; }
     public Guid? SourceRecordId { get; set; }
     public Guid? LegacyTransactionId { get; set; }
     public DateTime CreatedAt { get; set; }
+    public List<BudgetLedgerSplit> Splits { get; set; } = [];
+}
+
+public sealed class BudgetLedgerSplit
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid LedgerEntryId { get; set; }
+    public Guid? CategoryId { get; set; }
+    public Guid? CategoryVersionId { get; set; }
+    public string CategoryNameSnapshot { get; set; } = "";
+    public string CategoryColorSnapshot { get; set; } = "";
+    public string CategoryIconSnapshot { get; set; } = "";
+    public long AmountCents { get; set; }
+    public long OrdinaryImpactCents { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class BudgetCategoryVersion
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid CategoryId { get; set; }
+    public string Name { get; set; } = "";
+    public string Color { get; set; } = "";
+    public string Icon { get; set; } = "tag";
+    public string Behavior { get; set; } = BudgetValues.IncludeInLimit;
+    public bool Archived { get; set; }
+    public DateTime EffectiveFrom { get; set; }
 }
 
 public sealed class BudgetMigrationIssue
@@ -86,8 +118,10 @@ public sealed class BudgetCategory
     public Guid OwnerUserId { get; set; }
     public string Name { get; set; } = "";
     public string Color { get; set; } = "";
+    public string Icon { get; set; } = "tag";
     public string Behavior { get; set; } = BudgetValues.IncludeInLimit;
     public bool Protected { get; set; }
+    public DateTime? ArchivedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -160,7 +194,7 @@ public static class BudgetValues
     public const string Expense = "expense";
 }
 
-public sealed record CategorySummary(Guid Id, string Name, string Color, string Behavior, long SpentCents);
+public sealed record CategorySummary(Guid Id, string Name, string Color, string Icon, string Behavior, bool Archived, long SpentCents);
 public sealed record PlannedExpenseSummary(
     Guid Id, Guid OwnerUserId, Guid AccountId, Guid? CategoryId, string Name, string Kind, string Cadence,
     long AmountCents, int DueDay, int? DueMonth, bool IncludeInLimit, bool Active,
