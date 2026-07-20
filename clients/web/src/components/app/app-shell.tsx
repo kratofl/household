@@ -67,11 +67,19 @@ import {
   createBudgetTransaction,
   createPlannedExpense as createPlannedExpenseRequest,
   loadBudgetSummary,
+  loadBudgetSetup,
+  saveBudgetSetup,
   updateBudgetCategory,
   updateCurrentBudgetPeriod,
+  updateBudgetSettings,
   updatePlannedExpense as updatePlannedExpenseRequest,
 } from "@/features/budget/api"
-import type { BudgetCategory, BudgetSummary, PlannedExpense } from "@/features/budget/types"
+import type {
+  BudgetCategory,
+  BudgetSetupState,
+  BudgetSummary,
+  PlannedExpense,
+} from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
 import { ApiError, apiRequest } from "@/lib/api"
 import { type Locale, isLocale, supportedLocales, translate } from "@/lib/i18n"
@@ -1085,6 +1093,7 @@ function BudgetPanel(props: {
   const { accessToken, locale, pathname, t } = props
   const selectedBudgetView = budgetViewFromPath(pathname)
   const [summary, setSummary] = useState<BudgetSummary | null>(null)
+  const [setup, setSetup] = useState<BudgetSetupState | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1104,15 +1113,36 @@ function BudgetPanel(props: {
   const [plannedCadence, setPlannedCadence] = useState<PlannedExpense["cadence"]>("monthly")
   const [plannedDueDay, setPlannedDueDay] = useState("1")
   const [plannedDueMonth, setPlannedDueMonth] = useState(String(new Date().getMonth() + 1))
+  const [baseCurrency, setBaseCurrency] = useState("EUR")
+  const [periodStartDay, setPeriodStartDay] = useState("1")
+  const [bufferRule, setBufferRule] = useState<BudgetSetupState["bufferRule"]>("fixed")
+  const [bufferValue, setBufferValue] = useState("0")
+  const [initialIncomeName, setInitialIncomeName] = useState("")
+  const [initialIncomeAmount, setInitialIncomeAmount] = useState("")
+  const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
+  const [openingName, setOpeningName] = useState("")
+  const [openingAmount, setOpeningAmount] = useState("")
 
   const currency = useCallback(
     (cents: number) =>
       new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-US", {
         style: "currency",
-        currency: "EUR",
+        currency: setup?.baseCurrency ?? "EUR",
       }).format(cents / 100),
-    [locale],
+    [locale, setup?.baseCurrency],
   )
+
+  const hydrateSetup = useCallback((data: BudgetSetupState) => {
+    setSetup(data)
+    setBaseCurrency(data.baseCurrency)
+    setPeriodStartDay(String(data.preferredPeriodStartDay))
+    setBufferRule(data.bufferRule)
+    setBufferValue(
+      data.bufferRule === "fixed"
+        ? centsToInput(data.bufferAmountCents)
+        : String(data.bufferPercentageBasisPoints / 100),
+    )
+  }, [])
 
   const chartData = useMemo(
     () =>
@@ -1145,15 +1175,25 @@ function BudgetPanel(props: {
     }
   }, [accessToken, t])
 
+  const loadSetup = useCallback(async () => {
+    if (!accessToken) return
+    const data = await loadBudgetSetup(accessToken)
+    hydrateSetup(data)
+  }, [accessToken, hydrateSetup])
+
   useEffect(() => {
     if (!accessToken) return
 
     let active = true
     void (async () => {
       try {
-        const data = await loadBudgetSummary(accessToken)
+        const [data, setupData] = await Promise.all([
+          loadBudgetSummary(accessToken),
+          loadBudgetSetup(accessToken),
+        ])
         if (!active) return
         setSummary(data)
+        hydrateSetup(setupData)
         setCategoryId((current) => current || data.categories[0]?.id || "")
         setAccountId((current) => current || data.accounts[0]?.id || "")
         setLimit(centsToInput(data.period.spendingLimitCents))
@@ -1169,7 +1209,7 @@ function BudgetPanel(props: {
     return () => {
       active = false
     }
-  }, [accessToken, t])
+  }, [accessToken, hydrateSetup, t])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setError(null), 0)
@@ -1339,11 +1379,180 @@ function BudgetPanel(props: {
     }
   }
 
+  const saveSetup = async (settingsOnly: boolean) => {
+    if (!accessToken) return
+    const preferredPeriodStartDay = Number(periodStartDay)
+    const parsedBuffer = Number(bufferValue.replace(",", "."))
+    const incomeAmountCents = initialIncomeAmount ? parseEuroCents(initialIncomeAmount) : 0
+    const openingAmountCents = openingAmount ? parseEuroCents(openingAmount) : 0
+    if (
+      !/^[A-Za-z]{3}$/.test(baseCurrency) ||
+      !Number.isInteger(preferredPeriodStartDay) ||
+      preferredPeriodStartDay < 1 ||
+      preferredPeriodStartDay > 31 ||
+      !Number.isFinite(parsedBuffer) ||
+      parsedBuffer < 0 ||
+      incomeAmountCents === null ||
+      openingAmountCents === null
+    ) {
+      setError(t("budget.setupValidation"))
+      return
+    }
+    setSaving(true)
+    try {
+      const body = {
+        baseCurrency: baseCurrency.toUpperCase(),
+        preferredPeriodStartDay,
+        bufferRule,
+        bufferAmountCents: bufferRule === "fixed" ? Math.round(parsedBuffer * 100) : 0,
+        bufferPercentageBasisPoints: bufferRule === "percentage" ? Math.round(parsedBuffer * 100) : 0,
+        incomePlans:
+          !settingsOnly && initialIncomeName.trim() && incomeAmountCents > 0
+            ? [{ name: initialIncomeName.trim(), amountCents: incomeAmountCents }]
+            : [],
+        openingAllocations:
+          !settingsOnly && openingAmountCents > 0
+            ? [{ kind: openingKind, name: openingName.trim(), amountCents: openingAmountCents }]
+            : [],
+      }
+      const data = settingsOnly
+        ? await updateBudgetSettings(accessToken, body)
+        : await saveBudgetSetup(accessToken, body)
+      hydrateSetup(data)
+      await Promise.all([loadSummary(), loadSetup()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const showOverview = selectedBudgetView === "overview"
   const showTransactions = selectedBudgetView === "transactions"
   const showPlanning = selectedBudgetView === "planning"
+  const showSaving = selectedBudgetView === "saving"
+  const showWishlist = selectedBudgetView === "wishlist"
   const showCategories = selectedBudgetView === "categories"
+  const showReports = selectedBudgetView === "reports"
   const showSettings = selectedBudgetView === "settings"
+
+  const setupFields = (onboarding: boolean) => (
+    <div className="rounded-lg border bg-muted/10 p-4 sm:p-6">
+      <div className="max-w-2xl">
+        <h3 className="text-lg font-semibold">
+          {t(onboarding ? "budget.setupTitle" : "budget.configurationTitle")}
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t(onboarding ? "budget.setupDescription" : "budget.configurationDescription")}
+        </p>
+      </div>
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="grid gap-1.5">
+          <Label htmlFor={onboarding ? "setup-currency" : "settings-currency"}>
+            {t("budget.baseCurrency")}
+          </Label>
+          <Input
+            id={onboarding ? "setup-currency" : "settings-currency"}
+            value={baseCurrency}
+            maxLength={3}
+            disabled={setup?.baseCurrencyLocked}
+            onChange={(event) => setBaseCurrency(event.target.value.toUpperCase())}
+          />
+          {setup?.baseCurrencyLocked ? (
+            <p className="text-xs text-muted-foreground">{t("budget.currencyLocked")}</p>
+          ) : null}
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor={onboarding ? "setup-start-day" : "settings-start-day"}>
+            {t("budget.periodStartDay")}
+          </Label>
+          <Input
+            id={onboarding ? "setup-start-day" : "settings-start-day"}
+            type="number"
+            min={1}
+            max={31}
+            value={periodStartDay}
+            onChange={(event) => setPeriodStartDay(event.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">{t("budget.periodStartHint")}</p>
+        </div>
+        <div className="grid gap-1.5">
+          <Label>{t("budget.bufferRule")}</Label>
+          <FormSelect
+            value={bufferRule}
+            onValueChange={(value) => setBufferRule(value as BudgetSetupState["bufferRule"])}
+            options={[
+              { value: "fixed", label: t("budget.bufferFixed") },
+              { value: "percentage", label: t("budget.bufferPercentage") },
+            ]}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor={onboarding ? "setup-buffer" : "settings-buffer"}>
+            {bufferRule === "fixed" ? t("budget.bufferAmount") : t("budget.bufferPercent")}
+          </Label>
+          <Input
+            id={onboarding ? "setup-buffer" : "settings-buffer"}
+            inputMode="decimal"
+            value={bufferValue}
+            onChange={(event) => setBufferValue(event.target.value)}
+          />
+        </div>
+      </div>
+      {onboarding ? (
+        <div className="mt-6 grid gap-5 border-t pt-5 lg:grid-cols-2">
+          <div>
+            <h4 className="font-medium">{t("budget.initialIncome")}</h4>
+            <p className="mt-1 text-sm text-muted-foreground">{t("budget.initialIncomeHint")}</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Input
+                value={initialIncomeName}
+                onChange={(event) => setInitialIncomeName(event.target.value)}
+                placeholder={t("budget.incomeName")}
+              />
+              <Input
+                inputMode="decimal"
+                value={initialIncomeAmount}
+                onChange={(event) => setInitialIncomeAmount(event.target.value)}
+                placeholder={t("budget.amount")}
+              />
+            </div>
+          </div>
+          <div>
+            <h4 className="font-medium">{t("budget.openingAllocation")}</h4>
+            <p className="mt-1 text-sm text-muted-foreground">{t("budget.openingAllocationHint")}</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <FormSelect
+                value={openingKind}
+                onValueChange={(value) => setOpeningKind(value as typeof openingKind)}
+                options={[
+                  { value: "buffer", label: t("budget.buffer") },
+                  { value: "savings", label: t("budget.savings") },
+                  { value: "investment", label: t("budget.investment") },
+                ]}
+              />
+              <Input
+                value={openingName}
+                onChange={(event) => setOpeningName(event.target.value)}
+                placeholder={t("budget.allocationName")}
+              />
+              <Input
+                inputMode="decimal"
+                value={openingAmount}
+                onChange={(event) => setOpeningAmount(event.target.value)}
+                placeholder={t("budget.amount")}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-6 flex justify-end">
+        <Button onClick={() => saveSetup(!onboarding)} disabled={saving}>
+          {saving ? t("budget.saving") : t(onboarding ? "budget.completeSetup" : "budget.saveConfiguration")}
+        </Button>
+      </div>
+    </div>
+  )
 
   return (
     <Card>
@@ -1363,12 +1572,14 @@ function BudgetPanel(props: {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
-        {loading && !summary ? (
+        {loading && (!summary || !setup) ? (
           <div className="grid gap-4 md:grid-cols-3">
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
             <Skeleton className="h-24" />
           </div>
+        ) : setup && !setup.completed ? (
+          setupFields(true)
         ) : summary ? (
           <>
             {showOverview ? (
@@ -1460,6 +1671,7 @@ function BudgetPanel(props: {
               ) : null}
             </div>
             ) : null}
+            {showSettings ? setupFields(false) : null}
             {showSettings || showCategories ? (
             <div className="grid gap-5 xl:grid-cols-[24rem_minmax(0,1fr)]">
               {showSettings ? (
@@ -1630,6 +1842,28 @@ function BudgetPanel(props: {
                 )}
               </div>
             </div>
+            ) : null}
+            {showSaving || showWishlist || showReports ? (
+              <div className="rounded-lg border border-dashed bg-muted/10 p-8 text-center sm:p-12">
+                <h3 className="text-lg font-semibold">
+                  {t(
+                    showSaving
+                      ? "budget.emptySavingTitle"
+                      : showWishlist
+                        ? "budget.emptyWishlistTitle"
+                        : "budget.emptyReportsTitle",
+                  )}
+                </h3>
+                <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
+                  {t(
+                    showSaving
+                      ? "budget.emptySavingDescription"
+                      : showWishlist
+                        ? "budget.emptyWishlistDescription"
+                        : "budget.emptyReportsDescription",
+                  )}
+                </p>
+              </div>
             ) : null}
           </>
         ) : null}

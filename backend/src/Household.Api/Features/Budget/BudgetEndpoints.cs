@@ -10,8 +10,10 @@ public static partial class BudgetEndpoints
     public static IEndpointRouteBuilder MapBudgetEndpoints(this IEndpointRouteBuilder routes)
     {
         var budget = routes.MapGroup("/budget");
+        budget.MapBudgetSetupEndpoints();
         budget.MapGet("/healthz", () => Results.NoContent());
         budget.MapGet("/summary", Summary);
+        budget.MapGet("/periods/current", GetCurrentPeriod);
         budget.MapPatch("/periods/current", UpdateCurrentPeriod);
         budget.MapPost("/categories", CreateCategory);
         budget.MapPatch("/categories/{categoryId:guid}", UpdateCategory);
@@ -21,6 +23,25 @@ public static partial class BudgetEndpoints
         budget.MapPost("/planned-expenses/apply-current", ApplyCurrentPlannedExpenses);
         budget.MapPost("/transactions", CreateTransaction);
         return routes;
+    }
+
+    private static async Task<IResult> GetCurrentPeriod(
+        string? date,
+        HttpContext context,
+        IIdentityAccess identity,
+        BudgetDbContext database,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        if (user is null) return Unauthorized();
+        var selectedDate = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        if (!string.IsNullOrWhiteSpace(date) && !DateOnly.TryParseExact(
+                date, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out selectedDate))
+            return HttpResults.Problem(400, "Invalid date", "Date must use YYYY-MM-DD");
+        var (period, _, _) = await new BudgetService(database, timeProvider)
+            .EnsureDefaultsAsync(user.Id, selectedDate, cancellationToken);
+        return Results.Ok(period);
     }
 
     private static async Task<IResult> Summary(

@@ -1,4 +1,12 @@
-const budgetViews = ["transactions", "planning", "categories", "settings"]
+const budgetViews = [
+  "transactions",
+  "planning",
+  "saving-investing",
+  "wishlist",
+  "categories",
+  "reports",
+  "settings",
+]
 
 export const dynamicParams = false
 

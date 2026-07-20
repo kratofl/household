@@ -7,10 +7,49 @@ public sealed class BudgetPeriod
     public string Name { get; set; } = "";
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
+    public int PreferredStartDay { get; set; } = 1;
     public long SpendingLimitCents { get; set; }
     public long OverspendCarryoverCents { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public sealed class BudgetSettings
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string BaseCurrency { get; set; } = "EUR";
+    public int PreferredPeriodStartDay { get; set; } = 1;
+    public string BufferRule { get; set; } = BudgetValues.FixedBuffer;
+    public long BufferAmountCents { get; set; }
+    public int BufferPercentageBasisPoints { get; set; }
+    public DateTime? SetupCompletedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public sealed class BudgetIncomePlan
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string Name { get; set; } = "";
+    public long AmountCents { get; set; }
+    public string Cadence { get; set; } = BudgetValues.Monthly;
+    public DateOnly StartDate { get; set; }
+    public bool Active { get; set; } = true;
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+public sealed class BudgetOpeningAllocation
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string Kind { get; set; } = "";
+    public string Name { get; set; } = "";
+    public long AmountCents { get; set; }
+    public DateOnly OccurredOn { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public sealed class BudgetCategory
@@ -87,6 +126,8 @@ public static class BudgetValues
     public const string Subscription = "subscription";
     public const string Monthly = "monthly";
     public const string Yearly = "yearly";
+    public const string FixedBuffer = "fixed";
+    public const string PercentageBuffer = "percentage";
 }
 
 public sealed record CategorySummary(Guid Id, string Name, string Color, string Behavior, long SpentCents);

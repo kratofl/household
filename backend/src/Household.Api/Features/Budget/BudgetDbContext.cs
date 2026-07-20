@@ -5,6 +5,9 @@ namespace Household.Api.Features.Budget;
 public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbContext(options)
 {
     public DbSet<BudgetPeriod> Periods => Set<BudgetPeriod>();
+    public DbSet<BudgetSettings> Settings => Set<BudgetSettings>();
+    public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
+    public DbSet<BudgetOpeningAllocation> OpeningAllocations => Set<BudgetOpeningAllocation>();
     public DbSet<BudgetCategory> Categories => Set<BudgetCategory>();
     public DbSet<BudgetAccount> Accounts => Set<BudgetAccount>();
     public DbSet<BudgetTransaction> Transactions => Set<BudgetTransaction>();
@@ -15,6 +18,9 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     {
         modelBuilder.HasDefaultSchema("budget");
         ConfigurePeriod(modelBuilder.Entity<BudgetPeriod>());
+        ConfigureSettings(modelBuilder.Entity<BudgetSettings>());
+        ConfigureIncomePlan(modelBuilder.Entity<BudgetIncomePlan>());
+        ConfigureOpeningAllocation(modelBuilder.Entity<BudgetOpeningAllocation>());
         ConfigureCategory(modelBuilder.Entity<BudgetCategory>());
         ConfigureAccount(modelBuilder.Entity<BudgetAccount>());
         ConfigureTransaction(modelBuilder.Entity<BudgetTransaction>());
@@ -30,10 +36,53 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.Name).HasColumnName("name");
         entity.Property(x => x.StartDate).HasColumnName("start_date");
         entity.Property(x => x.EndDate).HasColumnName("end_date");
+        entity.Property(x => x.PreferredStartDay).HasColumnName("preferred_start_day");
         entity.Property(x => x.SpendingLimitCents).HasColumnName("spending_limit_cents");
         entity.Property(x => x.OverspendCarryoverCents).HasColumnName("overspend_carryover_cents");
         Timestamps(entity);
         entity.HasIndex(x => new { x.OwnerUserId, x.StartDate }).IsUnique();
+    }
+
+    private static void ConfigureSettings(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetSettings> entity)
+    {
+        entity.ToTable("settings"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.BaseCurrency).HasColumnName("base_currency");
+        entity.Property(x => x.PreferredPeriodStartDay).HasColumnName("preferred_period_start_day");
+        entity.Property(x => x.BufferRule).HasColumnName("buffer_rule");
+        entity.Property(x => x.BufferAmountCents).HasColumnName("buffer_amount_cents");
+        entity.Property(x => x.BufferPercentageBasisPoints).HasColumnName("buffer_percentage_basis_points");
+        entity.Property(x => x.SetupCompletedAt).HasColumnName("setup_completed_at").HasColumnType("timestamp without time zone");
+        Timestamps(entity);
+        entity.HasIndex(x => x.OwnerUserId).IsUnique();
+    }
+
+    private static void ConfigureIncomePlan(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePlan> entity)
+    {
+        entity.ToTable("income_plans"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.Name).HasColumnName("name");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.Cadence).HasColumnName("cadence");
+        entity.Property(x => x.StartDate).HasColumnName("start_date");
+        entity.Property(x => x.Active).HasColumnName("active");
+        Timestamps(entity);
+        entity.HasIndex(x => new { x.OwnerUserId, x.Name });
+    }
+
+    private static void ConfigureOpeningAllocation(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetOpeningAllocation> entity)
+    {
+        entity.ToTable("opening_allocations"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.Kind).HasColumnName("kind");
+        entity.Property(x => x.Name).HasColumnName("name");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.OccurredOn).HasColumnName("occurred_on");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.OccurredOn });
     }
 
     private static void ConfigureCategory(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetCategory> entity)

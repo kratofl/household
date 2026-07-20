@@ -90,11 +90,18 @@ export const budgetViews = {
     labelKey: "budget.nav.transactions",
   },
   planning: { route: "/budget/planning", segment: "planning", labelKey: "budget.nav.planning" },
+  saving: {
+    route: "/budget/saving-investing",
+    segment: "saving-investing",
+    labelKey: "budget.nav.saving",
+  },
+  wishlist: { route: "/budget/wishlist", segment: "wishlist", labelKey: "budget.nav.wishlist" },
   categories: {
     route: "/budget/categories",
     segment: "categories",
     labelKey: "budget.nav.categories",
   },
+  reports: { route: "/budget/reports", segment: "reports", labelKey: "budget.nav.reports" },
   settings: { route: "/budget/settings", segment: "settings", labelKey: "budget.nav.settings" },
 } as const
 

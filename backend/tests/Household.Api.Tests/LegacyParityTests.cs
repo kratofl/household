@@ -222,10 +222,80 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await fixture.Client.SendAsync(jobRequest)).StatusCode);
     }
 
-    private static HttpRequestMessage Authenticated(HttpMethod method, string path)
+    [Fact]
+    public async Task First_run_setup_creates_initial_values_and_future_period_changes_do_not_rewrite_history()
+    {
+        using var initialRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/setup", LegacyParityFixture.FreshAccessToken);
+        var initialResponse = await fixture.Client.SendAsync(initialRequest);
+        var initial = await initialResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
+        Assert.False(initial.GetProperty("completed").GetBoolean());
+        Assert.False(initial.GetProperty("baseCurrencyLocked").GetBoolean());
+
+        using var setupRequest = Authenticated(HttpMethod.Put, "/api/v1/budget/setup", LegacyParityFixture.FreshAccessToken);
+        setupRequest.Content = JsonContent.Create(new
+        {
+            baseCurrency = "EUR",
+            preferredPeriodStartDay = 31,
+            bufferRule = "percentage",
+            bufferAmountCents = 0,
+            bufferPercentageBasisPoints = 1_250,
+            incomePlans = new[] { new { name = "Salary", amountCents = 320_000 } },
+            openingAllocations = new[] { new { kind = "buffer", name = "Opening buffer", amountCents = 25_000 } },
+        });
+        var setupResponse = await fixture.Client.SendAsync(setupRequest);
+        var setup = await setupResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.OK, setupResponse.StatusCode);
+        Assert.True(setup.GetProperty("completed").GetBoolean());
+        Assert.True(setup.GetProperty("baseCurrencyLocked").GetBoolean());
+        Assert.Single(setup.GetProperty("incomePlans").EnumerateArray());
+        Assert.Single(setup.GetProperty("openingAllocations").EnumerateArray());
+
+        using var julyPeriodRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/periods/current?date=2026-07-20", LegacyParityFixture.FreshAccessToken);
+        var julyResponse = await fixture.Client.SendAsync(julyPeriodRequest);
+        var julyPeriod = await julyResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2026-06-30", julyPeriod.GetProperty("startDate").GetString());
+        Assert.Equal("2026-07-30", julyPeriod.GetProperty("endDate").GetString());
+        Assert.Equal(31, julyPeriod.GetProperty("preferredStartDay").GetInt32());
+
+        using var settingsRequest = Authenticated(HttpMethod.Patch, "/api/v1/budget/settings", LegacyParityFixture.FreshAccessToken);
+        settingsRequest.Content = JsonContent.Create(new
+        {
+            baseCurrency = "EUR",
+            preferredPeriodStartDay = 15,
+            bufferRule = "fixed",
+            bufferAmountCents = 20_000,
+            bufferPercentageBasisPoints = 0,
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(settingsRequest)).StatusCode);
+
+        using var historicalRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/periods/current?date=2026-07-20", LegacyParityFixture.FreshAccessToken);
+        var historicalPeriod = await (await fixture.Client.SendAsync(historicalRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2026-06-30", historicalPeriod.GetProperty("startDate").GetString());
+        Assert.Equal(31, historicalPeriod.GetProperty("preferredStartDay").GetInt32());
+
+        using var futureRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/periods/current?date=2026-08-20", LegacyParityFixture.FreshAccessToken);
+        var futurePeriod = await (await fixture.Client.SendAsync(futureRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("2026-08-15", futurePeriod.GetProperty("startDate").GetString());
+        Assert.Equal("2026-09-14", futurePeriod.GetProperty("endDate").GetString());
+        Assert.Equal(15, futurePeriod.GetProperty("preferredStartDay").GetInt32());
+
+        using var currencyRequest = Authenticated(HttpMethod.Patch, "/api/v1/budget/settings", LegacyParityFixture.FreshAccessToken);
+        currencyRequest.Content = JsonContent.Create(new
+        {
+            baseCurrency = "USD",
+            preferredPeriodStartDay = 15,
+            bufferRule = "fixed",
+            bufferAmountCents = 20_000,
+            bufferPercentageBasisPoints = 0,
+        });
+        Assert.Equal(HttpStatusCode.Conflict, (await fixture.Client.SendAsync(currencyRequest)).StatusCode);
+    }
+
+    private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.AccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
     }
 }

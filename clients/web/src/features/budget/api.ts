@@ -4,9 +4,23 @@ import type {
   BudgetCategoryInput,
   BudgetPeriodInput,
   BudgetSummary,
+  BudgetSetupInput,
+  BudgetSetupState,
   BudgetTransactionInput,
   PlannedExpenseInput,
 } from "./types"
+
+export function loadBudgetSetup(accessToken: string) {
+  return apiRequest<BudgetSetupState>("/budget/setup", { accessToken })
+}
+
+export function saveBudgetSetup(accessToken: string, body: BudgetSetupInput) {
+  return apiRequest<BudgetSetupState>("/budget/setup", { method: "PUT", accessToken, body })
+}
+
+export function updateBudgetSettings(accessToken: string, body: BudgetSetupInput) {
+  return apiRequest<BudgetSetupState>("/budget/settings", { method: "PATCH", accessToken, body })
+}
 
 export function loadBudgetSummary(accessToken: string) {
   return apiRequest<BudgetSummary>("/budget/summary", { accessToken })

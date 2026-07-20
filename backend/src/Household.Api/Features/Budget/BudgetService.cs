@@ -42,14 +42,28 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
         DateOnly date,
         CancellationToken cancellationToken)
     {
-        var start = new DateOnly(date.Year, date.Month, 1);
-        var end = start.AddMonths(1).AddDays(-1);
+        var period = await database.Periods
+            .Where(x => x.OwnerUserId == ownerId && x.StartDate <= date && x.EndDate >= date)
+            .OrderByDescending(x => x.StartDate)
+            .FirstOrDefaultAsync(cancellationToken);
+        var preferredStartDay = await database.Settings.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId)
+            .Select(x => (int?)x.PreferredPeriodStartDay)
+            .SingleOrDefaultAsync(cancellationToken) ?? 1;
+        var selected = period is null
+            ? BudgetPeriodCalendar.ForDate(date, preferredStartDay)
+            : new BudgetPeriodRange(period.StartDate, period.EndDate, period.PreferredStartDay);
+        var start = selected.Start;
+        var end = selected.End;
         var name = start.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
-        await database.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO budget.periods (owner_user_id, name, start_date, end_date, spending_limit_cents)
-            VALUES ({ownerId}, {name}, {start}, {end}, 240000)
-            ON CONFLICT (owner_user_id, start_date) DO NOTHING;
-            """, cancellationToken);
+        if (period is null)
+        {
+            await database.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO budget.periods (owner_user_id, name, start_date, end_date, preferred_start_day, spending_limit_cents)
+                VALUES ({ownerId}, {name}, {start}, {end}, {selected.PreferredStartDay}, 240000)
+                ON CONFLICT (owner_user_id, start_date) DO NOTHING;
+                """, cancellationToken);
+        }
         foreach (var category in DefaultCategories)
         {
             await database.Database.ExecuteSqlInterpolatedAsync($"""
@@ -64,7 +78,7 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             ON CONFLICT (owner_user_id, name) DO NOTHING;
             """, cancellationToken);
 
-        var period = await database.Periods.SingleAsync(
+        period ??= await database.Periods.SingleAsync(
             x => x.OwnerUserId == ownerId && x.StartDate == start, cancellationToken);
         var categories = await database.Categories.Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.Protected).ThenBy(x => x.Name).ToListAsync(cancellationToken);

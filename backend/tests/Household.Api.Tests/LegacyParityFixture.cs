@@ -12,12 +12,14 @@ public sealed class LegacyParityFixture : IAsyncLifetime
 {
     public const string AccessToken = "legacy-access-token";
     public const string RefreshToken = "legacy-refresh-token";
+    public const string FreshAccessToken = "fresh-access-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
     public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
     public static readonly Guid CategoryId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b43");
     public static readonly Guid AccountId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b44");
     public static readonly Guid PlannedExpenseId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b46");
+    public static readonly Guid FreshUserId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b47");
 
     private readonly string containerName = $"household-api-tests-{Guid.NewGuid():N}";
     private string connectionString = "";
@@ -66,6 +68,7 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         command.Parameters.AddWithValue("passwordHash", BCrypt.Net.BCrypt.HashPassword("admin", 4));
         command.Parameters.AddWithValue("accessHash", HashToken(AccessToken));
         command.Parameters.AddWithValue("refreshHash", HashToken(RefreshToken));
+        command.Parameters.AddWithValue("freshAccessHash", HashToken(FreshAccessToken));
         await command.ExecuteNonQueryAsync();
     }
 
@@ -139,6 +142,11 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b41', '019bd5e4-6c31-7c48-8471-a42157389b3f', @accessHash, @refreshHash,
                 CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b47', 'fresh', 'fresh@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b48', '019bd5e4-6c31-7c48-8471-a42157389b47', @freshAccessHash,
+                'fresh-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
 
         CREATE SCHEMA budget;
         CREATE TABLE budget.periods (
