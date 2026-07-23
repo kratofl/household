@@ -64,6 +64,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   autoPostCommitments,
   autoPostIncome,
+  closeBudgetPeriod,
   confirmCommitmentOccurrence,
   confirmIncomeOccurrence,
   createBudgetCategory,
@@ -1190,6 +1191,9 @@ function BudgetPanel(props: {
   const [periodStartDay, setPeriodStartDay] = useState("1")
   const [bufferRule, setBufferRule] = useState<BudgetSetupState["bufferRule"]>("fixed")
   const [bufferValue, setBufferValue] = useState("0")
+  const [bufferDisposition, setBufferDisposition] = useState<BudgetSetupState["defaultBufferDisposition"]>("retain")
+  const [deficitCoverage, setDeficitCoverage] = useState("0")
+  const [periodDisposition, setPeriodDisposition] = useState<BudgetSetupState["defaultBufferDisposition"]>("retain")
   const [initialIncomeName, setInitialIncomeName] = useState("")
   const [initialIncomeAmount, setInitialIncomeAmount] = useState("")
   const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
@@ -1220,6 +1224,8 @@ function BudgetPanel(props: {
     setBaseCurrency(data.baseCurrency)
     setPeriodStartDay(String(data.preferredPeriodStartDay))
     setBufferRule(data.bufferRule)
+    setBufferDisposition(data.defaultBufferDisposition)
+    setPeriodDisposition(data.defaultBufferDisposition)
     setBufferValue(
       data.bufferRule === "fixed"
         ? centsToInput(data.bufferAmountCents)
@@ -1728,6 +1734,7 @@ function BudgetPanel(props: {
         bufferRule,
         bufferAmountCents: bufferRule === "fixed" ? Math.round(parsedBuffer * 100) : 0,
         bufferPercentageBasisPoints: bufferRule === "percentage" ? Math.round(parsedBuffer * 100) : 0,
+        defaultBufferDisposition: bufferDisposition,
         incomePlans:
           !settingsOnly && initialIncomeName.trim() && incomeAmountCents > 0
             ? [{ name: initialIncomeName.trim(), amountCents: incomeAmountCents }]
@@ -1742,6 +1749,27 @@ function BudgetPanel(props: {
         : await saveBudgetSetup(accessToken, body)
       hydrateSetup(data)
       await Promise.all([loadSummary(), loadSetup()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const closeCurrentPeriod = async () => {
+    if (!accessToken || !summary) return
+    const coverDeficitCents = parseEuroCents(deficitCoverage)
+    if (coverDeficitCents === null || coverDeficitCents > summary.protectedBufferCents) {
+      setError(t("budget.periodCloseValidation"))
+      return
+    }
+    setSaving(true)
+    try {
+      await closeBudgetPeriod(accessToken, summary.period.id, {
+        coverDeficitCents,
+        disposition: periodDisposition,
+      })
+      await loadSummary()
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1877,6 +1905,20 @@ function BudgetPanel(props: {
             onChange={(event) => setBufferValue(event.target.value)}
           />
         </div>
+        <div className="grid gap-1.5">
+          <Label>{t("budget.defaultBufferDisposition")}</Label>
+          <FormSelect
+            value={bufferDisposition}
+            onValueChange={(value) => setBufferDisposition(value as BudgetSetupState["defaultBufferDisposition"])}
+            options={[
+              { value: "retain", label: t("budget.dispositionRetain") },
+              { value: "ordinary", label: t("budget.dispositionOrdinary") },
+              { value: "savings", label: t("budget.dispositionSavings") },
+              { value: "investment", label: t("budget.dispositionInvestment") },
+            ]}
+          />
+          <p className="text-xs text-muted-foreground">{t("budget.defaultBufferDispositionHint")}</p>
+        </div>
       </div>
       {onboarding ? (
         <div className="mt-6 grid gap-5 border-t pt-5 lg:grid-cols-2">
@@ -1962,13 +2004,58 @@ function BudgetPanel(props: {
         ) : summary ? (
           <>
             {showOverview ? (
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
               <Metric label={t("budget.actualIncome")} value={currency(summary.actualIncomeCents)} />
               <Metric label={t("budget.fundedBuffer")} value={currency(summary.fundedBufferCents)} />
               <Metric label={t("budget.reservedCommitments")} value={currency(summary.reservationCents)} />
               <Metric label={t("budget.maximumOrdinary")} value={currency(summary.maximumOrdinaryCents)} />
               <Metric label={t("budget.remaining")} value={currency(summary.ordinaryAvailableCents)} />
             </div>
+            ) : null}
+            {showOverview ? (
+              <div className="rounded-lg border p-4">
+                <div>
+                  <h3 className="font-medium">{t("budget.bufferAndCloseTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.bufferAndCloseDescription")}</p>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                  <Metric label={t("budget.forecastBufferTarget")} value={currency(summary.forecastBufferTargetCents)} />
+                  <Metric label={t("budget.actualBufferTarget")} value={currency(summary.actualBufferTargetCents)} />
+                  <Metric label={t("budget.bufferShortfall")} value={currency(summary.bufferShortfallCents)} />
+                  <Metric label={t("budget.protectedBuffer")} value={currency(summary.protectedBufferCents)} />
+                  <Metric label={t("budget.accumulatedBuffer")} value={currency(summary.accumulatedBufferCents)} />
+                  <Metric label={t("budget.deficitCarryover")} value={currency(summary.deficitCarryoverCents)} />
+                </div>
+                <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[1fr_1fr_auto]">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="deficit-coverage">
+                      {t("budget.coverDeficit")} · {t("budget.currentDeficit")}: {currency(Math.max(0, -summary.ordinaryAvailableCents))}
+                    </Label>
+                    <Input
+                      id="deficit-coverage"
+                      inputMode="decimal"
+                      value={deficitCoverage}
+                      onChange={(event) => setDeficitCoverage(event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>{t("budget.periodDisposition")}</Label>
+                    <FormSelect
+                      value={periodDisposition}
+                      onValueChange={(value) => setPeriodDisposition(value as BudgetSetupState["defaultBufferDisposition"])}
+                      options={[
+                        { value: "retain", label: t("budget.dispositionRetain") },
+                        { value: "ordinary", label: t("budget.dispositionOrdinary") },
+                        { value: "savings", label: t("budget.dispositionSavings") },
+                        { value: "investment", label: t("budget.dispositionInvestment") },
+                      ]}
+                    />
+                  </div>
+                  <Button className="self-end" onClick={closeCurrentPeriod} disabled={saving}>
+                    {t("budget.closePeriod")}
+                  </Button>
+                </div>
+              </div>
             ) : null}
             {showOverview || showTransactions ? (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">

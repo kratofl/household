@@ -5,10 +5,16 @@ namespace Household.Api.Features.Budget;
 
 public sealed class BudgetService(BudgetDbContext database, TimeProvider timeProvider)
 {
-    public async Task<BudgetSummary> SummaryAsync(Guid ownerId, CancellationToken cancellationToken)
+    public Task<BudgetSummary> SummaryAsync(Guid ownerId, CancellationToken cancellationToken) =>
+        SummaryAsync(ownerId, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
+
+    public async Task<BudgetSummary> SummaryAsync(
+        Guid ownerId,
+        DateOnly selectedDate,
+        CancellationToken cancellationToken)
     {
         var (period, categories, accounts) = await EnsureDefaultsAsync(
-            ownerId, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
+            ownerId, selectedDate, cancellationToken);
         var ledgerEntries = await database.LedgerEntries.AsNoTracking()
             .Include(x => x.Splits)
             .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id)
@@ -47,6 +53,8 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             .GroupBy(x => x.Destination).Select(x => new { Destination = x.Key, Amount = x.Sum(y => y.AmountCents) })
             .ToDictionaryAsync(x => x.Destination, x => x.Amount, cancellationToken);
         var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
+        var expectedIncome = (await new BudgetIncomePlanProjector(database).LoadAsync(
+            ownerId, period.StartDate, period.EndDate, cancellationToken)).Occurrences.Sum(x => x.AmountCents);
         var commitmentProjection = await new BudgetCommitmentProjector(database).LoadAsync(
             ownerId, period.StartDate, period.StartDate.AddYears(5), cancellationToken);
         var reservationCents = commitmentProjection.Occurrences
@@ -63,15 +71,44 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             varianceAllocations.GetValueOrDefault(BudgetValues.Savings),
             varianceAllocations.GetValueOrDefault(BudgetValues.Investment),
             reservationCents);
+        var forecastBufferTarget = settings?.BufferRule == BudgetValues.PercentageBuffer
+            ? checked(expectedIncome * (settings?.BufferPercentageBasisPoints ?? 0) / 10_000)
+            : settings?.BufferAmountCents ?? 0;
+        var priorClose = await (
+            from close in database.PeriodCloses.AsNoTracking()
+            join closedPeriod in database.Periods.AsNoTracking() on close.PeriodId equals closedPeriod.Id
+            where close.OwnerUserId == ownerId && closedPeriod.EndDate < period.StartDate
+            orderby closedPeriod.EndDate descending
+            select close).FirstOrDefaultAsync(cancellationToken);
+        var currentClose = await database.PeriodCloses.AsNoTracking().SingleOrDefaultAsync(
+            x => x.OwnerUserId == ownerId && x.PeriodId == period.Id, cancellationToken);
+        var openingBuffer = priorClose is null
+            ? await database.OpeningAllocations.AsNoTracking().Where(x =>
+                    x.OwnerUserId == ownerId && x.Kind == BudgetValues.Buffer && x.OccurredOn <= period.EndDate)
+                .SumAsync(x => x.AmountCents, cancellationToken)
+            : 0;
+        var accumulatedBuffer = priorClose?.RetainedBufferCents ?? openingBuffer;
+        var deficitCarryover = priorClose?.CarriedDeficitCents ?? 0;
+        var releasedOrdinary = priorClose?.Disposition == BudgetValues.Ordinary
+            ? priorClose.DispositionAmountCents
+            : 0;
+        var protectedBuffer = currentClose?.RetainedBufferCents
+            ?? checked(accumulatedBuffer + availability.FundedBufferCents);
+        var maximumOrdinary = Math.Max(
+            0,
+            checked(availability.MaximumOrdinaryCents - deficitCarryover + releasedOrdinary));
+        var ordinaryAvailable = checked(availability.OrdinaryAvailableCents - deficitCarryover + releasedOrdinary);
         var plannedSummaries = planned.Select(item => new PlannedExpenseSummary(
             item.Id, item.OwnerUserId, item.AccountId, item.CategoryId, item.Name, item.Kind, item.Cadence,
             item.AmountCents, item.DueDay, item.DueMonth, item.IncludeInLimit, item.Active,
             item.CreatedAt, item.UpdatedAt, applied.Contains(item.Id))).ToList();
         return new BudgetSummary(period, categorySummaries, spent, excluded,
-            availability.OrdinaryAvailableCents,
+            ordinaryAvailable,
             accounts.Sum(x => x.BalanceCents), accounts, plannedSummaries,
-            income, availability.FundedBufferCents, reservationCents, availability.MaximumOrdinaryCents,
-            availability.OrdinaryAvailableCents, ledgerEntries);
+            income, forecastBufferTarget, availability.TargetBufferCents,
+            availability.FundedBufferCents, availability.BufferShortfallCents,
+            currentClose?.RetainedBufferCents ?? accumulatedBuffer, protectedBuffer, deficitCarryover,
+            reservationCents, maximumOrdinary, ordinaryAvailable, ledgerEntries);
     }
 
     public async Task<(BudgetPeriod Period, List<BudgetCategory> Categories, List<BudgetAccount> Accounts)> EnsureDefaultsAsync(

@@ -877,6 +877,75 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Buffer_targets_are_funded_safely_and_period_close_carries_only_uncovered_deficit()
+    {
+        const string token = LegacyParityFixture.BufferAccessToken;
+        using var setupRequest = Authenticated(HttpMethod.Put, "/api/v1/budget/setup", token);
+        setupRequest.Content = JsonContent.Create(new
+        {
+            baseCurrency = "EUR", preferredPeriodStartDay = 1, bufferRule = "percentage",
+            bufferAmountCents = 0, bufferPercentageBasisPoints = 2_500,
+            defaultBufferDisposition = "retain",
+            incomePlans = new[] { new { name = "Forecast salary", amountCents = 200_000 } },
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(setupRequest)).StatusCode);
+
+        await PostLedger("income", "2026-07-23", "Actual salary", 100_000);
+        var percentageSummary = await Summary("2026-07-23");
+        Assert.Equal(50_000, percentageSummary.GetProperty("forecastBufferTargetCents").GetInt64());
+        Assert.Equal(25_000, percentageSummary.GetProperty("actualBufferTargetCents").GetInt64());
+        Assert.Equal(25_000, percentageSummary.GetProperty("fundedBufferCents").GetInt64());
+
+        using var settingsRequest = Authenticated(HttpMethod.Patch, "/api/v1/budget/settings", token);
+        settingsRequest.Content = JsonContent.Create(new
+        {
+            baseCurrency = "EUR", preferredPeriodStartDay = 1, bufferRule = "fixed",
+            bufferAmountCents = 50_000, bufferPercentageBasisPoints = 0,
+            defaultBufferDisposition = "retain",
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(settingsRequest)).StatusCode);
+        await PostLedger("expense", "2026-07-24", "Overspend", 130_000);
+        var overspent = await Summary("2026-07-23");
+        Assert.Equal(50_000, overspent.GetProperty("fundedBufferCents").GetInt64());
+        Assert.Equal(0, overspent.GetProperty("bufferShortfallCents").GetInt64());
+        Assert.Equal(-80_000, overspent.GetProperty("ordinaryAvailableCents").GetInt64());
+        Assert.Equal(50_000, overspent.GetProperty("protectedBufferCents").GetInt64());
+
+        var periodId = overspent.GetProperty("period").GetProperty("id").GetGuid();
+        using var closeRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/periods/{periodId}/close", token);
+        closeRequest.Content = JsonContent.Create(new { coverDeficitCents = 30_000, disposition = "retain" });
+        var closeResponse = await fixture.Client.SendAsync(closeRequest);
+        var closed = await closeResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, closeResponse.StatusCode);
+        Assert.Equal(80_000, closed.GetProperty("deficitCents").GetInt64());
+        Assert.Equal(30_000, closed.GetProperty("coveredFromBufferCents").GetInt64());
+        Assert.Equal(50_000, closed.GetProperty("carriedDeficitCents").GetInt64());
+        Assert.Equal(20_000, closed.GetProperty("retainedBufferCents").GetInt64());
+        using var closeRetry = Authenticated(HttpMethod.Post, $"/api/v1/budget/periods/{periodId}/close", token);
+        closeRetry.Content = JsonContent.Create(new { coverDeficitCents = 30_000, disposition = "retain" });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(closeRetry)).StatusCode);
+
+        await PostLedger("income", "2026-08-03", "Next salary", 100_000);
+        var nextPeriod = await Summary("2026-08-03");
+        Assert.Equal(50_000, nextPeriod.GetProperty("deficitCarryoverCents").GetInt64());
+        Assert.Equal(20_000, nextPeriod.GetProperty("accumulatedBufferCents").GetInt64());
+        Assert.Equal(0, nextPeriod.GetProperty("ordinaryAvailableCents").GetInt64());
+
+        async Task PostLedger(string kind, string date, string description, long amountCents)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+            request.Content = JsonContent.Create(new { kind, occurredOn = date, description, amountCents });
+            Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(request)).StatusCode);
+        }
+
+        async Task<JsonElement> Summary(string date)
+        {
+            using var request = Authenticated(HttpMethod.Get, $"/api/v1/budget/summary?date={date}", token);
+            return await (await fixture.Client.SendAsync(request)).Content.ReadFromJsonAsync<JsonElement>();
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

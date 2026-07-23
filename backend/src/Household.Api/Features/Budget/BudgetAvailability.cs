@@ -1,7 +1,9 @@
 namespace Household.Api.Features.Budget;
 
 public readonly record struct BudgetAvailabilityResult(
+    long TargetBufferCents,
     long FundedBufferCents,
+    long BufferShortfallCents,
     long MaximumOrdinaryCents,
     long OrdinaryAvailableCents);
 
@@ -26,6 +28,12 @@ public static class BudgetAvailability
         var bufferCapacity = Math.Max(0, actualIncomeCents - longTermAllocations - protectedReservations);
         var fundedBuffer = Math.Min(bufferCapacity, Math.Max(0, checked(target + explicitBufferCents)));
         var maximumOrdinary = Math.Max(0, actualIncomeCents - fundedBuffer - longTermAllocations - protectedReservations);
-        return new BudgetAvailabilityResult(fundedBuffer, maximumOrdinary, maximumOrdinary + ordinaryImpactCents);
+        var protectedTarget = Math.Max(0, checked(target + explicitBufferCents));
+        return new BudgetAvailabilityResult(
+            protectedTarget,
+            fundedBuffer,
+            Math.Max(0, protectedTarget - fundedBuffer),
+            maximumOrdinary,
+            maximumOrdinary + ordinaryImpactCents);
     }
 }

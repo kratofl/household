@@ -53,4 +53,16 @@ public sealed class BudgetAvailabilityTests
         Assert.Equal(0, result.MaximumOrdinaryCents);
         Assert.Equal(0, result.OrdinaryAvailableCents);
     }
+
+    [Fact]
+    public void Underfunded_buffer_target_exposes_shortfall_without_debt()
+    {
+        var result = BudgetAvailability.Calculate(
+            10_000, 0, BudgetValues.FixedBuffer, 25_000, 0);
+
+        Assert.Equal(25_000, result.TargetBufferCents);
+        Assert.Equal(10_000, result.FundedBufferCents);
+        Assert.Equal(15_000, result.BufferShortfallCents);
+        Assert.Equal(0, result.OrdinaryAvailableCents);
+    }
 }

@@ -23,9 +23,28 @@ public sealed class BudgetSettings
     public string BufferRule { get; set; } = BudgetValues.FixedBuffer;
     public long BufferAmountCents { get; set; }
     public int BufferPercentageBasisPoints { get; set; }
+    public string DefaultBufferDisposition { get; set; } = BudgetValues.Retain;
     public DateTime? SetupCompletedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+public sealed class BudgetPeriodClose
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid PeriodId { get; set; }
+    public long ForecastBufferTargetCents { get; set; }
+    public long ActualBufferTargetCents { get; set; }
+    public long FundedBufferCents { get; set; }
+    public long BufferShortfallCents { get; set; }
+    public long DeficitCents { get; set; }
+    public long CoveredFromBufferCents { get; set; }
+    public long CarriedDeficitCents { get; set; }
+    public string Disposition { get; set; } = BudgetValues.Retain;
+    public long DispositionAmountCents { get; set; }
+    public long RetainedBufferCents { get; set; }
+    public DateTime ClosedAt { get; set; }
 }
 
 public sealed class BudgetIncomePlan
@@ -390,6 +409,7 @@ public static class BudgetValues
     public const string Matched = "matched";
     public const string DuePeriod = "due_period";
     public const string GradualReservation = "gradual_reservation";
+    public const string Retain = "retain";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";
@@ -413,7 +433,13 @@ public sealed record BudgetSummary(
     IReadOnlyList<BudgetAccount> Accounts,
     IReadOnlyList<PlannedExpenseSummary> PlannedExpenses,
     long ActualIncomeCents,
+    long ForecastBufferTargetCents,
+    long ActualBufferTargetCents,
     long FundedBufferCents,
+    long BufferShortfallCents,
+    long AccumulatedBufferCents,
+    long ProtectedBufferCents,
+    long DeficitCarryoverCents,
     long ReservationCents,
     long MaximumOrdinaryCents,
     long OrdinaryAvailableCents,

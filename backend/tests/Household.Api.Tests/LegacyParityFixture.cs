@@ -20,6 +20,7 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public const string IncomeConfirmationAccessToken = "income-confirmation-access-token";
     public const string CommitmentAccessToken = "commitment-access-token";
     public const string ReservationAccessToken = "reservation-access-token";
+    public const string BufferAccessToken = "buffer-access-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
     public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
@@ -83,6 +84,7 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         command.Parameters.AddWithValue("incomeConfirmationAccessHash", HashToken(IncomeConfirmationAccessToken));
         command.Parameters.AddWithValue("commitmentAccessHash", HashToken(CommitmentAccessToken));
         command.Parameters.AddWithValue("reservationAccessHash", HashToken(ReservationAccessToken));
+        command.Parameters.AddWithValue("bufferAccessHash", HashToken(BufferAccessToken));
         await command.ExecuteNonQueryAsync();
     }
 
@@ -196,6 +198,11 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b56', '019bd5e4-6c31-7c48-8471-a42157389b55', @reservationAccessHash,
                 'reservation-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b57', 'buffer', 'buffer@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b58', '019bd5e4-6c31-7c48-8471-a42157389b57', @bufferAccessHash,
+                'buffer-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
 
         CREATE SCHEMA budget;
         CREATE TABLE budget.periods (

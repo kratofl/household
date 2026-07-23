@@ -6,6 +6,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
 {
     public DbSet<BudgetPeriod> Periods => Set<BudgetPeriod>();
     public DbSet<BudgetSettings> Settings => Set<BudgetSettings>();
+    public DbSet<BudgetPeriodClose> PeriodCloses => Set<BudgetPeriodClose>();
     public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
     public DbSet<BudgetIncomePlanPause> IncomePlanPauses => Set<BudgetIncomePlanPause>();
     public DbSet<BudgetIncomePlanStop> IncomePlanStops => Set<BudgetIncomePlanStop>();
@@ -36,6 +37,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         modelBuilder.HasDefaultSchema("budget");
         ConfigurePeriod(modelBuilder.Entity<BudgetPeriod>());
         ConfigureSettings(modelBuilder.Entity<BudgetSettings>());
+        ConfigurePeriodClose(modelBuilder.Entity<BudgetPeriodClose>());
         ConfigureIncomePlan(modelBuilder.Entity<BudgetIncomePlan>());
         ConfigureIncomePlanPause(modelBuilder.Entity<BudgetIncomePlanPause>());
         ConfigureIncomePlanStop(modelBuilder.Entity<BudgetIncomePlanStop>());
@@ -171,9 +173,30 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.BufferRule).HasColumnName("buffer_rule");
         entity.Property(x => x.BufferAmountCents).HasColumnName("buffer_amount_cents");
         entity.Property(x => x.BufferPercentageBasisPoints).HasColumnName("buffer_percentage_basis_points");
+        entity.Property(x => x.DefaultBufferDisposition).HasColumnName("default_buffer_disposition");
         entity.Property(x => x.SetupCompletedAt).HasColumnName("setup_completed_at").HasColumnType("timestamp without time zone");
         Timestamps(entity);
         entity.HasIndex(x => x.OwnerUserId).IsUnique();
+    }
+
+    private static void ConfigurePeriodClose(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetPeriodClose> entity)
+    {
+        entity.ToTable("period_closes"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.PeriodId).HasColumnName("period_id");
+        entity.Property(x => x.ForecastBufferTargetCents).HasColumnName("forecast_buffer_target_cents");
+        entity.Property(x => x.ActualBufferTargetCents).HasColumnName("actual_buffer_target_cents");
+        entity.Property(x => x.FundedBufferCents).HasColumnName("funded_buffer_cents");
+        entity.Property(x => x.BufferShortfallCents).HasColumnName("buffer_shortfall_cents");
+        entity.Property(x => x.DeficitCents).HasColumnName("deficit_cents");
+        entity.Property(x => x.CoveredFromBufferCents).HasColumnName("covered_from_buffer_cents");
+        entity.Property(x => x.CarriedDeficitCents).HasColumnName("carried_deficit_cents");
+        entity.Property(x => x.Disposition).HasColumnName("disposition");
+        entity.Property(x => x.DispositionAmountCents).HasColumnName("disposition_amount_cents");
+        entity.Property(x => x.RetainedBufferCents).HasColumnName("retained_buffer_cents");
+        entity.Property(x => x.ClosedAt).HasColumnName("closed_at").HasColumnType("timestamp without time zone");
+        entity.HasIndex(x => new { x.OwnerUserId, x.PeriodId }).IsUnique();
     }
 
     private static void ConfigureIncomePlan(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePlan> entity)

@@ -29,8 +29,8 @@ export function updateBudgetSettings(accessToken: string, body: BudgetSetupInput
   return apiRequest<BudgetSetupState>("/budget/settings", { method: "PATCH", accessToken, body })
 }
 
-export function loadBudgetSummary(accessToken: string) {
-  return apiRequest<BudgetSummary>("/budget/summary", { accessToken })
+export function loadBudgetSummary(accessToken: string, date?: string) {
+  return apiRequest<BudgetSummary>(`/budget/summary${date ? `?date=${date}` : ""}`, { accessToken })
 }
 
 export function createBudgetTransaction(accessToken: string, body: BudgetTransactionInput) {
@@ -155,4 +155,8 @@ export function matchCommitmentOccurrence(accessToken: string, seriesId: string,
 
 export function autoPostCommitments(accessToken: string, from: string, through: string) {
   return apiRequest(`/budget/commitments/auto-post?from=${from}&through=${through}`, { method: "POST", accessToken })
+}
+
+export function closeBudgetPeriod(accessToken: string, periodId: string, body: unknown) {
+  return apiRequest(`/budget/periods/${periodId}/close`, { method: "POST", accessToken, body })
 }

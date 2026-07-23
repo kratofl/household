@@ -78,6 +78,7 @@ public static partial class BudgetSetupEndpoints
         settings.BufferPercentageBasisPoints = request.BufferRule == BudgetValues.PercentageBuffer
             ? request.BufferPercentageBasisPoints
             : 0;
+        settings.DefaultBufferDisposition = request.DefaultBufferDisposition ?? settings.DefaultBufferDisposition;
         settings.SetupCompletedAt ??= DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
         await database.SaveChangesAsync(cancellationToken);
 
@@ -123,6 +124,7 @@ public static partial class BudgetSetupEndpoints
             settings?.BufferRule ?? BudgetValues.FixedBuffer,
             settings?.BufferAmountCents ?? 0,
             settings?.BufferPercentageBasisPoints ?? 0,
+            settings?.DefaultBufferDisposition ?? BudgetValues.Retain,
             incomePlans,
             openingAllocations);
     }
@@ -161,6 +163,9 @@ public static partial class BudgetSetupEndpoints
             return Invalid("Buffer rule must be fixed or percentage");
         if (request.BufferAmountCents < 0 || request.BufferPercentageBasisPoints is < 0 or > 10000)
             return Invalid("Buffer values are outside the supported range");
+        if (request.DefaultBufferDisposition is not null &&
+            request.DefaultBufferDisposition is not ("retain" or "ordinary" or "savings" or "investment"))
+            return Invalid("Default buffer disposition is invalid");
         if ((request.IncomePlans ?? []).Any(x => string.IsNullOrWhiteSpace(x.Name) || x.AmountCents <= 0))
             return Invalid("Income plans need a name and positive amount");
         if ((request.OpeningAllocations ?? []).Any(x => x.Kind is not ("buffer" or "savings" or "investment") || x.AmountCents < 0))
@@ -181,6 +186,7 @@ public sealed record BudgetSetupRequest(
     string BufferRule,
     long BufferAmountCents,
     int BufferPercentageBasisPoints,
+    string? DefaultBufferDisposition,
     IReadOnlyList<InitialIncomePlanRequest>? IncomePlans,
     IReadOnlyList<OpeningAllocationRequest>? OpeningAllocations);
 
@@ -196,5 +202,6 @@ public sealed record BudgetSetupState(
     string BufferRule,
     long BufferAmountCents,
     int BufferPercentageBasisPoints,
+    string DefaultBufferDisposition,
     IReadOnlyList<InitialIncomePlan> IncomePlans,
     IReadOnlyList<OpeningAllocation> OpeningAllocations);

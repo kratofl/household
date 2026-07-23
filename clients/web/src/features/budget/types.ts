@@ -16,6 +16,7 @@ export type BudgetSetupState = {
   bufferRule: "fixed" | "percentage"
   bufferAmountCents: number
   bufferPercentageBasisPoints: number
+  defaultBufferDisposition: "retain" | "ordinary" | "savings" | "investment"
   incomePlans: Array<{ id: string; name: string; amountCents: number }>
   openingAllocations: Array<{
     id: string
@@ -32,6 +33,7 @@ export type BudgetSetupInput = {
   bufferRule: BudgetSetupState["bufferRule"]
   bufferAmountCents: number
   bufferPercentageBasisPoints: number
+  defaultBufferDisposition?: BudgetSetupState["defaultBufferDisposition"]
   incomePlans?: Array<{ name: string; amountCents: number }>
   openingAllocations?: Array<{
     kind: "buffer" | "savings" | "investment"
@@ -81,7 +83,13 @@ export type BudgetSummary = {
   accounts: BudgetAccount[]
   plannedExpenses: PlannedExpense[]
   actualIncomeCents: number
+  forecastBufferTargetCents: number
+  actualBufferTargetCents: number
   fundedBufferCents: number
+  bufferShortfallCents: number
+  accumulatedBufferCents: number
+  protectedBufferCents: number
+  deficitCarryoverCents: number
   reservationCents: number
   maximumOrdinaryCents: number
   ordinaryAvailableCents: number
