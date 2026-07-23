@@ -796,6 +796,87 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Gradual_reservations_reduce_availability_and_prevent_double_charging()
+    {
+        const string token = LegacyParityFixture.ReservationAccessToken;
+        using var defaultsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var defaults = await (await fixture.Client.SendAsync(defaultsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var categoryId = defaults.GetProperty("categories")[0].GetProperty("id").GetGuid();
+
+        using var incomeRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+        incomeRequest.Content = JsonContent.Create(new
+        {
+            kind = "income", occurredOn = "2026-07-23", description = "Income", amountCents = 300_000,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(incomeRequest)).StatusCode);
+
+        var defaultSeries = await CreateAnnual("Insurance", "2026-08-23", false);
+        var catchUpSeries = await CreateAnnual("Tax", "2026-08-24", true);
+        using var projectionRequest = Authenticated(
+            HttpMethod.Get, "/api/v1/budget/commitments?from=2026-07-01&through=2027-09-01", token);
+        var projection = await (await fixture.Client.SendAsync(projectionRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var first = Assert.Single(projection.GetProperty("occurrences").EnumerateArray(), occurrence =>
+            occurrence.GetProperty("seriesId").GetGuid() == defaultSeries &&
+            occurrence.GetProperty("scheduledOn").GetString() == "2026-08-23");
+        Assert.Equal(10_000, first.GetProperty("reservationRateCents").GetInt64());
+        Assert.Equal(10_000, first.GetProperty("reservationCoverageCents").GetInt64());
+        Assert.Equal(110_000, first.GetProperty("reservationShortfallCents").GetInt64());
+        var normalCycle = Assert.Single(projection.GetProperty("occurrences").EnumerateArray(), occurrence =>
+            occurrence.GetProperty("seriesId").GetGuid() == defaultSeries &&
+            occurrence.GetProperty("scheduledOn").GetString() == "2027-08-23");
+        Assert.Equal(120_000, normalCycle.GetProperty("reservationCoverageCents").GetInt64());
+        Assert.Equal(0, normalCycle.GetProperty("reservationShortfallCents").GetInt64());
+
+        using var summaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var summary = await (await fixture.Client.SendAsync(summaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(20_000, summary.GetProperty("reservationCents").GetInt64());
+        Assert.Equal(280_000, summary.GetProperty("ordinaryAvailableCents").GetInt64());
+
+        var defaultPosting = await Confirm(defaultSeries, "2026-08-23");
+        Assert.Equal(10_000, defaultPosting.GetProperty("reservationCoverageCents").GetInt64());
+        Assert.Equal(0, defaultPosting.GetProperty("directOrdinaryImpactCents").GetInt64());
+        var defaultRetry = await Confirm(defaultSeries, "2026-08-23", HttpStatusCode.OK);
+        Assert.Equal(defaultPosting.GetProperty("id").GetGuid(), defaultRetry.GetProperty("id").GetGuid());
+        var catchUpPosting = await Confirm(catchUpSeries, "2026-08-24");
+        Assert.Equal(10_000, catchUpPosting.GetProperty("reservationCoverageCents").GetInt64());
+        Assert.Equal(-110_000, catchUpPosting.GetProperty("directOrdinaryImpactCents").GetInt64());
+
+        using var timelineRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline?origin=commitment_confirmation", token);
+        var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var insurance = Assert.Single(timeline.EnumerateArray(), item => item.GetProperty("description").GetString() == "Insurance");
+        Assert.Equal(120_000, insurance.GetProperty("amountCents").GetInt64());
+        Assert.Equal(0, insurance.GetProperty("ordinaryImpactCents").GetInt64());
+
+        async Task<Guid> CreateAnnual(string name, string startDate, bool chargeFirstShortfall)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments", token);
+            request.Content = JsonContent.Create(new
+            {
+                categoryId, kind = "fixed_cost", name, amountCents = 120_000, cadence = "yearly",
+                intervalCount = 1, startDate, budgetingMode = "gradual_reservation",
+                automaticPosting = false, chargeFirstShortfall,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var plan = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return plan.GetProperty("seriesId").GetGuid();
+        }
+
+        async Task<JsonElement> Confirm(
+            Guid seriesId,
+            string scheduledOn,
+            HttpStatusCode expectedStatus = HttpStatusCode.Created)
+        {
+            using var request = Authenticated(
+                HttpMethod.Post, $"/api/v1/budget/commitments/{seriesId}/occurrences/{scheduledOn}/confirm", token);
+            request.Content = JsonContent.Create(new { actualOn = scheduledOn, actualAmountCents = 120_000 });
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(expectedStatus, response.StatusCode);
+            return await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

@@ -19,6 +19,8 @@ public sealed class BudgetCommitmentProjector(BudgetDbContext database)
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToListAsync(cancellationToken);
         var postings = await database.CommitmentPostings.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .ToListAsync(cancellationToken);
+        var preferredPeriodStartDay = await database.Settings.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+            .Select(x => (int?)x.PreferredPeriodStartDay).SingleOrDefaultAsync(cancellationToken) ?? 1;
         var stopBySeries = stops.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.Min(y => y.EffectiveOn));
         var pausesBySeries = pauses.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.ToList());
         var overridesByOccurrence = overrides.GroupBy(x => (x.SeriesId, x.ScheduledOn)).ToDictionary(x => x.Key, x => x.Last());
@@ -36,14 +38,15 @@ public sealed class BudgetCommitmentProjector(BudgetDbContext database)
                 series.Key, current.CategoryId, current.Kind, current.Name, current.AmountCents, current.Cadence,
                 current.IntervalUnit, current.IntervalCount,
                 BudgetIncomePlanProjector.ParseWeekdays(current.Weekdays).Select(x => (int)x).Order().ToArray(),
-                current.StartDate, current.BudgetingMode, current.AutomaticPosting,
+                current.StartDate, current.BudgetingMode, current.ChargeFirstShortfall, current.AutomaticPosting,
                 stoppedOn == default ? null : stoppedOn,
                 seriesPauses.Select(x => new CommitmentPauseSummary(x.Id, x.From, x.Through, x.Reason)).ToList(),
                 ordered.Select(x => new CommitmentVersionSummary(
                     x.Id, x.EffectiveFrom, x.EffectiveTo, x.CategoryId, x.Kind, x.Name, x.AmountCents,
                     x.Cadence, x.IntervalUnit, x.IntervalCount,
                     BudgetIncomePlanProjector.ParseWeekdays(x.Weekdays).Select(y => (int)y).Order().ToArray(),
-                    x.BudgetingMode, x.AutomaticPosting, x.ChangeReason, x.Active)).ToList()));
+                    x.BudgetingMode, x.ChargeFirstShortfall, x.AutomaticPosting, x.ChangeReason, x.Active,
+                    x.CreatedAt)).ToList()));
 
             foreach (var version in ordered.Where(x => x.Active))
             {
@@ -62,14 +65,21 @@ public sealed class BudgetCommitmentProjector(BudgetDbContext database)
                     if (seriesPauses.Any(x => scheduledOn >= x.From && scheduledOn <= x.Through)) continue;
                     overridesByOccurrence.TryGetValue((series.Key, scheduledOn), out var occurrenceOverride);
                     postingsByOccurrence.TryGetValue((series.Key, scheduledOn), out var posting);
+                    var reservation = BudgetCommitmentReservations.Build(version, scheduledOn, preferredPeriodStartDay);
+                    var occurrenceAmount = occurrenceOverride?.AmountCents ?? version.AmountCents;
+                    var reservationCoverage = Math.Min(occurrenceAmount, reservation.CoverageCents);
                     occurrences.Add(new ExpectedCommitmentOccurrence(
                         $"commitment:{series.Key}:{scheduledOn:yyyy-MM-dd}", series.Key, version.Id,
                         version.CategoryId, version.Kind, scheduledOn, occurrenceOverride?.OccurredOn ?? scheduledOn,
-                        occurrenceOverride?.Name ?? version.Name, occurrenceOverride?.AmountCents ?? version.AmountCents,
-                        version.BudgetingMode, occurrenceOverride is not null,
+                        occurrenceOverride?.Name ?? version.Name, occurrenceAmount,
+                        version.BudgetingMode, version.ChargeFirstShortfall,
+                        reservation.RateCents, reservationCoverage,
+                        Math.Max(0, occurrenceAmount - reservationCoverage),
+                        reservation.Periods, occurrenceOverride is not null,
                         posting is null ? "expected" : posting.PostingMode == BudgetValues.Automatic ? "automatically_posted" : "confirmed",
                         posting is null ? null : new CommitmentPostingSummary(
-                            posting.Id, posting.LedgerEntryId, posting.ActualOn, posting.ActualAmountCents, posting.PostingMode)));
+                            posting.Id, posting.LedgerEntryId, posting.ActualOn, posting.ActualAmountCents,
+                            posting.ReservationCoverageCents, posting.DirectOrdinaryImpactCents, posting.PostingMode)));
                 }
             }
         }
@@ -84,16 +94,20 @@ public sealed record CommitmentProjection(
 public sealed record CommitmentSummary(
     Guid SeriesId, Guid? CategoryId, string Kind, string Name, long AmountCents, string Cadence,
     string IntervalUnit, int IntervalCount, IReadOnlyList<int> Weekdays, DateOnly StartDate,
-    string BudgetingMode, bool AutomaticPosting, DateOnly? StoppedOn,
+    string BudgetingMode, bool ChargeFirstShortfall, bool AutomaticPosting, DateOnly? StoppedOn,
     IReadOnlyList<CommitmentPauseSummary> Pauses, IReadOnlyList<CommitmentVersionSummary> Versions);
 public sealed record CommitmentPauseSummary(Guid Id, DateOnly From, DateOnly Through, string Reason);
 public sealed record CommitmentVersionSummary(
     Guid Id, DateOnly EffectiveFrom, DateOnly? EffectiveTo, Guid? CategoryId, string Kind, string Name,
     long AmountCents, string Cadence, string IntervalUnit, int IntervalCount, IReadOnlyList<int> Weekdays,
-    string BudgetingMode, bool AutomaticPosting, string ChangeReason, bool Active);
+    string BudgetingMode, bool ChargeFirstShortfall, bool AutomaticPosting, string ChangeReason, bool Active,
+    DateTime CreatedAt);
 public sealed record ExpectedCommitmentOccurrence(
     string Id, Guid SeriesId, Guid VersionId, Guid? CategoryId, string Kind, DateOnly ScheduledOn,
-    DateOnly OccurredOn, string Name, long AmountCents, string BudgetingMode, bool Overridden,
-    string Status, CommitmentPostingSummary? Posting);
+    DateOnly OccurredOn, string Name, long AmountCents, string BudgetingMode,
+    bool ChargeFirstShortfall, long ReservationRateCents, long ReservationCoverageCents,
+    long ReservationShortfallCents, IReadOnlyList<CommitmentReservationPeriod> Reservations,
+    bool Overridden, string Status, CommitmentPostingSummary? Posting);
 public sealed record CommitmentPostingSummary(
-    Guid Id, Guid LedgerEntryId, DateOnly ActualOn, long ActualAmountCents, string PostingMode);
+    Guid Id, Guid LedgerEntryId, DateOnly ActualOn, long ActualAmountCents,
+    long ReservationCoverageCents, long DirectOrdinaryImpactCents, string PostingMode);

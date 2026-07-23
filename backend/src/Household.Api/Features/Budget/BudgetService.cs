@@ -47,6 +47,12 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             .GroupBy(x => x.Destination).Select(x => new { Destination = x.Key, Amount = x.Sum(y => y.AmountCents) })
             .ToDictionaryAsync(x => x.Destination, x => x.Amount, cancellationToken);
         var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
+        var commitmentProjection = await new BudgetCommitmentProjector(database).LoadAsync(
+            ownerId, period.StartDate, period.StartDate.AddYears(5), cancellationToken);
+        var reservationCents = commitmentProjection.Occurrences
+            .SelectMany(x => x.Reservations)
+            .Where(x => x.Eligible && x.PeriodStart == period.StartDate)
+            .Sum(x => x.AmountCents);
         var availability = BudgetAvailability.Calculate(
             income,
             ordinaryImpact,
@@ -55,7 +61,8 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             settings?.BufferPercentageBasisPoints ?? 0,
             varianceAllocations.GetValueOrDefault(BudgetValues.Buffer),
             varianceAllocations.GetValueOrDefault(BudgetValues.Savings),
-            varianceAllocations.GetValueOrDefault(BudgetValues.Investment));
+            varianceAllocations.GetValueOrDefault(BudgetValues.Investment),
+            reservationCents);
         var plannedSummaries = planned.Select(item => new PlannedExpenseSummary(
             item.Id, item.OwnerUserId, item.AccountId, item.CategoryId, item.Name, item.Kind, item.Cadence,
             item.AmountCents, item.DueDay, item.DueMonth, item.IncludeInLimit, item.Active,
@@ -63,7 +70,7 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
         return new BudgetSummary(period, categorySummaries, spent, excluded,
             availability.OrdinaryAvailableCents,
             accounts.Sum(x => x.BalanceCents), accounts, plannedSummaries,
-            income, availability.FundedBufferCents, availability.MaximumOrdinaryCents,
+            income, availability.FundedBufferCents, reservationCents, availability.MaximumOrdinaryCents,
             availability.OrdinaryAvailableCents, ledgerEntries);
     }
 

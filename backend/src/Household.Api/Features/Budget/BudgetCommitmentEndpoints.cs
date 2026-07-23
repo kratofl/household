@@ -77,7 +77,9 @@ public static class BudgetCommitmentEndpoints
             request.AmountCents ?? source.AmountCents, request.Cadence ?? source.Cadence,
             request.IntervalUnit ?? source.IntervalUnit, request.IntervalCount ?? source.IntervalCount,
             request.Weekdays ?? ParseWeekdays(source.Weekdays), source.StartDate.ToString("yyyy-MM-dd"), null,
-            request.BudgetingMode ?? source.BudgetingMode, request.AutomaticPosting ?? source.AutomaticPosting),
+            request.BudgetingMode ?? source.BudgetingMode,
+            request.ChargeFirstShortfall ?? source.ChargeFirstShortfall,
+            request.AutomaticPosting ?? source.AutomaticPosting),
             user.Id, database, cancellationToken);
         if (parsed.Error is not null) return parsed.Error;
         var previousEnd = source.EffectiveTo;
@@ -172,7 +174,7 @@ public static class BudgetCommitmentEndpoints
         if (!TryDate(scheduledOn, out var scheduled)) return InvalidDate("scheduledOn");
         var occurrence = await FindOccurrence(user.Id, seriesId, scheduled, database, cancellationToken);
         if (occurrence is null) return NotFound("Expected commitment occurrence was not found");
-        var ledger = await database.LedgerEntries.SingleOrDefaultAsync(x =>
+        var ledger = await database.LedgerEntries.Include(x => x.Splits).SingleOrDefaultAsync(x =>
             x.OwnerUserId == user.Id && x.Id == request.LedgerEntryId && x.Kind == BudgetValues.Expense, cancellationToken);
         if (ledger is null) return NotFound("Expense ledger entry was not found");
         var result = await Post(user.Id, occurrence, ledger.OccurredOn, ledger.AmountCents, BudgetValues.Matched, ledger, database, budgetService, cancellationToken);
@@ -212,6 +214,14 @@ public static class BudgetCommitmentEndpoints
             x.OwnerUserId == ownerId && x.SeriesId == occurrence.SeriesId && x.ScheduledOn == occurrence.ScheduledOn, cancellationToken);
         if (existing is not null) return (existing, true);
         var postingId = Guid.NewGuid();
+        var reservationCoverage = occurrence.BudgetingMode == BudgetValues.GradualReservation
+            ? Math.Min(actualAmount, occurrence.ReservationCoverageCents)
+            : 0;
+        var directOrdinaryImpact = occurrence.BudgetingMode == BudgetValues.DuePeriod
+            ? -actualAmount
+            : occurrence.ChargeFirstShortfall
+                ? -Math.Max(0, actualAmount - reservationCoverage)
+                : 0;
         var ledger = matchedLedger;
         if (ledger is null)
         {
@@ -220,15 +230,28 @@ public static class BudgetCommitmentEndpoints
             {
                 Id = Guid.NewGuid(), OwnerUserId = ownerId, PeriodId = period.Id, CategoryId = occurrence.CategoryId,
                 Kind = BudgetValues.Expense, OccurredOn = actualOn, Description = occurrence.Name, AmountCents = actualAmount,
-                OrdinaryImpactCents = -actualAmount, Source = mode == BudgetValues.Automatic ? "commitment_automatic" : "commitment_confirmation",
+                OrdinaryImpactCents = directOrdinaryImpact,
+                Source = mode == BudgetValues.Automatic ? "commitment_automatic" : "commitment_confirmation",
                 SourceRecordId = postingId,
             };
+        }
+        else
+        {
+            ledger.OrdinaryImpactCents = directOrdinaryImpact;
+            var remainingImpact = Math.Abs(directOrdinaryImpact);
+            foreach (var split in ledger.Splits)
+            {
+                var splitImpact = Math.Min(split.AmountCents, remainingImpact);
+                split.OrdinaryImpactCents = -splitImpact;
+                remainingImpact -= splitImpact;
+            }
         }
         var posting = new BudgetCommitmentPosting
         {
             Id = postingId, OwnerUserId = ownerId, SeriesId = occurrence.SeriesId, VersionId = occurrence.VersionId,
             ScheduledOn = occurrence.ScheduledOn, ExpectedOn = occurrence.OccurredOn, ActualOn = actualOn,
             ExpectedAmountCents = occurrence.AmountCents, ActualAmountCents = actualAmount,
+            ReservationCoverageCents = reservationCoverage, DirectOrdinaryImpactCents = directOrdinaryImpact,
             PostingMode = mode, LedgerEntryId = ledger.Id,
         };
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
@@ -307,11 +330,15 @@ public static class BudgetCommitmentEndpoints
         if (cadence != BudgetValues.Custom) weekdays = [];
         if (request.BudgetingMode is not (BudgetValues.DuePeriod or BudgetValues.GradualReservation))
             return (null, Invalid("Budgeting mode is invalid"));
+        if (request.BudgetingMode == BudgetValues.GradualReservation && cadence == BudgetValues.Monthly)
+            return (null, Invalid("Gradual reservation is only available for non-monthly commitments"));
         if (request.CategoryId.HasValue && !await database.Categories.AnyAsync(
                 x => x.OwnerUserId == ownerId && x.Id == request.CategoryId, cancellationToken))
             return (null, Invalid("Category was not found"));
         return (new CommitmentDefinition(request.CategoryId, request.Kind, name, request.AmountCents, cadence, unit,
-            interval, string.Join(',', weekdays), start, stop, request.BudgetingMode, request.AutomaticPosting), null);
+            interval, string.Join(',', weekdays), start, stop, request.BudgetingMode,
+            request.BudgetingMode == BudgetValues.GradualReservation && request.ChargeFirstShortfall,
+            request.AutomaticPosting), null);
     }
 
     private static BudgetCommitmentPlan NewVersion(
@@ -321,6 +348,7 @@ public static class BudgetCommitmentEndpoints
         AmountCents = value.AmountCents, Cadence = value.Cadence, IntervalUnit = value.IntervalUnit,
         IntervalCount = value.IntervalCount, Weekdays = value.Weekdays, StartDate = value.StartDate,
         EffectiveFrom = effectiveFrom, EffectiveTo = effectiveTo, BudgetingMode = value.BudgetingMode,
+        ChargeFirstShortfall = value.ChargeFirstShortfall,
         AutomaticPosting = value.AutomaticPosting, ChangeReason = reason,
     };
     private static IReadOnlyList<int> ParseWeekdays(string value) => string.IsNullOrWhiteSpace(value) ? [] : value.Split(',').Select(int.Parse).ToArray();
@@ -335,11 +363,12 @@ public static class BudgetCommitmentEndpoints
 public sealed record CommitmentRequest(
     Guid? CategoryId, string? Kind, string? Name, long AmountCents, string? Cadence, string? IntervalUnit,
     int IntervalCount, IReadOnlyList<int>? Weekdays, string? StartDate, string? StopDate,
-    string? BudgetingMode, bool AutomaticPosting);
+    string? BudgetingMode, bool ChargeFirstShortfall, bool AutomaticPosting);
 public sealed record CommitmentEditRequest(
     string? Scope, string? Reason, string? ScheduledOn, string? EffectiveOn, string? OccurredOn,
     Guid? CategoryId, string? Kind, string? Name, long? AmountCents, string? Cadence, string? IntervalUnit,
-    int? IntervalCount, IReadOnlyList<int>? Weekdays, string? BudgetingMode, bool? AutomaticPosting);
+    int? IntervalCount, IReadOnlyList<int>? Weekdays, string? BudgetingMode,
+    bool? ChargeFirstShortfall, bool? AutomaticPosting);
 public sealed record CommitmentPauseRequest(string? From, string? Through, string? Reason);
 public sealed record CommitmentStopRequest(string? EffectiveOn, string? Reason);
 public sealed record CommitmentConfirmationRequest(string? ActualOn, long ActualAmountCents);
@@ -347,4 +376,4 @@ public sealed record CommitmentMatchRequest(Guid LedgerEntryId);
 internal sealed record CommitmentDefinition(
     Guid? CategoryId, string Kind, string Name, long AmountCents, string Cadence, string IntervalUnit,
     int IntervalCount, string Weekdays, DateOnly StartDate, DateOnly? StopDate,
-    string BudgetingMode, bool AutomaticPosting);
+    string BudgetingMode, bool ChargeFirstShortfall, bool AutomaticPosting);

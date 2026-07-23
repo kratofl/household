@@ -150,6 +150,7 @@ public sealed class BudgetCommitmentPlan
     public DateOnly EffectiveFrom { get; set; }
     public DateOnly? EffectiveTo { get; set; }
     public string BudgetingMode { get; set; } = BudgetValues.DuePeriod;
+    public bool ChargeFirstShortfall { get; set; }
     public bool AutomaticPosting { get; set; }
     public string ChangeReason { get; set; } = "";
     public bool Active { get; set; } = true;
@@ -202,6 +203,8 @@ public sealed class BudgetCommitmentPosting
     public DateOnly ActualOn { get; set; }
     public long ExpectedAmountCents { get; set; }
     public long ActualAmountCents { get; set; }
+    public long ReservationCoverageCents { get; set; }
+    public long DirectOrdinaryImpactCents { get; set; }
     public string PostingMode { get; set; } = BudgetValues.Manual;
     public Guid LedgerEntryId { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -411,6 +414,7 @@ public sealed record BudgetSummary(
     IReadOnlyList<PlannedExpenseSummary> PlannedExpenses,
     long ActualIncomeCents,
     long FundedBufferCents,
+    long ReservationCents,
     long MaximumOrdinaryCents,
     long OrdinaryAvailableCents,
     IReadOnlyList<BudgetLedgerEntry> LedgerEntries);

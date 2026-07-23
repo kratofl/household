@@ -82,6 +82,7 @@ export type BudgetSummary = {
   plannedExpenses: PlannedExpense[]
   actualIncomeCents: number
   fundedBufferCents: number
+  reservationCents: number
   maximumOrdinaryCents: number
   ordinaryAvailableCents: number
   ledgerEntries: BudgetLedgerEntry[]
@@ -240,6 +241,7 @@ export type CommitmentPlan = {
   weekdays: number[]
   startDate: string
   budgetingMode: "due_period" | "gradual_reservation"
+  chargeFirstShortfall: boolean
   automaticPosting: boolean
   stoppedOn?: string
   pauses: Array<{ id: string; from: string; through: string; reason: string }>
@@ -256,6 +258,7 @@ export type CommitmentPlan = {
     intervalCount: number
     weekdays: number[]
     budgetingMode: CommitmentPlan["budgetingMode"]
+    chargeFirstShortfall: boolean
     automaticPosting: boolean
     changeReason: string
     active: boolean
@@ -273,6 +276,16 @@ export type ExpectedCommitmentOccurrence = {
   name: string
   amountCents: number
   budgetingMode: CommitmentPlan["budgetingMode"]
+  chargeFirstShortfall: boolean
+  reservationRateCents: number
+  reservationCoverageCents: number
+  reservationShortfallCents: number
+  reservations: Array<{
+    periodStart: string
+    periodEnd: string
+    amountCents: number
+    eligible: boolean
+  }>
   overridden: boolean
   status: "expected" | "confirmed" | "automatically_posted"
   posting?: {
@@ -280,6 +293,8 @@ export type ExpectedCommitmentOccurrence = {
     ledgerEntryId: string
     actualOn: string
     actualAmountCents: number
+    reservationCoverageCents: number
+    directOrdinaryImpactCents: number
     postingMode: "manual" | "automatic" | "matched" | "legacy"
   }
 }
@@ -301,5 +316,6 @@ export type CommitmentInput = {
   startDate: string
   stopDate?: string
   budgetingMode: CommitmentPlan["budgetingMode"]
+  chargeFirstShortfall: boolean
   automaticPosting: boolean
 }

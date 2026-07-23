@@ -41,4 +41,16 @@ public sealed class BudgetAvailabilityTests
         Assert.Equal(100_000, result.MaximumOrdinaryCents);
         Assert.Equal(100_000, result.OrdinaryAvailableCents);
     }
+
+    [Fact]
+    public void Reservations_are_protected_before_the_buffer_and_ordinary_spending()
+    {
+        var result = BudgetAvailability.Calculate(
+            100_000, 0, BudgetValues.FixedBuffer, 30_000, 0,
+            reservationCents: 80_000);
+
+        Assert.Equal(20_000, result.FundedBufferCents);
+        Assert.Equal(0, result.MaximumOrdinaryCents);
+        Assert.Equal(0, result.OrdinaryAvailableCents);
+    }
 }

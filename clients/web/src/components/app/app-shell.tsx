@@ -1146,6 +1146,8 @@ function BudgetPanel(props: {
   const [commitmentUnit, setCommitmentUnit] = useState<CommitmentPlan["intervalUnit"]>("month")
   const [commitmentInterval, setCommitmentInterval] = useState("1")
   const [commitmentWeekdays, setCommitmentWeekdays] = useState<number[]>([])
+  const [commitmentBudgetingMode, setCommitmentBudgetingMode] = useState<CommitmentPlan["budgetingMode"]>("due_period")
+  const [commitmentChargeShortfall, setCommitmentChargeShortfall] = useState(false)
   const [commitmentAutomatic, setCommitmentAutomatic] = useState(false)
   const [commitmentStart, setCommitmentStart] = useState(() => new Date().toISOString().slice(0, 10))
   const [commitmentStop, setCommitmentStop] = useState("")
@@ -1159,6 +1161,8 @@ function BudgetPanel(props: {
   const [commitmentActionName, setCommitmentActionName] = useState("")
   const [commitmentActionAmount, setCommitmentActionAmount] = useState("")
   const [commitmentActionReason, setCommitmentActionReason] = useState("")
+  const [commitmentActionBudgetingMode, setCommitmentActionBudgetingMode] = useState<CommitmentPlan["budgetingMode"]>("due_period")
+  const [commitmentActionChargeShortfall, setCommitmentActionChargeShortfall] = useState(false)
   const [commitmentActionAutomatic, setCommitmentActionAutomatic] = useState(false)
   const [commitmentMatchLedgerId, setCommitmentMatchLedgerId] = useState("")
   const [incomeProjection, setIncomeProjection] = useState<IncomePlanProjection | null>(null)
@@ -1476,7 +1480,9 @@ function BudgetPanel(props: {
         weekdays: commitmentCadence === "custom" && commitmentUnit === "week" ? commitmentWeekdays : [],
         startDate: commitmentStart,
         stopDate: commitmentStop || undefined,
-        budgetingMode: "due_period",
+        budgetingMode: commitmentCadence === "monthly" ? "due_period" : commitmentBudgetingMode,
+        chargeFirstShortfall:
+          commitmentCadence !== "monthly" && commitmentBudgetingMode === "gradual_reservation" && commitmentChargeShortfall,
         automaticPosting: commitmentAutomatic,
       })
       setCommitmentName("")
@@ -1501,6 +1507,8 @@ function BudgetPanel(props: {
     setCommitmentActionName(occurrence?.name ?? plan.name)
     setCommitmentActionAmount(centsToInput(occurrence?.amountCents ?? plan.amountCents))
     setCommitmentActionReason("")
+    setCommitmentActionBudgetingMode(plan.budgetingMode)
+    setCommitmentActionChargeShortfall(plan.chargeFirstShortfall)
     setCommitmentActionAutomatic(plan.automaticPosting)
     setCommitmentMatchLedgerId("")
   }
@@ -1542,6 +1550,9 @@ function BudgetPanel(props: {
           occurredOn: commitmentAction.kind === "occurrence" ? commitmentActionDate : undefined,
           name: commitmentActionName.trim(),
           amountCents,
+          budgetingMode: commitmentActionBudgetingMode,
+          chargeFirstShortfall:
+            commitmentActionBudgetingMode === "gradual_reservation" && commitmentActionChargeShortfall,
           automaticPosting: commitmentActionAutomatic,
           reason: commitmentActionReason,
         })
@@ -1954,6 +1965,7 @@ function BudgetPanel(props: {
             <div className="grid gap-4 md:grid-cols-4">
               <Metric label={t("budget.actualIncome")} value={currency(summary.actualIncomeCents)} />
               <Metric label={t("budget.fundedBuffer")} value={currency(summary.fundedBufferCents)} />
+              <Metric label={t("budget.reservedCommitments")} value={currency(summary.reservationCents)} />
               <Metric label={t("budget.maximumOrdinary")} value={currency(summary.maximumOrdinaryCents)} />
               <Metric label={t("budget.remaining")} value={currency(summary.ordinaryAvailableCents)} />
             </div>
@@ -2506,12 +2518,29 @@ function BudgetPanel(props: {
                     { value: "custom", label: t("budget.custom") },
                   ]}
                 />
+                {commitmentCadence !== "monthly" ? (
+                  <FormSelect
+                    value={commitmentBudgetingMode}
+                    onValueChange={(value) => setCommitmentBudgetingMode(value as CommitmentPlan["budgetingMode"])}
+                    options={[
+                      { value: "due_period", label: t("budget.duePeriod") },
+                      { value: "gradual_reservation", label: t("budget.gradualReservation") },
+                    ]}
+                    aria-label={t("budget.budgetingMode")}
+                  />
+                ) : null}
                 <Input type="date" value={commitmentStart} onChange={(event) => setCommitmentStart(event.target.value)} aria-label={t("budget.startDate")} />
                 <Input type="date" value={commitmentStop} onChange={(event) => setCommitmentStop(event.target.value)} aria-label={t("budget.optionalStopDate")} />
                 <div className="flex items-center justify-between gap-3 rounded-md border px-3">
                   <Label htmlFor="commitment-automatic">{t("budget.automaticPosting")}</Label>
                   <Switch id="commitment-automatic" checked={commitmentAutomatic} onCheckedChange={setCommitmentAutomatic} />
                 </div>
+                {commitmentCadence !== "monthly" && commitmentBudgetingMode === "gradual_reservation" ? (
+                  <div className="flex items-center justify-between gap-3 rounded-md border px-3">
+                    <Label htmlFor="commitment-shortfall">{t("budget.chargeFirstShortfall")}</Label>
+                    <Switch id="commitment-shortfall" checked={commitmentChargeShortfall} onCheckedChange={setCommitmentChargeShortfall} />
+                  </div>
+                ) : null}
                 {commitmentCadence === "custom" ? (
                   <>
                     <Input inputMode="numeric" min={1} value={commitmentInterval} onChange={(event) => setCommitmentInterval(event.target.value)} aria-label={t("budget.intervalCount")} />
@@ -2559,6 +2588,7 @@ function BudgetPanel(props: {
                           {` · ${t(plan.cadence === "weekly" ? "budget.weekly" : plan.cadence === "quarterly" ? "budget.quarterly" : plan.cadence === "yearly" ? "budget.yearly" : plan.cadence === "custom" ? "budget.custom" : "budget.monthly")}`}
                           {plan.stoppedOn ? ` · ${t("budget.stoppedOn")} ${plan.stoppedOn}` : ""}
                           {plan.automaticPosting ? ` · ${t("budget.automatic")}` : ` · ${t("budget.manualConfirmation")}`}
+                          {` · ${t(plan.budgetingMode === "gradual_reservation" ? "budget.gradualReservation" : "budget.duePeriod")}`}
                           {` · ${plan.versions.length} ${t("budget.versions")}`}
                         </p>
                       </div>
@@ -2592,6 +2622,24 @@ function BudgetPanel(props: {
                             {occurrence.occurredOn} · {t(occurrence.status === "confirmed" ? "budget.statusConfirmed" : occurrence.status === "automatically_posted" ? "budget.statusAutomaticallyPosted" : "budget.statusExpected")}
                             {occurrence.overridden ? ` · ${t("budget.overridden")}` : ""}
                           </p>
+                          {occurrence.budgetingMode === "gradual_reservation" ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t("budget.reservationRate")}: {currency(occurrence.reservationRateCents)}
+                              {` · ${t("budget.covered")}: ${currency(occurrence.reservationCoverageCents)}`}
+                              {occurrence.reservationShortfallCents > 0
+                                ? ` · ${t("budget.shortfall")}: ${currency(occurrence.reservationShortfallCents)}`
+                                : ""}
+                              {occurrence.chargeFirstShortfall && occurrence.reservationShortfallCents > 0
+                                ? ` · ${t("budget.shortfallWillCharge")}`
+                                : ""}
+                            </p>
+                          ) : null}
+                          {occurrence.posting && occurrence.posting.directOrdinaryImpactCents !== -occurrence.posting.actualAmountCents ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t("budget.transactionAmount")}: {currency(occurrence.posting.actualAmountCents)}
+                              {` · ${t("budget.ordinaryImpact")}: ${currency(occurrence.posting.directOrdinaryImpactCents)}`}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-1">
                           <span>{currency(occurrence.amountCents)}</span>
@@ -2641,10 +2689,29 @@ function BudgetPanel(props: {
                     <Input value={commitmentActionReason} onChange={(event) => setCommitmentActionReason(event.target.value)} placeholder={t("budget.reason")} />
                   ) : null}
                   {commitmentAction.kind === "future" || commitmentAction.kind === "effective_date" ? (
-                    <div className="flex items-center justify-between gap-3 rounded-md border px-3">
-                      <Label htmlFor="commitment-action-automatic">{t("budget.automaticPosting")}</Label>
-                      <Switch id="commitment-action-automatic" checked={commitmentActionAutomatic} onCheckedChange={setCommitmentActionAutomatic} />
-                    </div>
+                    <>
+                      <FormSelect
+                        value={commitmentActionBudgetingMode}
+                        onValueChange={(value) => setCommitmentActionBudgetingMode(value as CommitmentPlan["budgetingMode"])}
+                        options={commitmentProjection?.plans.find((plan) => plan.seriesId === commitmentAction.seriesId)?.cadence === "monthly"
+                          ? [{ value: "due_period", label: t("budget.duePeriod") }]
+                          : [
+                              { value: "due_period", label: t("budget.duePeriod") },
+                              { value: "gradual_reservation", label: t("budget.gradualReservation") },
+                            ]}
+                        aria-label={t("budget.budgetingMode")}
+                      />
+                      {commitmentActionBudgetingMode === "gradual_reservation" ? (
+                        <div className="flex items-center justify-between gap-3 rounded-md border px-3">
+                          <Label htmlFor="commitment-action-shortfall">{t("budget.chargeFirstShortfall")}</Label>
+                          <Switch id="commitment-action-shortfall" checked={commitmentActionChargeShortfall} onCheckedChange={setCommitmentActionChargeShortfall} />
+                        </div>
+                      ) : null}
+                      <div className="flex items-center justify-between gap-3 rounded-md border px-3">
+                        <Label htmlFor="commitment-action-automatic">{t("budget.automaticPosting")}</Label>
+                        <Switch id="commitment-action-automatic" checked={commitmentActionAutomatic} onCheckedChange={setCommitmentActionAutomatic} />
+                      </div>
+                    </>
                   ) : null}
                   <div className="flex gap-2">
                     <Button onClick={submitCommitmentAction} disabled={saving}>{t("budget.confirmAction")}</Button>

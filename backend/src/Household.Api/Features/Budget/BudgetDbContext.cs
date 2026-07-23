@@ -307,6 +307,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.IntervalCount).HasColumnName("interval_count"); entity.Property(x => x.Weekdays).HasColumnName("weekdays");
         entity.Property(x => x.StartDate).HasColumnName("start_date"); entity.Property(x => x.EffectiveFrom).HasColumnName("effective_from");
         entity.Property(x => x.EffectiveTo).HasColumnName("effective_to"); entity.Property(x => x.BudgetingMode).HasColumnName("budgeting_mode");
+        entity.Property(x => x.ChargeFirstShortfall).HasColumnName("charge_first_shortfall");
         entity.Property(x => x.AutomaticPosting).HasColumnName("automatic_posting"); entity.Property(x => x.ChangeReason).HasColumnName("change_reason");
         entity.Property(x => x.Active).HasColumnName("active"); Timestamps(entity);
         entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.EffectiveFrom });
@@ -349,7 +350,10 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.SeriesId).HasColumnName("series_id"); entity.Property(x => x.VersionId).HasColumnName("version_id");
         entity.Property(x => x.ScheduledOn).HasColumnName("scheduled_on"); entity.Property(x => x.ExpectedOn).HasColumnName("expected_on");
         entity.Property(x => x.ActualOn).HasColumnName("actual_on"); entity.Property(x => x.ExpectedAmountCents).HasColumnName("expected_amount_cents");
-        entity.Property(x => x.ActualAmountCents).HasColumnName("actual_amount_cents"); entity.Property(x => x.PostingMode).HasColumnName("posting_mode");
+        entity.Property(x => x.ActualAmountCents).HasColumnName("actual_amount_cents");
+        entity.Property(x => x.ReservationCoverageCents).HasColumnName("reservation_coverage_cents");
+        entity.Property(x => x.DirectOrdinaryImpactCents).HasColumnName("direct_ordinary_impact_cents");
+        entity.Property(x => x.PostingMode).HasColumnName("posting_mode");
         entity.Property(x => x.LedgerEntryId).HasColumnName("ledger_entry_id"); entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
         entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.ScheduledOn }).IsUnique();
     }
