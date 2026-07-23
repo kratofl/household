@@ -690,6 +690,112 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Commitments_share_versioned_scheduling_and_post_only_through_explicit_paths()
+    {
+        const string token = LegacyParityFixture.CommitmentAccessToken;
+        using var defaultsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var defaults = await (await fixture.Client.SendAsync(defaultsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var categoryId = defaults.GetProperty("categories")[0].GetProperty("id").GetGuid();
+
+        var seriesId = await CreateCommitment("Rent", 100_000, "fixed_cost", "monthly", "2026-07-31", false);
+        using var occurrenceEdit = Authenticated(HttpMethod.Patch, $"/api/v1/budget/commitments/{seriesId}", token);
+        occurrenceEdit.Content = JsonContent.Create(new
+        {
+            scope = "occurrence", scheduledOn = "2026-08-31", occurredOn = "2026-08-30",
+            amountCents = 105_000, reason = "Landlord requested an earlier transfer",
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(occurrenceEdit)).StatusCode);
+
+        using var futureEdit = Authenticated(HttpMethod.Patch, $"/api/v1/budget/commitments/{seriesId}", token);
+        futureEdit.Content = JsonContent.Create(new
+        {
+            scope = "future", effectiveOn = "2026-09-30", kind = "subscription",
+            amountCents = 120_000, reason = "Contract changed",
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(futureEdit)).StatusCode);
+
+        using var pauseRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/commitments/{seriesId}/pauses", token);
+        pauseRequest.Content = JsonContent.Create(new { from = "2026-10-01", through = "2026-10-31", reason = "Payment holiday" });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(pauseRequest)).StatusCode);
+        using var stopRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/commitments/{seriesId}/stop", token);
+        stopRequest.Content = JsonContent.Create(new { effectiveOn = "2026-11-01", reason = "Contract ended" });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(stopRequest)).StatusCode);
+
+        using var confirmationRequest = Authenticated(
+            HttpMethod.Post, $"/api/v1/budget/commitments/{seriesId}/occurrences/2026-07-31/confirm", token);
+        confirmationRequest.Content = JsonContent.Create(new { actualOn = "2026-07-31", actualAmountCents = 99_000 });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(confirmationRequest)).StatusCode);
+        using var retryConfirmation = Authenticated(
+            HttpMethod.Post, $"/api/v1/budget/commitments/{seriesId}/occurrences/2026-07-31/confirm", token);
+        retryConfirmation.Content = JsonContent.Create(new { actualOn = "2026-07-31", actualAmountCents = 99_000 });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(retryConfirmation)).StatusCode);
+
+        using var projectionRequest = Authenticated(
+            HttpMethod.Get, "/api/v1/budget/commitments?from=2026-07-01&through=2026-12-31", token);
+        var projection = await (await fixture.Client.SendAsync(projectionRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var plan = Assert.Single(projection.GetProperty("plans").EnumerateArray(), x => x.GetProperty("seriesId").GetGuid() == seriesId);
+        Assert.Equal(2, plan.GetProperty("versions").GetArrayLength());
+        Assert.Equal("2026-09-29", plan.GetProperty("versions")[0].GetProperty("effectiveTo").GetString());
+        var occurrences = projection.GetProperty("occurrences").EnumerateArray()
+            .Where(x => x.GetProperty("seriesId").GetGuid() == seriesId).ToList();
+        Assert.Equal(["2026-07-31", "2026-08-30", "2026-09-30"], occurrences.Select(x => x.GetProperty("occurredOn").GetString()));
+        Assert.Equal("confirmed", occurrences[0].GetProperty("status").GetString());
+        Assert.Equal(105_000, occurrences[1].GetProperty("amountCents").GetInt64());
+        Assert.Equal("subscription", occurrences[2].GetProperty("kind").GetString());
+
+        _ = await CreateCommitment("Auto utility", 2_000, "fixed_cost", "monthly", "2026-07-23", true);
+        using var autoRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments/auto-post?from=2026-07-23&through=2026-07-23", token);
+        var autoResult = await (await fixture.Client.SendAsync(autoRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(1, autoResult.GetProperty("posted").GetInt32());
+        using var autoRetryRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments/auto-post?from=2026-07-23&through=2026-07-23", token);
+        var autoRetry = await (await fixture.Client.SendAsync(autoRetryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, autoRetry.GetProperty("posted").GetInt32());
+
+        var matchSeries = await CreateCommitment("Matched utility", 3_000, "subscription", "monthly", "2026-07-24", false);
+        using var ledgerRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+        ledgerRequest.Content = JsonContent.Create(new
+        {
+            kind = "expense", occurredOn = "2026-07-24", description = "Utility debit",
+            amountCents = 3_100, categoryId, affectsOrdinary = true,
+        });
+        var ledger = await (await fixture.Client.SendAsync(ledgerRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        using var matchRequest = Authenticated(
+            HttpMethod.Post, $"/api/v1/budget/commitments/{matchSeries}/occurrences/2026-07-24/match", token);
+        matchRequest.Content = JsonContent.Create(new { ledgerEntryId = ledger.GetProperty("id").GetGuid() });
+        var matchResponse = await fixture.Client.SendAsync(matchRequest);
+        var matched = await matchResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, matchResponse.StatusCode);
+        Assert.Equal("matched", matched.GetProperty("postingMode").GetString());
+        Assert.Equal(ledger.GetProperty("id").GetGuid(), matched.GetProperty("ledgerEntryId").GetGuid());
+
+        using var timelineRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline?origin=commitment_plan", token);
+        var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(timeline.EnumerateArray(), x =>
+            x.GetProperty("description").GetString() == "Rent" && x.GetProperty("status").GetString() == "confirmed");
+
+        using var legacyRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/commitments?from=2026-07-01&through=2027-12-31");
+        var legacy = await (await fixture.Client.SendAsync(legacyRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(legacy.GetProperty("plans").EnumerateArray(), x =>
+            x.GetProperty("seriesId").GetGuid() == LegacyParityFixture.PlannedExpenseId &&
+            x.GetProperty("versions")[0].GetProperty("changeReason").GetString() == "Migrated from legacy planned expense");
+
+        async Task<Guid> CreateCommitment(
+            string name, long amountCents, string kind, string cadence, string startDate, bool automaticPosting)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments", token);
+            request.Content = JsonContent.Create(new
+            {
+                categoryId, kind, name, amountCents, cadence, intervalCount = 1, startDate,
+                budgetingMode = "due_period", automaticPosting,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var value = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return value.GetProperty("seriesId").GetGuid();
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

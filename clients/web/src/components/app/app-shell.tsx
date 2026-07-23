@@ -62,30 +62,35 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  applyCurrentPlannedExpenses,
+  autoPostCommitments,
   autoPostIncome,
+  confirmCommitmentOccurrence,
   confirmIncomeOccurrence,
   createBudgetCategory,
+  createCommitment,
   createIncomePlan,
   createBudgetLedgerEntry,
   correctBudgetLedgerEntry,
-  createPlannedExpense as createPlannedExpenseRequest,
+  editCommitment,
   loadBudgetSummary,
   loadBudgetSetup,
   loadBudgetLedgerDetails,
   loadBudgetTimeline,
+  loadCommitments,
   loadIncomePlans,
   editIncomePlan,
+  matchCommitmentOccurrence,
+  pauseCommitment,
   pauseIncomePlan,
   refundBudgetLedgerEntry,
   saveBudgetSetup,
   saveDefaultIncomeVarianceRule,
   saveIncomePlanVarianceRule,
+  stopCommitment,
   stopIncomePlan,
   updateBudgetCategory,
   updateCurrentBudgetPeriod,
   updateBudgetSettings,
-  updatePlannedExpense as updatePlannedExpenseRequest,
   voidBudgetLedgerEntry,
 } from "@/features/budget/api"
 import type {
@@ -94,10 +99,12 @@ import type {
   BudgetSetupState,
   BudgetSummary,
   BudgetTimelineItem,
+  CommitmentPlan,
+  CommitmentProjection,
+  ExpectedCommitmentOccurrence,
   ExpectedIncomeOccurrence,
   IncomePlan,
   IncomePlanProjection,
-  PlannedExpense,
 } from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
 import { ApiError, apiRequest } from "@/lib/api"
@@ -1124,7 +1131,6 @@ function BudgetPanel(props: {
   const [splitAmount, setSplitAmount] = useState("")
   const [amount, setAmount] = useState("")
   const [categoryId, setCategoryId] = useState("")
-  const [accountId, setAccountId] = useState("")
   const [occurredOn, setOccurredOn] = useState(() => new Date().toISOString().slice(0, 10))
   const [limit, setLimit] = useState("")
   const [carryover, setCarryover] = useState("")
@@ -1132,12 +1138,29 @@ function BudgetPanel(props: {
   const [categoryColor, setCategoryColor] = useState("#64748b")
   const [categoryIcon, setCategoryIcon] = useState("tag")
   const [categoryBehavior, setCategoryBehavior] = useState<BudgetCategory["behavior"]>("include_in_limit")
-  const [plannedName, setPlannedName] = useState("")
-  const [plannedAmount, setPlannedAmount] = useState("")
-  const [plannedKind, setPlannedKind] = useState<PlannedExpense["kind"]>("fixed_cost")
-  const [plannedCadence, setPlannedCadence] = useState<PlannedExpense["cadence"]>("monthly")
-  const [plannedDueDay, setPlannedDueDay] = useState("1")
-  const [plannedDueMonth, setPlannedDueMonth] = useState(String(new Date().getMonth() + 1))
+  const [commitmentProjection, setCommitmentProjection] = useState<CommitmentProjection | null>(null)
+  const [commitmentName, setCommitmentName] = useState("")
+  const [commitmentAmount, setCommitmentAmount] = useState("")
+  const [commitmentKind, setCommitmentKind] = useState<CommitmentPlan["kind"]>("fixed_cost")
+  const [commitmentCadence, setCommitmentCadence] = useState<CommitmentPlan["cadence"]>("monthly")
+  const [commitmentUnit, setCommitmentUnit] = useState<CommitmentPlan["intervalUnit"]>("month")
+  const [commitmentInterval, setCommitmentInterval] = useState("1")
+  const [commitmentWeekdays, setCommitmentWeekdays] = useState<number[]>([])
+  const [commitmentAutomatic, setCommitmentAutomatic] = useState(false)
+  const [commitmentStart, setCommitmentStart] = useState(() => new Date().toISOString().slice(0, 10))
+  const [commitmentStop, setCommitmentStop] = useState("")
+  const [commitmentAction, setCommitmentAction] = useState<{
+    kind: "occurrence" | "confirm" | "match" | "future" | "effective_date" | "pause" | "stop"
+    seriesId: string
+    occurrence?: ExpectedCommitmentOccurrence
+  } | null>(null)
+  const [commitmentActionDate, setCommitmentActionDate] = useState("")
+  const [commitmentActionThrough, setCommitmentActionThrough] = useState("")
+  const [commitmentActionName, setCommitmentActionName] = useState("")
+  const [commitmentActionAmount, setCommitmentActionAmount] = useState("")
+  const [commitmentActionReason, setCommitmentActionReason] = useState("")
+  const [commitmentActionAutomatic, setCommitmentActionAutomatic] = useState(false)
+  const [commitmentMatchLedgerId, setCommitmentMatchLedgerId] = useState("")
   const [incomeProjection, setIncomeProjection] = useState<IncomePlanProjection | null>(null)
   const [incomeName, setIncomeName] = useState("")
   const [incomeAmount, setIncomeAmount] = useState("")
@@ -1221,7 +1244,6 @@ function BudgetPanel(props: {
       setSummary(data)
       setCategoryId((current) => current || data.categories[0]?.id || "")
       setSplitCategoryId((current) => current || data.categories[1]?.id || data.categories[0]?.id || "")
-      setAccountId((current) => current || data.accounts[0]?.id || "")
       setLimit(centsToInput(data.period.spendingLimitCents))
       setCarryover(centsToInput(data.period.overspendCarryoverCents))
       setError(null)
@@ -1255,6 +1277,14 @@ function BudgetPanel(props: {
     setIncomeProjection(await loadIncomePlans(accessToken, from, end.toISOString().slice(0, 10)))
   }, [accessToken, summary?.period.startDate])
 
+  const loadRecurringCommitments = useCallback(async () => {
+    if (!accessToken) return
+    const from = summary?.period.startDate ?? new Date().toISOString().slice(0, 10)
+    const end = new Date(`${from}T00:00:00Z`)
+    end.setUTCFullYear(end.getUTCFullYear() + 1)
+    setCommitmentProjection(await loadCommitments(accessToken, from, end.toISOString().slice(0, 10)))
+  }, [accessToken, summary?.period.startDate])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1270,7 +1300,6 @@ function BudgetPanel(props: {
         hydrateSetup(setupData)
         setCategoryId((current) => current || data.categories[0]?.id || "")
         setSplitCategoryId((current) => current || data.categories[1]?.id || data.categories[0]?.id || "")
-        setAccountId((current) => current || data.accounts[0]?.id || "")
         setLimit(centsToInput(data.period.spendingLimitCents))
         setCarryover(centsToInput(data.period.overspendCarryoverCents))
         setError(null)
@@ -1301,10 +1330,11 @@ function BudgetPanel(props: {
   useEffect(() => {
     if (!accessToken || selectedBudgetView !== "planning") return
     const timer = window.setTimeout(() => {
-      void loadRecurringIncome().catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
+      void Promise.all([loadRecurringIncome(), loadRecurringCommitments()])
+        .catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [accessToken, loadRecurringIncome, selectedBudgetView, t])
+  }, [accessToken, loadRecurringCommitments, loadRecurringIncome, selectedBudgetView, t])
 
   const createTransaction = async () => {
     if (!accessToken) return
@@ -1425,33 +1455,34 @@ function BudgetPanel(props: {
     }
   }
 
-  const createPlannedExpense = async () => {
+  const createRecurringCommitment = async () => {
     if (!accessToken) return
-    const amountCents = parseEuroCents(plannedAmount)
-    const dueDay = Number(plannedDueDay)
-    const dueMonth = Number(plannedDueMonth)
-    if (!plannedName.trim() || amountCents === null || !accountId || !Number.isInteger(dueDay)) {
-      setError(t("budget.plannedValidation"))
+    const amountCents = parseEuroCents(commitmentAmount)
+    const intervalCount = Number(commitmentInterval)
+    if (!commitmentName.trim() || !amountCents || !commitmentStart || !Number.isInteger(intervalCount) || intervalCount <= 0) {
+      setError(t("budget.commitmentValidation"))
       return
     }
     setSaving(true)
     try {
-      const category = summary?.categories.find((entry) => entry.id === categoryId)
-      await createPlannedExpenseRequest(accessToken, {
-        accountId,
-        categoryId,
-        name: plannedName,
-        kind: plannedKind,
-        cadence: plannedCadence,
+      await createCommitment(accessToken, {
+        categoryId: categoryId || undefined,
+        kind: commitmentKind,
+        name: commitmentName.trim(),
         amountCents,
-        dueDay,
-        dueMonth: plannedCadence === "yearly" ? dueMonth : undefined,
-        includeInLimit: category?.behavior !== "exclude_from_limit",
-        active: true,
+        cadence: commitmentCadence,
+        intervalUnit: commitmentUnit,
+        intervalCount,
+        weekdays: commitmentCadence === "custom" && commitmentUnit === "week" ? commitmentWeekdays : [],
+        startDate: commitmentStart,
+        stopDate: commitmentStop || undefined,
+        budgetingMode: "due_period",
+        automaticPosting: commitmentAutomatic,
       })
-      setPlannedName("")
-      setPlannedAmount("")
-      await loadSummary()
+      setCommitmentName("")
+      setCommitmentAmount("")
+      setCommitmentStop("")
+      await loadRecurringCommitments()
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1459,24 +1490,64 @@ function BudgetPanel(props: {
     }
   }
 
-  const updatePlannedExpense = async (planned: PlannedExpense, patch: Partial<PlannedExpense>) => {
-    if (!accessToken) return
-    const nextPlanned = { ...planned, ...patch }
+  const openCommitmentAction = (
+    kind: "occurrence" | "confirm" | "match" | "future" | "effective_date" | "pause" | "stop",
+    plan: CommitmentPlan,
+    occurrence?: ExpectedCommitmentOccurrence,
+  ) => {
+    setCommitmentAction({ kind, seriesId: plan.seriesId, occurrence })
+    setCommitmentActionDate(occurrence?.occurredOn ?? new Date().toISOString().slice(0, 10))
+    setCommitmentActionThrough(occurrence?.occurredOn ?? new Date().toISOString().slice(0, 10))
+    setCommitmentActionName(occurrence?.name ?? plan.name)
+    setCommitmentActionAmount(centsToInput(occurrence?.amountCents ?? plan.amountCents))
+    setCommitmentActionReason("")
+    setCommitmentActionAutomatic(plan.automaticPosting)
+    setCommitmentMatchLedgerId("")
+  }
+
+  const submitCommitmentAction = async () => {
+    if (!accessToken || !commitmentAction ||
+      (!["confirm", "match"].includes(commitmentAction.kind) && !commitmentActionReason.trim())) {
+      setError(t("budget.commitmentActionValidation"))
+      return
+    }
+    const amountCents = parseEuroCents(commitmentActionAmount)
     setSaving(true)
     try {
-      await updatePlannedExpenseRequest(accessToken, planned.id, {
-        accountId: nextPlanned.accountId,
-        categoryId: nextPlanned.categoryId,
-        name: nextPlanned.name,
-        kind: nextPlanned.kind,
-        cadence: nextPlanned.cadence,
-        amountCents: nextPlanned.amountCents,
-        dueDay: nextPlanned.dueDay,
-        dueMonth: nextPlanned.cadence === "yearly" ? nextPlanned.dueMonth : undefined,
-        includeInLimit: nextPlanned.includeInLimit,
-        active: nextPlanned.active,
-      })
-      await loadSummary()
+      if (commitmentAction.kind === "confirm") {
+        if (!amountCents || !commitmentAction.occurrence) throw new Error(t("budget.commitmentValidation"))
+        await confirmCommitmentOccurrence(
+          accessToken, commitmentAction.seriesId, commitmentAction.occurrence.scheduledOn,
+          { actualOn: commitmentActionDate, actualAmountCents: amountCents },
+        )
+      } else if (commitmentAction.kind === "match") {
+        if (!commitmentAction.occurrence || !commitmentMatchLedgerId) throw new Error(t("budget.matchValidation"))
+        await matchCommitmentOccurrence(
+          accessToken, commitmentAction.seriesId, commitmentAction.occurrence.scheduledOn, commitmentMatchLedgerId,
+        )
+      } else if (commitmentAction.kind === "pause") {
+        await pauseCommitment(accessToken, commitmentAction.seriesId, {
+          from: commitmentActionDate, through: commitmentActionThrough, reason: commitmentActionReason,
+        })
+      } else if (commitmentAction.kind === "stop") {
+        await stopCommitment(accessToken, commitmentAction.seriesId, {
+          effectiveOn: commitmentActionDate, reason: commitmentActionReason,
+        })
+      } else {
+        if (!amountCents || !commitmentActionName.trim()) throw new Error(t("budget.commitmentValidation"))
+        await editCommitment(accessToken, commitmentAction.seriesId, {
+          scope: commitmentAction.kind,
+          scheduledOn: commitmentAction.occurrence?.scheduledOn,
+          effectiveOn: commitmentAction.kind === "occurrence" ? undefined : commitmentActionDate,
+          occurredOn: commitmentAction.kind === "occurrence" ? commitmentActionDate : undefined,
+          name: commitmentActionName.trim(),
+          amountCents,
+          automaticPosting: commitmentActionAutomatic,
+          reason: commitmentActionReason,
+        })
+      }
+      setCommitmentAction(null)
+      await Promise.all([loadRecurringCommitments(), loadTimeline(), loadSummary()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1484,12 +1555,13 @@ function BudgetPanel(props: {
     }
   }
 
-  const applyPlannedExpenses = async () => {
+  const postAutomaticCommitments = async () => {
     if (!accessToken) return
+    const from = summary?.period.startDate ?? new Date().toISOString().slice(0, 10)
     setSaving(true)
     try {
-      await applyCurrentPlannedExpenses(accessToken)
-      await loadSummary()
+      await autoPostCommitments(accessToken, from, new Date().toISOString().slice(0, 10))
+      await Promise.all([loadRecurringCommitments(), loadTimeline(), loadSummary()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -2397,107 +2469,190 @@ function BudgetPanel(props: {
               ) : null}
             </div>
             <div className="rounded-lg border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-medium">{t("budget.plannedTitle")}</h3>
-                  <p className="text-sm text-muted-foreground">{t("budget.plannedDescription")}</p>
+                  <h3 className="font-medium">{t("budget.commitmentsTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.commitmentsDescription")}</p>
                 </div>
-                <Button onClick={applyPlannedExpenses} disabled={saving}>
-                  {t("budget.applyPlanned")}
+                <Button variant="outline" onClick={postAutomaticCommitments} disabled={saving}>
+                  {t("budget.postAutomaticCommitments")}
                 </Button>
               </div>
-              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(8rem,1fr)_7rem_9rem_8rem_5rem_5rem_auto]">
-                <Input value={plannedName} onChange={(event) => setPlannedName(event.target.value)} placeholder={t("budget.plannedName")} />
-                <Input inputMode="decimal" value={plannedAmount} onChange={(event) => setPlannedAmount(event.target.value)} placeholder={t("budget.amount")} />
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <Input value={commitmentName} onChange={(event) => setCommitmentName(event.target.value)} placeholder={t("budget.commitmentName")} />
+                <Input inputMode="decimal" value={commitmentAmount} onChange={(event) => setCommitmentAmount(event.target.value)} placeholder={t("budget.amount")} />
                 <FormSelect
-                  value={plannedKind}
-                  onValueChange={(value) => setPlannedKind(value as PlannedExpense["kind"])}
+                  value={commitmentKind}
+                  onValueChange={(value) => setCommitmentKind(value as CommitmentPlan["kind"])}
                   options={[
                     { value: "fixed_cost", label: t("budget.fixedCost") },
                     { value: "subscription", label: t("budget.subscription") },
                   ]}
                 />
                 <FormSelect
-                  value={plannedCadence}
-                  onValueChange={(value) => setPlannedCadence(value as PlannedExpense["cadence"])}
+                  value={categoryId}
+                  onValueChange={setCategoryId}
+                  options={(summary.categories ?? []).map((category) => ({ value: category.id, label: category.name }))}
+                  aria-label={t("budget.category")}
+                />
+                <FormSelect
+                  value={commitmentCadence}
+                  onValueChange={(value) => setCommitmentCadence(value as CommitmentPlan["cadence"])}
                   options={[
+                    { value: "weekly", label: t("budget.weekly") },
                     { value: "monthly", label: t("budget.monthly") },
+                    { value: "quarterly", label: t("budget.quarterly") },
                     { value: "yearly", label: t("budget.yearly") },
+                    { value: "custom", label: t("budget.custom") },
                   ]}
                 />
-                <Input inputMode="numeric" value={plannedDueDay} onChange={(event) => setPlannedDueDay(event.target.value)} aria-label={t("budget.dueDay")} />
-                <Input
-                  inputMode="numeric"
-                  value={plannedDueMonth}
-                  onChange={(event) => setPlannedDueMonth(event.target.value)}
-                  disabled={plannedCadence !== "yearly"}
-                  aria-label={t("budget.dueMonth")}
-                />
-                <Button onClick={createPlannedExpense} disabled={saving}>{t("budget.addPlanned")}</Button>
+                <Input type="date" value={commitmentStart} onChange={(event) => setCommitmentStart(event.target.value)} aria-label={t("budget.startDate")} />
+                <Input type="date" value={commitmentStop} onChange={(event) => setCommitmentStop(event.target.value)} aria-label={t("budget.optionalStopDate")} />
+                <div className="flex items-center justify-between gap-3 rounded-md border px-3">
+                  <Label htmlFor="commitment-automatic">{t("budget.automaticPosting")}</Label>
+                  <Switch id="commitment-automatic" checked={commitmentAutomatic} onCheckedChange={setCommitmentAutomatic} />
+                </div>
+                {commitmentCadence === "custom" ? (
+                  <>
+                    <Input inputMode="numeric" min={1} value={commitmentInterval} onChange={(event) => setCommitmentInterval(event.target.value)} aria-label={t("budget.intervalCount")} />
+                    <FormSelect
+                      value={commitmentUnit}
+                      onValueChange={(value) => setCommitmentUnit(value as CommitmentPlan["intervalUnit"])}
+                      options={[
+                        { value: "week", label: t("budget.weeks") },
+                        { value: "month", label: t("budget.months") },
+                        { value: "quarter", label: t("budget.quarters") },
+                        { value: "year", label: t("budget.years") },
+                      ]}
+                    />
+                  </>
+                ) : null}
+                <Button onClick={createRecurringCommitment} disabled={saving}>{t("budget.addCommitment")}</Button>
               </div>
-              <div className="mt-4 grid gap-2">
-                {(summary.plannedExpenses ?? []).length === 0 ? (
+              {commitmentCadence === "custom" && commitmentUnit === "week" ? (
+                <div className="mt-3 flex flex-wrap gap-2" aria-label={t("budget.weekdays")}>
+                  {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={commitmentWeekdays.includes(day) ? "default" : "outline"}
+                      onClick={() => setCommitmentWeekdays((current) => current.includes(day) ? current.filter((value) => value !== day) : [...current, day])}
+                    >
+                      {new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-US", { weekday: "short" }).format(new Date(Date.UTC(2026, 6, 5 + day)))}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mt-5 grid gap-3 xl:grid-cols-2">
+                {(commitmentProjection?.plans ?? []).length === 0 ? (
                   <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    {t("budget.noPlanned")}
+                    {t("budget.noCommitments")}
                   </div>
-                ) : (
-                  summary.plannedExpenses.map((planned) => (
-                    <div key={planned.id} className="grid gap-2 rounded-md border p-3 lg:grid-cols-[minmax(8rem,1fr)_7rem_9rem_8rem_6rem_6rem_7rem]">
-                      <Input
-                        value={planned.name}
-                        onChange={(event) => updatePlannedExpense(planned, { name: event.target.value })}
-                        aria-label={t("budget.plannedName")}
-                      />
-                      <Input
-                        inputMode="decimal"
-                        value={centsToInput(planned.amountCents)}
-                        onChange={(event) => {
-                          const amountCents = parseEuroCents(event.target.value)
-                          if (amountCents !== null) void updatePlannedExpense(planned, { amountCents })
-                        }}
-                        aria-label={t("budget.amount")}
-                      />
-                      <FormSelect
-                        value={planned.kind}
-                        onValueChange={(value) => updatePlannedExpense(planned, { kind: value as PlannedExpense["kind"] })}
-                        options={[
-                          { value: "fixed_cost", label: t("budget.fixedCost") },
-                          { value: "subscription", label: t("budget.subscription") },
-                        ]}
-                      />
-                      <FormSelect
-                        value={planned.cadence}
-                        onValueChange={(value) => updatePlannedExpense(planned, { cadence: value as PlannedExpense["cadence"] })}
-                        options={[
-                          { value: "monthly", label: t("budget.monthly") },
-                          { value: "yearly", label: t("budget.yearly") },
-                        ]}
-                      />
-                      <Input
-                        inputMode="numeric"
-                        value={String(planned.dueDay)}
-                        onChange={(event) => updatePlannedExpense(planned, { dueDay: Number(event.target.value) })}
-                        aria-label={t("budget.dueDay")}
-                      />
-                      <Input
-                        inputMode="numeric"
-                        value={String(planned.dueMonth ?? "")}
-                        disabled={planned.cadence !== "yearly"}
-                        onChange={(event) => updatePlannedExpense(planned, { dueMonth: Number(event.target.value) })}
-                        aria-label={t("budget.dueMonth")}
-                      />
-                      <Button
-                        variant={planned.active ? "outline" : "secondary"}
-                        onClick={() => updatePlannedExpense(planned, { active: !planned.active })}
-                        disabled={saving}
-                      >
-                        {planned.appliedInCurrentPeriod ? t("budget.applied") : planned.active ? t("budget.active") : t("budget.inactive")}
-                      </Button>
+                ) : commitmentProjection?.plans.map((plan) => (
+                  <div key={plan.seriesId} className={`rounded-md border p-3 ${plan.stoppedOn ? "opacity-60" : ""}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{plan.name} · {currency(plan.amountCents)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t(plan.kind === "fixed_cost" ? "budget.fixedCost" : "budget.subscription")}
+                          {` · ${t(plan.cadence === "weekly" ? "budget.weekly" : plan.cadence === "quarterly" ? "budget.quarterly" : plan.cadence === "yearly" ? "budget.yearly" : plan.cadence === "custom" ? "budget.custom" : "budget.monthly")}`}
+                          {plan.stoppedOn ? ` · ${t("budget.stoppedOn")} ${plan.stoppedOn}` : ""}
+                          {plan.automaticPosting ? ` · ${t("budget.automatic")}` : ` · ${t("budget.manualConfirmation")}`}
+                          {` · ${plan.versions.length} ${t("budget.versions")}`}
+                        </p>
+                      </div>
+                      {!plan.stoppedOn ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openCommitmentAction("future", plan)}>{t("budget.editFuture")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => openCommitmentAction("effective_date", plan)}>{t("budget.editEffective")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => openCommitmentAction("pause", plan)}>{t("budget.pause")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => openCommitmentAction("stop", plan)}>{t("budget.stop")}</Button>
+                        </div>
+                      ) : null}
                     </div>
-                  ))
-                )}
+                    {plan.pauses.length > 0 ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {plan.pauses.map((pause) => `${t("budget.paused")} ${pause.from}–${pause.through}`).join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
               </div>
-            </div>
+              <div className="mt-5">
+                <h4 className="text-sm font-medium">{t("budget.upcomingCommitments")}</h4>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {(commitmentProjection?.occurrences ?? []).slice(0, 18).map((occurrence) => {
+                    const plan = commitmentProjection?.plans.find((item) => item.seriesId === occurrence.seriesId)
+                    return (
+                      <div key={occurrence.id} className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                        <div>
+                          <p className="font-medium">{occurrence.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {occurrence.occurredOn} · {t(occurrence.status === "confirmed" ? "budget.statusConfirmed" : occurrence.status === "automatically_posted" ? "budget.statusAutomaticallyPosted" : "budget.statusExpected")}
+                            {occurrence.overridden ? ` · ${t("budget.overridden")}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          <span>{currency(occurrence.amountCents)}</span>
+                          {plan && !plan.stoppedOn && occurrence.status === "expected" ? (
+                            <>
+                              <Button size="sm" variant="ghost" onClick={() => openCommitmentAction("confirm", plan, occurrence)}>{t("budget.confirmExpense")}</Button>
+                              <Button size="sm" variant="ghost" onClick={() => openCommitmentAction("match", plan, occurrence)}>{t("budget.matchExpense")}</Button>
+                              <Button size="sm" variant="ghost" onClick={() => openCommitmentAction("occurrence", plan, occurrence)}>{t("budget.editOccurrence")}</Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              {commitmentAction ? (
+                <div className="mt-5 grid gap-3 rounded-md border bg-muted/10 p-4 sm:grid-cols-2 xl:grid-cols-4">
+                  {!["stop", "pause", "match"].includes(commitmentAction.kind) ? (
+                    <>
+                      {!["confirm"].includes(commitmentAction.kind) ? (
+                        <Input value={commitmentActionName} onChange={(event) => setCommitmentActionName(event.target.value)} placeholder={t("budget.commitmentName")} />
+                      ) : null}
+                      <Input inputMode="decimal" value={commitmentActionAmount} onChange={(event) => setCommitmentActionAmount(event.target.value)} placeholder={t("budget.amount")} />
+                    </>
+                  ) : null}
+                  {commitmentAction.kind === "match" ? (
+                    <FormSelect
+                      value={commitmentMatchLedgerId}
+                      onValueChange={setCommitmentMatchLedgerId}
+                      options={[
+                        { value: "", label: t("budget.selectExpense") },
+                        ...summary.ledgerEntries.filter((entry) => entry.kind === "expense").map((entry) => ({
+                          value: entry.id,
+                          label: `${entry.occurredOn} · ${entry.description} · ${currency(entry.amountCents)}`,
+                        })),
+                      ]}
+                      aria-label={t("budget.selectExpense")}
+                    />
+                  ) : (
+                    <Input type="date" value={commitmentActionDate} onChange={(event) => setCommitmentActionDate(event.target.value)} aria-label={t("budget.effectiveDate")} />
+                  )}
+                  {commitmentAction.kind === "pause" ? (
+                    <Input type="date" value={commitmentActionThrough} onChange={(event) => setCommitmentActionThrough(event.target.value)} aria-label={t("budget.pauseThrough")} />
+                  ) : null}
+                  {!["confirm", "match"].includes(commitmentAction.kind) ? (
+                    <Input value={commitmentActionReason} onChange={(event) => setCommitmentActionReason(event.target.value)} placeholder={t("budget.reason")} />
+                  ) : null}
+                  {commitmentAction.kind === "future" || commitmentAction.kind === "effective_date" ? (
+                    <div className="flex items-center justify-between gap-3 rounded-md border px-3">
+                      <Label htmlFor="commitment-action-automatic">{t("budget.automaticPosting")}</Label>
+                      <Switch id="commitment-action-automatic" checked={commitmentActionAutomatic} onCheckedChange={setCommitmentActionAutomatic} />
+                    </div>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <Button onClick={submitCommitmentAction} disabled={saving}>{t("budget.confirmAction")}</Button>
+                    <Button variant="outline" onClick={() => setCommitmentAction(null)}>{t("budget.cancel")}</Button>
+                  </div>
+                </div>
+              ) : null}
+              </div>
             </div>
             ) : null}
             {showSaving || showWishlist || showReports ? (

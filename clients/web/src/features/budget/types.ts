@@ -227,3 +227,79 @@ export type IncomePlanInput = {
   startDate: string
   stopDate?: string
 }
+
+export type CommitmentPlan = {
+  seriesId: string
+  categoryId?: string
+  kind: "fixed_cost" | "subscription"
+  name: string
+  amountCents: number
+  cadence: "weekly" | "monthly" | "quarterly" | "yearly" | "custom"
+  intervalUnit: "week" | "month" | "quarter" | "year"
+  intervalCount: number
+  weekdays: number[]
+  startDate: string
+  budgetingMode: "due_period" | "gradual_reservation"
+  automaticPosting: boolean
+  stoppedOn?: string
+  pauses: Array<{ id: string; from: string; through: string; reason: string }>
+  versions: Array<{
+    id: string
+    effectiveFrom: string
+    effectiveTo?: string
+    categoryId?: string
+    kind: CommitmentPlan["kind"]
+    name: string
+    amountCents: number
+    cadence: CommitmentPlan["cadence"]
+    intervalUnit: CommitmentPlan["intervalUnit"]
+    intervalCount: number
+    weekdays: number[]
+    budgetingMode: CommitmentPlan["budgetingMode"]
+    automaticPosting: boolean
+    changeReason: string
+    active: boolean
+  }>
+}
+
+export type ExpectedCommitmentOccurrence = {
+  id: string
+  seriesId: string
+  versionId: string
+  categoryId?: string
+  kind: CommitmentPlan["kind"]
+  scheduledOn: string
+  occurredOn: string
+  name: string
+  amountCents: number
+  budgetingMode: CommitmentPlan["budgetingMode"]
+  overridden: boolean
+  status: "expected" | "confirmed" | "automatically_posted"
+  posting?: {
+    id: string
+    ledgerEntryId: string
+    actualOn: string
+    actualAmountCents: number
+    postingMode: "manual" | "automatic" | "matched" | "legacy"
+  }
+}
+
+export type CommitmentProjection = {
+  plans: CommitmentPlan[]
+  occurrences: ExpectedCommitmentOccurrence[]
+}
+
+export type CommitmentInput = {
+  categoryId?: string
+  kind: CommitmentPlan["kind"]
+  name: string
+  amountCents: number
+  cadence: CommitmentPlan["cadence"]
+  intervalUnit: CommitmentPlan["intervalUnit"]
+  intervalCount: number
+  weekdays: number[]
+  startDate: string
+  stopDate?: string
+  budgetingMode: CommitmentPlan["budgetingMode"]
+  automaticPosting: boolean
+}

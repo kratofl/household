@@ -10,6 +10,8 @@ import type {
   BudgetSetupInput,
   BudgetSetupState,
   BudgetTransactionInput,
+  CommitmentInput,
+  CommitmentProjection,
   IncomePlanInput,
   IncomePlanProjection,
   PlannedExpenseInput,
@@ -117,4 +119,40 @@ export function saveDefaultIncomeVarianceRule(accessToken: string, body: unknown
 
 export function saveIncomePlanVarianceRule(accessToken: string, seriesId: string, body: unknown) {
   return apiRequest(`/budget/income-plans/${seriesId}/variance-rule`, { method: "PUT", accessToken, body })
+}
+
+export function loadCommitments(accessToken: string, from: string, through: string) {
+  return apiRequest<CommitmentProjection>(`/budget/commitments?from=${from}&through=${through}`, { accessToken })
+}
+
+export function createCommitment(accessToken: string, body: CommitmentInput) {
+  return apiRequest("/budget/commitments", { method: "POST", accessToken, body })
+}
+
+export function editCommitment(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}`, { method: "PATCH", accessToken, body })
+}
+
+export function pauseCommitment(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}/pauses`, { method: "POST", accessToken, body })
+}
+
+export function stopCommitment(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}/stop`, { method: "POST", accessToken, body })
+}
+
+export function confirmCommitmentOccurrence(accessToken: string, seriesId: string, scheduledOn: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}/occurrences/${scheduledOn}/confirm`, { method: "POST", accessToken, body })
+}
+
+export function matchCommitmentOccurrence(accessToken: string, seriesId: string, scheduledOn: string, ledgerEntryId: string) {
+  return apiRequest(`/budget/commitments/${seriesId}/occurrences/${scheduledOn}/match`, {
+    method: "POST",
+    accessToken,
+    body: { ledgerEntryId },
+  })
+}
+
+export function autoPostCommitments(accessToken: string, from: string, through: string) {
+  return apiRequest(`/budget/commitments/auto-post?from=${from}&through=${through}`, { method: "POST", accessToken })
 }
