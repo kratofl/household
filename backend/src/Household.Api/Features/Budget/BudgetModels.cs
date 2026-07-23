@@ -43,6 +43,7 @@ public sealed class BudgetIncomePlan
     public DateOnly EffectiveFrom { get; set; }
     public DateOnly? EffectiveTo { get; set; }
     public string ChangeReason { get; set; } = "";
+    public bool AutomaticPosting { get; set; }
     public bool Active { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -79,6 +80,56 @@ public sealed class BudgetIncomeOccurrenceOverride
     public string Name { get; set; } = "";
     public long AmountCents { get; set; }
     public string Reason { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class BudgetIncomePosting
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid SeriesId { get; set; }
+    public Guid VersionId { get; set; }
+    public DateOnly ScheduledOn { get; set; }
+    public DateOnly ExpectedOn { get; set; }
+    public DateOnly ActualOn { get; set; }
+    public long ExpectedAmountCents { get; set; }
+    public long ActualAmountCents { get; set; }
+    public long VarianceCents { get; set; }
+    public string PostingMode { get; set; } = "manual";
+    public Guid LedgerEntryId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<BudgetIncomeVarianceAllocation> Allocations { get; set; } = [];
+}
+
+public sealed class BudgetIncomeVarianceRule
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid? SeriesId { get; set; }
+    public string Mode { get; set; } = BudgetValues.Fixed;
+    public DateTime EffectiveFrom { get; set; }
+    public List<BudgetIncomeVarianceRuleRoute> Routes { get; set; } = [];
+}
+
+public sealed class BudgetIncomeVarianceRuleRoute
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid RuleId { get; set; }
+    public int Position { get; set; }
+    public string Destination { get; set; } = BudgetValues.Buffer;
+    public Guid? TargetId { get; set; }
+    public long Value { get; set; }
+}
+
+public sealed class BudgetIncomeVarianceAllocation
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid PostingId { get; set; }
+    public string Destination { get; set; } = BudgetValues.Buffer;
+    public Guid? TargetId { get; set; }
+    public long AmountCents { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -251,6 +302,14 @@ public static class BudgetValues
     public const string Month = "month";
     public const string Quarter = "quarter";
     public const string Year = "year";
+    public const string Fixed = "fixed";
+    public const string Percentage = "percentage";
+    public const string Buffer = "buffer";
+    public const string Ordinary = "ordinary";
+    public const string Savings = "savings";
+    public const string Investment = "investment";
+    public const string Manual = "manual";
+    public const string Automatic = "automatic";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";

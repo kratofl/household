@@ -601,6 +601,95 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Income_confirmation_routes_positive_variance_and_auto_posting_is_retry_safe()
+    {
+        const string token = LegacyParityFixture.IncomeConfirmationAccessToken;
+        var shortfallSeries = await CreateIncomePlan("Variable salary", 100_000, false, "monthly", "2026-07-01");
+
+        using var shortfallRequest = Authenticated(
+            HttpMethod.Post, $"/api/v1/budget/income-plans/{shortfallSeries}/occurrences/2026-07-01/confirm", token);
+        shortfallRequest.Content = JsonContent.Create(new { actualOn = "2026-07-02", actualAmountCents = 80_000 });
+        var shortfallResponse = await fixture.Client.SendAsync(shortfallRequest);
+        var shortfall = await shortfallResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, shortfallResponse.StatusCode);
+        Assert.Equal(-20_000, shortfall.GetProperty("varianceCents").GetInt64());
+
+        using var shortfallSummaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var shortfallSummary = await (await fixture.Client.SendAsync(shortfallSummaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(80_000, shortfallSummary.GetProperty("actualIncomeCents").GetInt64());
+        Assert.Equal(80_000, shortfallSummary.GetProperty("maximumOrdinaryCents").GetInt64());
+
+        var surplusSeries = await CreateIncomePlan("Bonus", 100_000, false, "monthly", "2026-07-05");
+        using var ruleRequest = Authenticated(HttpMethod.Put, $"/api/v1/budget/income-plans/{surplusSeries}/variance-rule", token);
+        ruleRequest.Content = JsonContent.Create(new
+        {
+            mode = "percentage",
+            routes = new[]
+            {
+                new { destination = "ordinary", value = 2_500, targetId = (Guid?)null },
+                new { destination = "savings", value = 2_500, targetId = (Guid?)Guid.NewGuid() },
+            },
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(ruleRequest)).StatusCode);
+
+        var confirmationPath = $"/api/v1/budget/income-plans/{surplusSeries}/occurrences/2026-07-05/confirm";
+        using var surplusRequest = Authenticated(HttpMethod.Post, confirmationPath, token);
+        surplusRequest.Content = JsonContent.Create(new { actualOn = "2026-07-05", actualAmountCents = 120_000 });
+        var surplusResponse = await fixture.Client.SendAsync(surplusRequest);
+        var surplus = await surplusResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, surplusResponse.StatusCode);
+        Assert.Equal(20_000, surplus.GetProperty("varianceCents").GetInt64());
+        Assert.Contains(surplus.GetProperty("allocations").EnumerateArray(), x =>
+            x.GetProperty("destination").GetString() == "ordinary" && x.GetProperty("amountCents").GetInt64() == 5_000);
+        Assert.Contains(surplus.GetProperty("allocations").EnumerateArray(), x =>
+            x.GetProperty("destination").GetString() == "savings" && x.GetProperty("amountCents").GetInt64() == 5_000);
+        Assert.Contains(surplus.GetProperty("allocations").EnumerateArray(), x =>
+            x.GetProperty("destination").GetString() == "buffer" && x.GetProperty("amountCents").GetInt64() == 10_000);
+
+        using var retryRequest = Authenticated(HttpMethod.Post, confirmationPath, token);
+        retryRequest.Content = JsonContent.Create(new { actualOn = "2026-07-05", actualAmountCents = 120_000 });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(retryRequest)).StatusCode);
+
+        using var routedSummaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var routedSummary = await (await fixture.Client.SendAsync(routedSummaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(200_000, routedSummary.GetProperty("actualIncomeCents").GetInt64());
+        Assert.Equal(10_000, routedSummary.GetProperty("fundedBufferCents").GetInt64());
+        Assert.Equal(185_000, routedSummary.GetProperty("maximumOrdinaryCents").GetInt64());
+        Assert.Equal(2, routedSummary.GetProperty("ledgerEntries").EnumerateArray().Count(x =>
+            x.GetProperty("source").GetString() == "income_confirmation"));
+
+        var automaticSeries = await CreateIncomePlan("Daily payout", 1_000, true, "daily", "2026-07-19");
+        using var autoRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans/auto-post?from=2026-07-19&through=2026-07-20", token);
+        var autoResult = await (await fixture.Client.SendAsync(autoRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, autoResult.GetProperty("posted").GetInt32());
+        using var autoRetryRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans/auto-post?from=2026-07-19&through=2026-07-20", token);
+        var retryResult = await (await fixture.Client.SendAsync(autoRetryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, retryResult.GetProperty("posted").GetInt32());
+
+        using var timelineRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline?kind=income", token);
+        var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(timeline.EnumerateArray(), x =>
+            x.GetProperty("entryType").GetString() == "expected" && x.GetProperty("status").GetString() == "confirmed");
+        Assert.Contains(timeline.EnumerateArray(), x =>
+            x.GetProperty("entryType").GetString() == "expected" && x.GetProperty("status").GetString() == "automatically_posted");
+        Assert.Equal(2, timeline.EnumerateArray().Count(x =>
+            x.GetProperty("entryType").GetString() == "actual" && x.GetProperty("origin").GetString() == "income_automatic"));
+
+        async Task<Guid> CreateIncomePlan(string name, long amountCents, bool automaticPosting, string cadence, string startDate)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans", token);
+            request.Content = JsonContent.Create(new
+            {
+                name, amountCents, cadence, intervalCount = 1, startDate, automaticPosting,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var plan = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return plan.GetProperty("seriesId").GetGuid();
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

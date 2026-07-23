@@ -10,6 +10,10 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetIncomePlanPause> IncomePlanPauses => Set<BudgetIncomePlanPause>();
     public DbSet<BudgetIncomePlanStop> IncomePlanStops => Set<BudgetIncomePlanStop>();
     public DbSet<BudgetIncomeOccurrenceOverride> IncomeOccurrenceOverrides => Set<BudgetIncomeOccurrenceOverride>();
+    public DbSet<BudgetIncomePosting> IncomePostings => Set<BudgetIncomePosting>();
+    public DbSet<BudgetIncomeVarianceRule> IncomeVarianceRules => Set<BudgetIncomeVarianceRule>();
+    public DbSet<BudgetIncomeVarianceRuleRoute> IncomeVarianceRuleRoutes => Set<BudgetIncomeVarianceRuleRoute>();
+    public DbSet<BudgetIncomeVarianceAllocation> IncomeVarianceAllocations => Set<BudgetIncomeVarianceAllocation>();
     public DbSet<BudgetOpeningAllocation> OpeningAllocations => Set<BudgetOpeningAllocation>();
     public DbSet<BudgetLedgerEntry> LedgerEntries => Set<BudgetLedgerEntry>();
     public DbSet<BudgetMigrationIssue> MigrationIssues => Set<BudgetMigrationIssue>();
@@ -31,6 +35,10 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigureIncomePlanPause(modelBuilder.Entity<BudgetIncomePlanPause>());
         ConfigureIncomePlanStop(modelBuilder.Entity<BudgetIncomePlanStop>());
         ConfigureIncomeOccurrenceOverride(modelBuilder.Entity<BudgetIncomeOccurrenceOverride>());
+        ConfigureIncomePosting(modelBuilder.Entity<BudgetIncomePosting>());
+        ConfigureIncomeVarianceRule(modelBuilder.Entity<BudgetIncomeVarianceRule>());
+        ConfigureIncomeVarianceRuleRoute(modelBuilder.Entity<BudgetIncomeVarianceRuleRoute>());
+        ConfigureIncomeVarianceAllocation(modelBuilder.Entity<BudgetIncomeVarianceAllocation>());
         ConfigureOpeningAllocation(modelBuilder.Entity<BudgetOpeningAllocation>());
         ConfigureLedgerEntry(modelBuilder.Entity<BudgetLedgerEntry>());
         ConfigureMigrationIssue(modelBuilder.Entity<BudgetMigrationIssue>());
@@ -174,6 +182,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.EffectiveFrom).HasColumnName("effective_from");
         entity.Property(x => x.EffectiveTo).HasColumnName("effective_to");
         entity.Property(x => x.ChangeReason).HasColumnName("change_reason");
+        entity.Property(x => x.AutomaticPosting).HasColumnName("automatic_posting");
         entity.Property(x => x.Active).HasColumnName("active");
         Timestamps(entity);
         entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.EffectiveFrom });
@@ -217,6 +226,64 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.Reason).HasColumnName("reason");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
         entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.ScheduledOn, x.CreatedAt });
+    }
+
+    private static void ConfigureIncomePosting(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePosting> entity)
+    {
+        entity.ToTable("income_postings"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.SeriesId).HasColumnName("series_id");
+        entity.Property(x => x.VersionId).HasColumnName("version_id");
+        entity.Property(x => x.ScheduledOn).HasColumnName("scheduled_on");
+        entity.Property(x => x.ExpectedOn).HasColumnName("expected_on");
+        entity.Property(x => x.ActualOn).HasColumnName("actual_on");
+        entity.Property(x => x.ExpectedAmountCents).HasColumnName("expected_amount_cents");
+        entity.Property(x => x.ActualAmountCents).HasColumnName("actual_amount_cents");
+        entity.Property(x => x.VarianceCents).HasColumnName("variance_cents");
+        entity.Property(x => x.PostingMode).HasColumnName("posting_mode");
+        entity.Property(x => x.LedgerEntryId).HasColumnName("ledger_entry_id");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.ScheduledOn }).IsUnique();
+        entity.HasMany(x => x.Allocations).WithOne().HasForeignKey(x => x.PostingId);
+    }
+
+    private static void ConfigureIncomeVarianceRule(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomeVarianceRule> entity)
+    {
+        entity.ToTable("income_variance_rules"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.SeriesId).HasColumnName("series_id");
+        entity.Property(x => x.Mode).HasColumnName("mode");
+        entity.Property(x => x.EffectiveFrom).HasColumnName("effective_from").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.SeriesId, x.EffectiveFrom });
+        entity.HasMany(x => x.Routes).WithOne().HasForeignKey(x => x.RuleId);
+    }
+
+    private static void ConfigureIncomeVarianceRuleRoute(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomeVarianceRuleRoute> entity)
+    {
+        entity.ToTable("income_variance_rule_routes"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.RuleId).HasColumnName("rule_id");
+        entity.Property(x => x.Position).HasColumnName("position");
+        entity.Property(x => x.Destination).HasColumnName("destination");
+        entity.Property(x => x.TargetId).HasColumnName("target_id");
+        entity.Property(x => x.Value).HasColumnName("value");
+        entity.HasIndex(x => new { x.OwnerUserId, x.RuleId, x.Position }).IsUnique();
+    }
+
+    private static void ConfigureIncomeVarianceAllocation(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomeVarianceAllocation> entity)
+    {
+        entity.ToTable("income_variance_allocations"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.PostingId).HasColumnName("posting_id");
+        entity.Property(x => x.Destination).HasColumnName("destination");
+        entity.Property(x => x.TargetId).HasColumnName("target_id");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.PostingId });
     }
 
     private static void ConfigureOpeningAllocation(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetOpeningAllocation> entity)

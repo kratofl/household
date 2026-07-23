@@ -20,11 +20,14 @@ public sealed class BudgetIncomePlanProjector(BudgetDbContext database)
             .Where(x => x.OwnerUserId == ownerId).OrderBy(x => x.EffectiveOn).ToListAsync(cancellationToken);
         var overrides = await database.IncomeOccurrenceOverrides.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToListAsync(cancellationToken);
+        var postings = await database.IncomePostings.AsNoTracking().Include(x => x.Allocations)
+            .Where(x => x.OwnerUserId == ownerId).ToListAsync(cancellationToken);
 
         var stopBySeries = stops.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.Min(y => y.EffectiveOn));
         var pausesBySeries = pauses.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.ToList());
         var overrideByOccurrence = overrides.GroupBy(x => (x.SeriesId, x.ScheduledOn))
             .ToDictionary(x => x.Key, x => x.Last());
+        var postingByOccurrence = postings.ToDictionary(x => (x.SeriesId, x.ScheduledOn));
         var projectedPlans = new List<IncomePlanSummary>();
         var occurrences = new List<ExpectedIncomeOccurrence>();
 
@@ -37,11 +40,12 @@ public sealed class BudgetIncomePlanProjector(BudgetDbContext database)
             projectedPlans.Add(new IncomePlanSummary(
                 series.Key, current.Name, current.AmountCents, current.Cadence, current.IntervalUnit,
                 current.IntervalCount, ParseWeekdays(current.Weekdays).Select(x => (int)x).Order().ToArray(),
-                current.StartDate, stoppedOn == default ? null : stoppedOn,
+                current.StartDate, current.AutomaticPosting, stoppedOn == default ? null : stoppedOn,
                 seriesPauses.Select(x => new IncomePauseSummary(x.Id, x.From, x.Through, x.Reason)).ToList(),
                 ordered.Select(x => new IncomePlanVersionSummary(
                     x.Id, x.EffectiveFrom, x.EffectiveTo, x.Name, x.AmountCents, x.Cadence,
-                    x.IntervalUnit, x.IntervalCount, ParseWeekdays(x.Weekdays).Select(y => (int)y).Order().ToArray(), x.ChangeReason, x.Active)).ToList()));
+                    x.IntervalUnit, x.IntervalCount, ParseWeekdays(x.Weekdays).Select(y => (int)y).Order().ToArray(),
+                    x.AutomaticPosting, x.ChangeReason, x.Active)).ToList()));
 
             foreach (var version in ordered.Where(x => x.Active))
             {
@@ -55,12 +59,18 @@ public sealed class BudgetIncomePlanProjector(BudgetDbContext database)
                 {
                     if (seriesPauses.Any(x => scheduledOn >= x.From && scheduledOn <= x.Through)) continue;
                     overrideByOccurrence.TryGetValue((series.Key, scheduledOn), out var occurrenceOverride);
+                    postingByOccurrence.TryGetValue((series.Key, scheduledOn), out var posting);
                     occurrences.Add(new ExpectedIncomeOccurrence(
                         $"income:{series.Key}:{scheduledOn:yyyy-MM-dd}", series.Key, version.Id, scheduledOn,
                         occurrenceOverride?.OccurredOn ?? scheduledOn,
                         occurrenceOverride?.Name ?? version.Name,
                         occurrenceOverride?.AmountCents ?? version.AmountCents,
-                        occurrenceOverride is not null));
+                        occurrenceOverride is not null,
+                        posting is null ? "expected" : posting.PostingMode == BudgetValues.Automatic ? "automatically_posted" : "confirmed",
+                        posting is null ? null : new IncomePostingSummary(
+                            posting.Id, posting.LedgerEntryId, posting.ActualOn, posting.ActualAmountCents,
+                            posting.VarianceCents, posting.PostingMode,
+                            posting.Allocations.Select(x => new IncomeAllocationSummary(x.Destination, x.TargetId, x.AmountCents)).ToList())));
                 }
             }
         }
@@ -94,12 +104,17 @@ public sealed record IncomePlanProjection(
     IReadOnlyList<ExpectedIncomeOccurrence> Occurrences);
 public sealed record IncomePlanSummary(
     Guid SeriesId, string Name, long AmountCents, string Cadence, string IntervalUnit, int IntervalCount,
-    IReadOnlyList<int> Weekdays, DateOnly StartDate, DateOnly? StoppedOn,
+    IReadOnlyList<int> Weekdays, DateOnly StartDate, bool AutomaticPosting, DateOnly? StoppedOn,
     IReadOnlyList<IncomePauseSummary> Pauses, IReadOnlyList<IncomePlanVersionSummary> Versions);
 public sealed record IncomePauseSummary(Guid Id, DateOnly From, DateOnly Through, string Reason);
 public sealed record IncomePlanVersionSummary(
     Guid Id, DateOnly EffectiveFrom, DateOnly? EffectiveTo, string Name, long AmountCents,
-    string Cadence, string IntervalUnit, int IntervalCount, IReadOnlyList<int> Weekdays, string ChangeReason, bool Active);
+    string Cadence, string IntervalUnit, int IntervalCount, IReadOnlyList<int> Weekdays,
+    bool AutomaticPosting, string ChangeReason, bool Active);
 public sealed record ExpectedIncomeOccurrence(
     string Id, Guid SeriesId, Guid VersionId, DateOnly ScheduledOn, DateOnly OccurredOn,
-    string Name, long AmountCents, bool Overridden);
+    string Name, long AmountCents, bool Overridden, string Status, IncomePostingSummary? Posting);
+public sealed record IncomePostingSummary(
+    Guid Id, Guid LedgerEntryId, DateOnly ActualOn, long ActualAmountCents, long VarianceCents,
+    string PostingMode, IReadOnlyList<IncomeAllocationSummary> Allocations);
+public sealed record IncomeAllocationSummary(string Destination, Guid? TargetId, long AmountCents);

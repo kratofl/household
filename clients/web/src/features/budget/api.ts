@@ -102,3 +102,19 @@ export function pauseIncomePlan(accessToken: string, seriesId: string, body: unk
 export function stopIncomePlan(accessToken: string, seriesId: string, body: unknown) {
   return apiRequest(`/budget/income-plans/${seriesId}/stop`, { method: "POST", accessToken, body })
 }
+
+export function confirmIncomeOccurrence(accessToken: string, seriesId: string, scheduledOn: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/occurrences/${scheduledOn}/confirm`, { method: "POST", accessToken, body })
+}
+
+export function autoPostIncome(accessToken: string, from: string, through: string) {
+  return apiRequest(`/budget/income-plans/auto-post?from=${from}&through=${through}`, { method: "POST", accessToken })
+}
+
+export function saveDefaultIncomeVarianceRule(accessToken: string, body: unknown) {
+  return apiRequest("/budget/income-variance-rules/default", { method: "PUT", accessToken, body })
+}
+
+export function saveIncomePlanVarianceRule(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/variance-rule`, { method: "PUT", accessToken, body })
+}

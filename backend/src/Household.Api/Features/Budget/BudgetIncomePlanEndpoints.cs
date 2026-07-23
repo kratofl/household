@@ -52,7 +52,7 @@ public static class BudgetIncomePlanEndpoints
             AmountCents = definition.AmountCents, Cadence = definition.Cadence,
             IntervalUnit = definition.IntervalUnit, IntervalCount = definition.IntervalCount,
             Weekdays = definition.Weekdays, StartDate = definition.StartDate,
-            EffectiveFrom = definition.StartDate,
+            EffectiveFrom = definition.StartDate, AutomaticPosting = definition.AutomaticPosting,
         };
         database.IncomePlans.Add(plan);
         if (definition.StopDate.HasValue)
@@ -89,7 +89,7 @@ public static class BudgetIncomePlanEndpoints
             request.Name ?? source.Name, request.AmountCents ?? source.AmountCents,
             request.Cadence ?? source.Cadence, request.IntervalUnit ?? source.IntervalUnit,
             request.IntervalCount ?? source.IntervalCount, request.Weekdays ?? ParseWeekdays(source.Weekdays),
-            source.StartDate.ToString("yyyy-MM-dd"), null));
+            request.AutomaticPosting ?? source.AutomaticPosting, source.StartDate.ToString("yyyy-MM-dd"), null));
         if (parsed.Error is not null) return parsed.Error;
         var definition = parsed.Value!;
 
@@ -101,7 +101,7 @@ public static class BudgetIncomePlanEndpoints
             SeriesId = seriesId, OwnerUserId = user.Id, Name = definition.Name, AmountCents = definition.AmountCents,
             Cadence = definition.Cadence, IntervalUnit = definition.IntervalUnit, IntervalCount = definition.IntervalCount,
             Weekdays = definition.Weekdays, StartDate = source.StartDate, EffectiveFrom = effectiveOn,
-            EffectiveTo = previousEnd, ChangeReason = request.Reason.Trim(),
+            EffectiveTo = previousEnd, ChangeReason = request.Reason.Trim(), AutomaticPosting = definition.AutomaticPosting,
         };
         database.IncomePlans.Add(version);
         await database.SaveChangesAsync(cancellationToken);
@@ -212,7 +212,7 @@ public static class BudgetIncomePlanEndpoints
         if (cadence != BudgetValues.Custom) weekdays = [];
         return (new IncomePlanDefinition(
             name, request.AmountCents, cadence, intervalUnit, intervalCount,
-            string.Join(',', weekdays), startDate, stopDate), null);
+            string.Join(',', weekdays), request.AutomaticPosting, startDate, stopDate), null);
     }
 
     private static IReadOnlyList<int> ParseWeekdays(string value) => string.IsNullOrWhiteSpace(value)
@@ -228,13 +228,13 @@ public static class BudgetIncomePlanEndpoints
 
 public sealed record IncomePlanRequest(
     string? Name, long AmountCents, string? Cadence, string? IntervalUnit, int IntervalCount,
-    IReadOnlyList<int>? Weekdays, string? StartDate, string? StopDate);
+    IReadOnlyList<int>? Weekdays, bool AutomaticPosting, string? StartDate, string? StopDate);
 public sealed record IncomePlanEditRequest(
     string? Scope, string? Reason, string? ScheduledOn, string? EffectiveOn, string? OccurredOn,
     string? Name, long? AmountCents, string? Cadence, string? IntervalUnit, int? IntervalCount,
-    IReadOnlyList<int>? Weekdays);
+    IReadOnlyList<int>? Weekdays, bool? AutomaticPosting);
 public sealed record PauseIncomePlanRequest(string? From, string? Through, string? Reason);
 public sealed record StopIncomePlanRequest(string? EffectiveOn, string? Reason);
 internal sealed record IncomePlanDefinition(
     string Name, long AmountCents, string Cadence, string IntervalUnit, int IntervalCount,
-    string Weekdays, DateOnly StartDate, DateOnly? StopDate);
+    string Weekdays, bool AutomaticPosting, DateOnly StartDate, DateOnly? StopDate);

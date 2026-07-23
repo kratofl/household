@@ -132,7 +132,7 @@ export type BudgetTimelineItem = {
   id: string
   entryType: "actual" | "expected"
   kind: "income" | "expense" | "refund"
-  status: "actual" | "expected" | "corrected" | "voided"
+  status: "actual" | "expected" | "confirmed" | "automatically_posted" | "corrected" | "voided"
   occurredOn: string
   description: string
   amountCents: number
@@ -184,9 +184,10 @@ export type IncomePlan = {
   intervalCount: number
   weekdays: number[]
   startDate: string
+  automaticPosting: boolean
   stoppedOn?: string
   pauses: Array<{ id: string; from: string; through: string; reason: string }>
-  versions: Array<{ id: string; effectiveFrom: string; effectiveTo?: string; changeReason: string }>
+  versions: Array<{ id: string; effectiveFrom: string; effectiveTo?: string; automaticPosting: boolean; changeReason: string }>
 }
 
 export type ExpectedIncomeOccurrence = {
@@ -198,6 +199,16 @@ export type ExpectedIncomeOccurrence = {
   name: string
   amountCents: number
   overridden: boolean
+  status: "expected" | "confirmed" | "automatically_posted"
+  posting?: {
+    id: string
+    ledgerEntryId: string
+    actualOn: string
+    actualAmountCents: number
+    varianceCents: number
+    postingMode: "manual" | "automatic"
+    allocations: Array<{ destination: string; targetId?: string; amountCents: number }>
+  }
 }
 
 export type IncomePlanProjection = {
@@ -212,6 +223,7 @@ export type IncomePlanInput = {
   intervalUnit: IncomePlan["intervalUnit"]
   intervalCount: number
   weekdays: number[]
+  automaticPosting: boolean
   startDate: string
   stopDate?: string
 }

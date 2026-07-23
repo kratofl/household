@@ -12,13 +12,18 @@ public static class BudgetAvailability
         long ordinaryImpactCents,
         string bufferRule,
         long bufferAmountCents,
-        int bufferPercentageBasisPoints)
+        int bufferPercentageBasisPoints,
+        long explicitBufferCents = 0,
+        long savingsCents = 0,
+        long investmentCents = 0)
     {
         var target = bufferRule == BudgetValues.PercentageBuffer
             ? checked(actualIncomeCents * bufferPercentageBasisPoints / 10_000)
             : bufferAmountCents;
-        var fundedBuffer = Math.Min(Math.Max(0, actualIncomeCents), Math.Max(0, target));
-        var maximumOrdinary = Math.Max(0, actualIncomeCents - fundedBuffer);
+        var longTermAllocations = Math.Max(0, checked(savingsCents + investmentCents));
+        var bufferCapacity = Math.Max(0, actualIncomeCents - longTermAllocations);
+        var fundedBuffer = Math.Min(bufferCapacity, Math.Max(0, checked(target + explicitBufferCents)));
+        var maximumOrdinary = Math.Max(0, actualIncomeCents - fundedBuffer - longTermAllocations);
         return new BudgetAvailabilityResult(fundedBuffer, maximumOrdinary, maximumOrdinary + ordinaryImpactCents);
     }
 }

@@ -40,13 +40,22 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
         var excluded = effectiveEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents == 0).Sum(x => x.AmountCents);
         var income = effectiveEntries.Where(x => x.Kind == BudgetValues.Income).Sum(x => x.AmountCents);
         var ordinaryImpact = effectiveEntries.Where(x => x.Kind != BudgetValues.Income).Sum(x => x.OrdinaryImpactCents);
+        var incomePostingIds = effectiveEntries.Where(x => x.Kind == BudgetValues.Income && x.SourceRecordId.HasValue)
+            .Select(x => x.SourceRecordId!.Value).ToHashSet();
+        var varianceAllocations = await database.IncomeVarianceAllocations.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && incomePostingIds.Contains(x.PostingId))
+            .GroupBy(x => x.Destination).Select(x => new { Destination = x.Key, Amount = x.Sum(y => y.AmountCents) })
+            .ToDictionaryAsync(x => x.Destination, x => x.Amount, cancellationToken);
         var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
         var availability = BudgetAvailability.Calculate(
             income,
             ordinaryImpact,
             settings?.BufferRule ?? BudgetValues.FixedBuffer,
             settings?.BufferAmountCents ?? 0,
-            settings?.BufferPercentageBasisPoints ?? 0);
+            settings?.BufferPercentageBasisPoints ?? 0,
+            varianceAllocations.GetValueOrDefault(BudgetValues.Buffer),
+            varianceAllocations.GetValueOrDefault(BudgetValues.Savings),
+            varianceAllocations.GetValueOrDefault(BudgetValues.Investment));
         var plannedSummaries = planned.Select(item => new PlannedExpenseSummary(
             item.Id, item.OwnerUserId, item.AccountId, item.CategoryId, item.Name, item.Kind, item.Cadence,
             item.AmountCents, item.DueDay, item.DueMonth, item.IncludeInLimit, item.Active,

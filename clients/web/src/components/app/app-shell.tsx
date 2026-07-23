@@ -63,6 +63,8 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   applyCurrentPlannedExpenses,
+  autoPostIncome,
+  confirmIncomeOccurrence,
   createBudgetCategory,
   createIncomePlan,
   createBudgetLedgerEntry,
@@ -77,6 +79,8 @@ import {
   pauseIncomePlan,
   refundBudgetLedgerEntry,
   saveBudgetSetup,
+  saveDefaultIncomeVarianceRule,
+  saveIncomePlanVarianceRule,
   stopIncomePlan,
   updateBudgetCategory,
   updateCurrentBudgetPeriod,
@@ -1141,14 +1145,20 @@ function BudgetPanel(props: {
   const [incomeUnit, setIncomeUnit] = useState<IncomePlan["intervalUnit"]>("month")
   const [incomeInterval, setIncomeInterval] = useState("1")
   const [incomeWeekdays, setIncomeWeekdays] = useState<number[]>([])
+  const [incomeAutomatic, setIncomeAutomatic] = useState(false)
   const [incomeStart, setIncomeStart] = useState(() => new Date().toISOString().slice(0, 10))
   const [incomeStop, setIncomeStop] = useState("")
-  const [incomeAction, setIncomeAction] = useState<{ kind: "occurrence" | "future" | "effective_date" | "pause" | "stop"; seriesId: string; occurrence?: ExpectedIncomeOccurrence } | null>(null)
+  const [incomeAction, setIncomeAction] = useState<{ kind: "occurrence" | "confirm" | "future" | "effective_date" | "pause" | "stop"; seriesId: string; occurrence?: ExpectedIncomeOccurrence } | null>(null)
   const [incomeActionDate, setIncomeActionDate] = useState("")
   const [incomeActionThrough, setIncomeActionThrough] = useState("")
   const [incomeActionName, setIncomeActionName] = useState("")
   const [incomeActionAmount, setIncomeActionAmount] = useState("")
   const [incomeActionReason, setIncomeActionReason] = useState("")
+  const [incomeActionAutomatic, setIncomeActionAutomatic] = useState(false)
+  const [varianceScope, setVarianceScope] = useState("default")
+  const [varianceMode, setVarianceMode] = useState<"fixed" | "percentage">("percentage")
+  const [varianceDestination, setVarianceDestination] = useState<"buffer" | "ordinary">("buffer")
+  const [varianceValue, setVarianceValue] = useState("100")
   const [baseCurrency, setBaseCurrency] = useState("EUR")
   const [periodStartDay, setPeriodStartDay] = useState("1")
   const [bufferRule, setBufferRule] = useState<BudgetSetupState["bufferRule"]>("fixed")
@@ -1504,6 +1514,7 @@ function BudgetPanel(props: {
         intervalUnit: incomeUnit,
         intervalCount,
         weekdays: incomeCadence === "custom" && incomeUnit === "week" ? incomeWeekdays : [],
+        automaticPosting: incomeAutomatic,
         startDate: incomeStart,
         stopDate: incomeStop || undefined,
       })
@@ -1519,7 +1530,7 @@ function BudgetPanel(props: {
   }
 
   const openIncomePlanAction = (
-    kind: "occurrence" | "future" | "effective_date" | "pause" | "stop",
+    kind: "occurrence" | "confirm" | "future" | "effective_date" | "pause" | "stop",
     plan: IncomePlan,
     occurrence?: ExpectedIncomeOccurrence,
   ) => {
@@ -1529,17 +1540,24 @@ function BudgetPanel(props: {
     setIncomeActionName(occurrence?.name ?? plan.name)
     setIncomeActionAmount(centsToInput(occurrence?.amountCents ?? plan.amountCents))
     setIncomeActionReason("")
+    setIncomeActionAutomatic(plan.automaticPosting)
   }
 
   const submitIncomePlanAction = async () => {
-    if (!accessToken || !incomeAction || !incomeActionReason.trim()) {
+    if (!accessToken || !incomeAction || (incomeAction.kind !== "confirm" && !incomeActionReason.trim())) {
       setError(t("budget.incomeActionValidation"))
       return
     }
     const amountCents = parseEuroCents(incomeActionAmount)
     setSaving(true)
     try {
-      if (incomeAction.kind === "pause") {
+      if (incomeAction.kind === "confirm") {
+        if (!amountCents || !incomeAction.occurrence) throw new Error(t("budget.incomePlanValidation"))
+        await confirmIncomeOccurrence(
+          accessToken, incomeAction.seriesId, incomeAction.occurrence.scheduledOn,
+          { actualOn: incomeActionDate, actualAmountCents: amountCents },
+        )
+      } else if (incomeAction.kind === "pause") {
         await pauseIncomePlan(accessToken, incomeAction.seriesId, {
           from: incomeActionDate, through: incomeActionThrough, reason: incomeActionReason,
         })
@@ -1554,11 +1572,45 @@ function BudgetPanel(props: {
           scheduledOn: incomeAction.occurrence?.scheduledOn,
           effectiveOn: incomeAction.kind === "occurrence" ? undefined : incomeActionDate,
           occurredOn: incomeAction.kind === "occurrence" ? incomeActionDate : undefined,
-          name: incomeActionName.trim(), amountCents, reason: incomeActionReason,
+          name: incomeActionName.trim(), amountCents, automaticPosting: incomeActionAutomatic, reason: incomeActionReason,
         })
       }
       setIncomeAction(null)
       await Promise.all([loadRecurringIncome(), loadTimeline()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const postAutomaticIncome = async () => {
+    if (!accessToken) return
+    const from = summary?.period.startDate ?? new Date().toISOString().slice(0, 10)
+    setSaving(true)
+    try {
+      await autoPostIncome(accessToken, from, new Date().toISOString().slice(0, 10))
+      await Promise.all([loadRecurringIncome(), loadTimeline(), loadSummary()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveVarianceRule = async () => {
+    if (!accessToken) return
+    const parsed = Number(varianceValue.replace(",", "."))
+    const value = varianceMode === "percentage" ? Math.round(parsed * 100) : parseEuroCents(varianceValue)
+    if (value === null || !Number.isFinite(value) || value < 0 || (varianceMode === "percentage" && value > 10_000)) {
+      setError(t("budget.varianceRuleValidation"))
+      return
+    }
+    const body = { mode: varianceMode, routes: [{ destination: varianceDestination, value }] }
+    setSaving(true)
+    try {
+      if (varianceScope === "default") await saveDefaultIncomeVarianceRule(accessToken, body)
+      else await saveIncomePlanVarianceRule(accessToken, varianceScope, body)
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1893,6 +1945,8 @@ function BudgetPanel(props: {
                     options={[
                       { value: "all", label: t("budget.filterAllStatuses") },
                       { value: "expected", label: t("budget.statusExpected") },
+                      { value: "confirmed", label: t("budget.statusConfirmed") },
+                      { value: "automatically_posted", label: t("budget.statusAutomaticallyPosted") },
                       { value: "actual", label: t("budget.statusActual") },
                       { value: "corrected", label: t("budget.statusCorrected") },
                       { value: "voided", label: t("budget.statusVoided") },
@@ -2158,9 +2212,12 @@ function BudgetPanel(props: {
             {showPlanning ? (
             <div className="space-y-5">
             <div className="rounded-lg border p-4">
-              <div>
-                <h3 className="font-medium">{t("budget.incomePlansTitle")}</h3>
-                <p className="text-sm text-muted-foreground">{t("budget.incomePlansDescription")}</p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-medium">{t("budget.incomePlansTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.incomePlansDescription")}</p>
+                </div>
+                <Button variant="outline" onClick={postAutomaticIncome} disabled={saving}>{t("budget.postAutomaticIncome")}</Button>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <Input value={incomeName} onChange={(event) => setIncomeName(event.target.value)} placeholder={t("budget.incomeName")} />
@@ -2179,6 +2236,10 @@ function BudgetPanel(props: {
                 />
                 <Input type="date" value={incomeStart} onChange={(event) => setIncomeStart(event.target.value)} aria-label={t("budget.startDate")} />
                 <Input type="date" value={incomeStop} onChange={(event) => setIncomeStop(event.target.value)} aria-label={t("budget.optionalStopDate")} />
+                <div className="flex items-center justify-between gap-3 rounded-md border px-3">
+                  <Label htmlFor="income-automatic">{t("budget.automaticPosting")}</Label>
+                  <Switch id="income-automatic" checked={incomeAutomatic} onCheckedChange={setIncomeAutomatic} />
+                </div>
                 {incomeCadence === "custom" ? (
                   <>
                     <Input inputMode="numeric" min={1} value={incomeInterval} onChange={(event) => setIncomeInterval(event.target.value)} aria-label={t("budget.intervalCount")} />
@@ -2212,6 +2273,34 @@ function BudgetPanel(props: {
                   ))}
                 </div>
               ) : null}
+              <div className="mt-4 grid gap-3 rounded-md border bg-muted/10 p-3 md:grid-cols-2 xl:grid-cols-5">
+                <FormSelect
+                  value={varianceScope}
+                  onValueChange={setVarianceScope}
+                  options={[
+                    { value: "default", label: t("budget.defaultVarianceRule") },
+                    ...(incomeProjection?.plans ?? []).map((plan) => ({ value: plan.seriesId, label: plan.name })),
+                  ]}
+                />
+                <FormSelect
+                  value={varianceMode}
+                  onValueChange={(value) => setVarianceMode(value as typeof varianceMode)}
+                  options={[
+                    { value: "fixed", label: t("budget.fixedAmount") },
+                    { value: "percentage", label: t("budget.percentage") },
+                  ]}
+                />
+                <FormSelect
+                  value={varianceDestination}
+                  onValueChange={(value) => setVarianceDestination(value as typeof varianceDestination)}
+                  options={[
+                    { value: "buffer", label: t("budget.buffer") },
+                    { value: "ordinary", label: t("budget.currentSpending") },
+                  ]}
+                />
+                <Input inputMode="decimal" value={varianceValue} onChange={(event) => setVarianceValue(event.target.value)} aria-label={t("budget.routingValue")} />
+                <Button variant="outline" onClick={saveVarianceRule} disabled={saving}>{t("budget.saveVarianceRule")}</Button>
+              </div>
               <div className="mt-5 grid gap-3 xl:grid-cols-2">
                 {(incomeProjection?.plans ?? []).length === 0 ? (
                   <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -2227,6 +2316,7 @@ function BudgetPanel(props: {
                             ? `${t("budget.every")} ${plan.intervalCount} ${plan.intervalUnit}`
                             : t(plan.cadence === "daily" ? "budget.daily" : plan.cadence === "weekly" ? "budget.weekly" : plan.cadence === "quarterly" ? "budget.quarterly" : plan.cadence === "yearly" ? "budget.yearly" : "budget.monthly")}
                           {plan.stoppedOn ? ` · ${t("budget.stoppedOn")} ${plan.stoppedOn}` : ""}
+                          {plan.automaticPosting ? ` · ${t("budget.automatic")}` : ` · ${t("budget.manualConfirmation")}`}
                           {` · ${plan.versions.length} ${t("budget.versions")}`}
                         </p>
                       </div>
@@ -2256,12 +2346,19 @@ function BudgetPanel(props: {
                       <div key={occurrence.id} className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm">
                         <div>
                           <p className="font-medium">{occurrence.name}</p>
-                          <p className="text-xs text-muted-foreground">{occurrence.occurredOn}{occurrence.overridden ? ` · ${t("budget.overridden")}` : ""}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {occurrence.occurredOn} · {t(occurrence.status === "confirmed" ? "budget.statusConfirmed" : occurrence.status === "automatically_posted" ? "budget.statusAutomaticallyPosted" : "budget.statusExpected")}
+                            {occurrence.overridden ? ` · ${t("budget.overridden")}` : ""}
+                            {occurrence.posting ? ` · ${t("budget.variance")}: ${currency(occurrence.posting.varianceCents)}` : ""}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span>{currency(occurrence.amountCents)}</span>
-                          {plan && !plan.stoppedOn ? (
-                            <Button size="sm" variant="ghost" onClick={() => openIncomePlanAction("occurrence", plan, occurrence)}>{t("budget.editOccurrence")}</Button>
+                          {plan && !plan.stoppedOn && occurrence.status === "expected" ? (
+                            <>
+                              <Button size="sm" variant="ghost" onClick={() => openIncomePlanAction("confirm", plan, occurrence)}>{t("budget.confirmIncome")}</Button>
+                              <Button size="sm" variant="ghost" onClick={() => openIncomePlanAction("occurrence", plan, occurrence)}>{t("budget.editOccurrence")}</Button>
+                            </>
                           ) : null}
                         </div>
                       </div>
@@ -2273,7 +2370,9 @@ function BudgetPanel(props: {
                 <div className="mt-5 grid gap-3 rounded-md border bg-muted/10 p-4 sm:grid-cols-2 xl:grid-cols-4">
                   {incomeAction.kind !== "stop" && incomeAction.kind !== "pause" ? (
                     <>
-                      <Input value={incomeActionName} onChange={(event) => setIncomeActionName(event.target.value)} placeholder={t("budget.incomeName")} />
+                      {incomeAction.kind !== "confirm" ? (
+                        <Input value={incomeActionName} onChange={(event) => setIncomeActionName(event.target.value)} placeholder={t("budget.incomeName")} />
+                      ) : null}
                       <Input inputMode="decimal" value={incomeActionAmount} onChange={(event) => setIncomeActionAmount(event.target.value)} placeholder={t("budget.amount")} />
                     </>
                   ) : null}
@@ -2281,7 +2380,15 @@ function BudgetPanel(props: {
                   {incomeAction.kind === "pause" ? (
                     <Input type="date" value={incomeActionThrough} onChange={(event) => setIncomeActionThrough(event.target.value)} aria-label={t("budget.pauseThrough")} />
                   ) : null}
-                  <Input value={incomeActionReason} onChange={(event) => setIncomeActionReason(event.target.value)} placeholder={t("budget.reason")} />
+                  {incomeAction.kind !== "confirm" ? (
+                    <Input value={incomeActionReason} onChange={(event) => setIncomeActionReason(event.target.value)} placeholder={t("budget.reason")} />
+                  ) : null}
+                  {incomeAction.kind === "future" || incomeAction.kind === "effective_date" ? (
+                    <div className="flex items-center justify-between gap-3 rounded-md border px-3">
+                      <Label htmlFor="income-action-automatic">{t("budget.automaticPosting")}</Label>
+                      <Switch id="income-action-automatic" checked={incomeActionAutomatic} onCheckedChange={setIncomeActionAutomatic} />
+                    </div>
+                  ) : null}
                   <div className="flex gap-2">
                     <Button onClick={submitIncomePlanAction} disabled={saving}>{t("budget.confirmAction")}</Button>
                     <Button variant="outline" onClick={() => setIncomeAction(null)}>{t("budget.cancel")}</Button>

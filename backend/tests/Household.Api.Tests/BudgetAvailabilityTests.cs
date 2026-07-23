@@ -29,4 +29,16 @@ public sealed class BudgetAvailabilityTests
         Assert.Equal(expectedAvailableCents, result.OrdinaryAvailableCents);
         Assert.Equal(Math.Max(0, actualIncomeCents - expectedBufferCents), result.MaximumOrdinaryCents);
     }
+
+    [Fact]
+    public void Explicit_variance_allocations_remain_protected_from_ordinary_spending()
+    {
+        var result = BudgetAvailability.Calculate(
+            120_000, 0, BudgetValues.FixedBuffer, 10_000, 0,
+            explicitBufferCents: 5_000, savingsCents: 3_000, investmentCents: 2_000);
+
+        Assert.Equal(15_000, result.FundedBufferCents);
+        Assert.Equal(100_000, result.MaximumOrdinaryCents);
+        Assert.Equal(100_000, result.OrdinaryAvailableCents);
+    }
 }

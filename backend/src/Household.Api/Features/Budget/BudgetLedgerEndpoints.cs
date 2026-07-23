@@ -221,7 +221,7 @@ public static class BudgetLedgerEndpoints
             : (await new BudgetIncomePlanProjector(database).LoadAsync(
                     user.Id, projectedPeriod.StartDate, projectedPeriod.EndDate, cancellationToken))
                 .Occurrences.Select(x => new BudgetTimelineItem(
-                    x.Id, "expected", BudgetValues.Income, "expected", x.OccurredOn,
+                    x.Id, "expected", BudgetValues.Income, x.Status, x.OccurredOn,
                     x.Name, x.AmountCents, x.AmountCents, null, "", null, "income_plan", [])).ToList();
         var result = actual.Concat(expectedExpenses).Concat(expectedIncome).Where(item =>
                 (string.IsNullOrWhiteSpace(query) || item.Description.Contains(query, StringComparison.OrdinalIgnoreCase) || item.Merchant.Contains(query, StringComparison.OrdinalIgnoreCase)) &&
