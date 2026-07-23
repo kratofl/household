@@ -71,6 +71,7 @@ import {
   createCommitment,
   createIncomePlan,
   createInvestmentEvent,
+  createWishlistItem,
   createBudgetLedgerEntry,
   createSavingsContribution,
   createSavingsGoal,
@@ -86,6 +87,8 @@ import {
   loadCommitments,
   loadIncomePlans,
   loadInvestments,
+  loadWishlist,
+  promoteWishlistItem,
   loadSavings,
   editIncomePlan,
   matchCommitmentOccurrence,
@@ -97,6 +100,7 @@ import {
   saveIncomePlanVarianceRule,
   stopCommitment,
   stopIncomePlan,
+  updateWishlistItem,
   updateBudgetCategory,
   updateCurrentBudgetPeriod,
   updateBudgetSettings,
@@ -115,6 +119,7 @@ import type {
   IncomePlan,
   IncomePlanProjection,
   InvestmentProjection,
+  WishlistItem,
   SavingsProjection,
 } from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
@@ -1235,6 +1240,17 @@ function BudgetPanel(props: {
   const [investmentDate, setInvestmentDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [investmentDestination, setInvestmentDestination] = useState<"buffer" | "savings" | "ordinary">("buffer")
   const [investmentTargetPurposeId, setInvestmentTargetPurposeId] = useState("")
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([])
+  const [wishlistName, setWishlistName] = useState("")
+  const [wishlistPrice, setWishlistPrice] = useState("")
+  const [wishlistPriority, setWishlistPriority] = useState<WishlistItem["priority"]>("medium")
+  const [wishlistNotes, setWishlistNotes] = useState("")
+  const [wishlistPromotionId, setWishlistPromotionId] = useState<string | null>(null)
+  const [wishlistPromotionKind, setWishlistPromotionKind] = useState<"new" | "link">("new")
+  const [wishlistPromotionMode, setWishlistPromotionMode] = useState<"date" | "rate">("rate")
+  const [wishlistPromotionDate, setWishlistPromotionDate] = useState("")
+  const [wishlistPromotionRate, setWishlistPromotionRate] = useState("")
+  const [wishlistPromotionGoalId, setWishlistPromotionGoalId] = useState("")
   const [initialIncomeName, setInitialIncomeName] = useState("")
   const [initialIncomeAmount, setInitialIncomeAmount] = useState("")
   const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
@@ -1351,6 +1367,11 @@ function BudgetPanel(props: {
     setInvestments(await loadInvestments(accessToken))
   }, [accessToken])
 
+  const loadWishlistState = useCallback(async () => {
+    if (!accessToken) return
+    setWishlist(await loadWishlist(accessToken))
+  }, [accessToken])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1410,6 +1431,15 @@ function BudgetPanel(props: {
     }, 0)
     return () => window.clearTimeout(timer)
   }, [accessToken, loadInvestmentState, loadSavingsState, selectedBudgetView, t])
+
+  useEffect(() => {
+    if (!accessToken || selectedBudgetView !== "wishlist") return
+    const timer = window.setTimeout(() => {
+      void Promise.all([loadWishlistState(), loadSavingsState()])
+        .catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [accessToken, loadSavingsState, loadWishlistState, selectedBudgetView, t])
 
   const createTransaction = async () => {
     if (!accessToken) return
@@ -1999,6 +2029,76 @@ function BudgetPanel(props: {
       setInvestmentDescription("")
       setInvestmentAmount("")
       await Promise.all([loadInvestmentState(), loadSavingsState(), loadSummary(), loadTimeline()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const addWishlistItem = async () => {
+    if (!accessToken) return
+    const estimatedPriceCents = wishlistPrice.trim() ? parseEuroCents(wishlistPrice) : null
+    if (!wishlistName.trim() || wishlistPrice.trim() && !estimatedPriceCents) {
+      setError(t("budget.wishlistValidation"))
+      return
+    }
+    setSaving(true)
+    try {
+      await createWishlistItem(accessToken, {
+        name: wishlistName.trim(),
+        estimatedPriceCents,
+        priority: wishlistPriority,
+        notes: wishlistNotes.trim(),
+      })
+      setWishlistName("")
+      setWishlistPrice("")
+      setWishlistNotes("")
+      await loadWishlistState()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const changeWishlistStatus = async (itemId: string, status: WishlistItem["status"]) => {
+    if (!accessToken) return
+    setSaving(true)
+    try {
+      await updateWishlistItem(accessToken, itemId, { status })
+      await loadWishlistState()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const promoteWishlist = async () => {
+    if (!accessToken || !wishlistPromotionId) return
+    const recurringContributionCents = parseEuroCents(wishlistPromotionRate)
+    if (wishlistPromotionKind === "link" && !wishlistPromotionGoalId ||
+        wishlistPromotionKind === "new" && wishlistPromotionMode === "date" && !wishlistPromotionDate ||
+        wishlistPromotionKind === "new" && wishlistPromotionMode === "rate" && !recurringContributionCents) {
+      setError(t("budget.wishlistPromotionValidation"))
+      return
+    }
+    setSaving(true)
+    try {
+      await promoteWishlistItem(accessToken, wishlistPromotionId,
+        wishlistPromotionKind === "link"
+          ? { savingsGoalId: wishlistPromotionGoalId }
+          : {
+              planningMode: wishlistPromotionMode,
+              targetDate: wishlistPromotionMode === "date" ? wishlistPromotionDate : undefined,
+              recurringContributionCents: wishlistPromotionMode === "rate" ? recurringContributionCents : undefined,
+            })
+      setWishlistPromotionId(null)
+      setWishlistPromotionDate("")
+      setWishlistPromotionRate("")
+      setWishlistPromotionGoalId("")
+      await Promise.all([loadWishlistState(), loadSavingsState()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -3340,21 +3440,123 @@ function BudgetPanel(props: {
                 </div>
               </div>
             ) : null}
-            {showWishlist || showReports ? (
+            {showWishlist ? (
+              <div className="space-y-5">
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.wishlistTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.wishlistDescription")}</p>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <Input value={wishlistName} onChange={(event) => setWishlistName(event.target.value)} placeholder={t("budget.wishlistName")} />
+                    <Input inputMode="decimal" value={wishlistPrice} onChange={(event) => setWishlistPrice(event.target.value)} placeholder={t("budget.estimatedPrice")} />
+                    <FormSelect
+                      value={wishlistPriority}
+                      onValueChange={(value) => setWishlistPriority(value as typeof wishlistPriority)}
+                      options={[
+                        { value: "low", label: t("budget.priorityLow") },
+                        { value: "medium", label: t("budget.priorityMedium") },
+                        { value: "high", label: t("budget.priorityHigh") },
+                      ]}
+                    />
+                    <Input value={wishlistNotes} onChange={(event) => setWishlistNotes(event.target.value)} placeholder={t("budget.notes")} />
+                  </div>
+                  <div className="mt-4 flex justify-end">
+                    <Button onClick={addWishlistItem} disabled={saving}>{t("budget.addWishlistItem")}</Button>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {wishlist.filter((item) => item.status !== "removed").map((item) => (
+                    <div key={item.id} className="rounded-lg border p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="font-medium">{item.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {item.estimatedPriceCents ? currency(item.estimatedPriceCents) : t("budget.priceOpen")}
+                            {` · ${t(
+                              item.priority === "high" ? "budget.priorityHigh" :
+                              item.priority === "low" ? "budget.priorityLow" : "budget.priorityMedium",
+                            )}`}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                          {item.savingsGoalId ? t("budget.linkedToGoal") :
+                            item.status === "completed" ? t("budget.wishlistCompleted") : t("budget.unfundedReminder")}
+                        </span>
+                      </div>
+                      {item.notes ? <p className="mt-3 text-sm">{item.notes}</p> : null}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {!item.savingsGoalId && item.status === "active" ? (
+                          <Button size="sm" onClick={() => setWishlistPromotionId(item.id)}>
+                            {t("budget.promoteWishlist")}
+                          </Button>
+                        ) : null}
+                        {item.status === "active" ? (
+                          <Button size="sm" variant="outline" onClick={() => changeWishlistStatus(item.id, "completed")}>
+                            {t("budget.markCompleted")}
+                          </Button>
+                        ) : null}
+                        <Button size="sm" variant="ghost" onClick={() => changeWishlistStatus(item.id, "removed")}>
+                          {t("budget.remove")}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {wishlistPromotionId ? (
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-medium">{t("budget.promoteWishlistTitle")}</h3>
+                    <p className="text-sm text-muted-foreground">{t("budget.promoteWishlistDescription")}</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <FormSelect
+                        value={wishlistPromotionKind}
+                        onValueChange={(value) => setWishlistPromotionKind(value as typeof wishlistPromotionKind)}
+                        options={[
+                          { value: "new", label: t("budget.createNewGoal") },
+                          { value: "link", label: t("budget.linkExistingGoal") },
+                        ]}
+                      />
+                      {wishlistPromotionKind === "link" ? (
+                        <FormSelect
+                          value={wishlistPromotionGoalId}
+                          onValueChange={setWishlistPromotionGoalId}
+                          options={[
+                            { value: "", label: t("budget.selectSavingsGoal") },
+                            ...(savings?.purposes ?? []).filter((purpose) => purpose.targetAmountCents && purpose.status !== "completed")
+                              .map((purpose) => ({ value: purpose.id, label: purpose.name })),
+                          ]}
+                        />
+                      ) : (
+                        <>
+                          <FormSelect
+                            value={wishlistPromotionMode}
+                            onValueChange={(value) => setWishlistPromotionMode(value as typeof wishlistPromotionMode)}
+                            options={[
+                              { value: "date", label: t("budget.dateDrivenGoal") },
+                              { value: "rate", label: t("budget.rateDrivenGoal") },
+                            ]}
+                          />
+                          {wishlistPromotionMode === "date" ? (
+                            <Input type="date" value={wishlistPromotionDate} onChange={(event) => setWishlistPromotionDate(event.target.value)} />
+                          ) : (
+                            <Input inputMode="decimal" value={wishlistPromotionRate} onChange={(event) => setWishlistPromotionRate(event.target.value)} placeholder={t("budget.goalRecurringRate")} />
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <Button onClick={promoteWishlist} disabled={saving}>{t("budget.confirmPromotion")}</Button>
+                      <Button variant="outline" onClick={() => setWishlistPromotionId(null)}>{t("budget.cancel")}</Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {showReports ? (
               <div className="rounded-lg border border-dashed bg-muted/10 p-8 text-center sm:p-12">
                 <h3 className="text-lg font-semibold">
-                  {t(
-                    showWishlist
-                        ? "budget.emptyWishlistTitle"
-                        : "budget.emptyReportsTitle",
-                  )}
+                  {t("budget.emptyReportsTitle")}
                 </h3>
                 <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-                  {t(
-                    showWishlist
-                        ? "budget.emptyWishlistDescription"
-                        : "budget.emptyReportsDescription",
-                  )}
+                  {t("budget.emptyReportsDescription")}
                 </p>
               </div>
             ) : null}

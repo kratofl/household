@@ -132,6 +132,20 @@ public sealed class BudgetInvestmentEvent
     public DateTime CreatedAt { get; set; }
 }
 
+public sealed class BudgetWishlistItem
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string Name { get; set; } = "";
+    public long? EstimatedPriceCents { get; set; }
+    public string Priority { get; set; } = BudgetValues.Medium;
+    public string Notes { get; set; } = "";
+    public string Status { get; set; } = BudgetValues.Active;
+    public Guid? SavingsGoalId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
 public sealed class BudgetIncomePlan
 {
     public Guid Id { get; set; }
@@ -502,6 +516,12 @@ public static class BudgetValues
     public const string Goal = "goal";
     public const string Valuation = "valuation";
     public const string Withdrawal = "withdrawal";
+    public const string Low = "low";
+    public const string Medium = "medium";
+    public const string High = "high";
+    public const string Active = "active";
+    public const string Completed = "completed";
+    public const string Removed = "removed";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";

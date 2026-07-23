@@ -13,6 +13,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetSavingsPurchase> SavingsPurchases => Set<BudgetSavingsPurchase>();
     public DbSet<BudgetSavingsPurchaseFunding> SavingsPurchaseFunding => Set<BudgetSavingsPurchaseFunding>();
     public DbSet<BudgetInvestmentEvent> InvestmentEvents => Set<BudgetInvestmentEvent>();
+    public DbSet<BudgetWishlistItem> WishlistItems => Set<BudgetWishlistItem>();
     public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
     public DbSet<BudgetIncomePlanPause> IncomePlanPauses => Set<BudgetIncomePlanPause>();
     public DbSet<BudgetIncomePlanStop> IncomePlanStops => Set<BudgetIncomePlanStop>();
@@ -50,6 +51,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigureSavingsPurchase(modelBuilder.Entity<BudgetSavingsPurchase>());
         ConfigureSavingsPurchaseFunding(modelBuilder.Entity<BudgetSavingsPurchaseFunding>());
         ConfigureInvestmentEvent(modelBuilder.Entity<BudgetInvestmentEvent>());
+        ConfigureWishlistItem(modelBuilder.Entity<BudgetWishlistItem>());
         ConfigureIncomePlan(modelBuilder.Entity<BudgetIncomePlan>());
         ConfigureIncomePlanPause(modelBuilder.Entity<BudgetIncomePlanPause>());
         ConfigureIncomePlanStop(modelBuilder.Entity<BudgetIncomePlanStop>());
@@ -306,6 +308,21 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.TargetPurposeId).HasColumnName("target_purpose_id");
         entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
         entity.HasIndex(x => new { x.OwnerUserId, x.IdempotencyKey }).IsUnique();
+    }
+
+    private static void ConfigureWishlistItem(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetWishlistItem> entity)
+    {
+        entity.ToTable("wishlist_items"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.Name).HasColumnName("name");
+        entity.Property(x => x.EstimatedPriceCents).HasColumnName("estimated_price_cents");
+        entity.Property(x => x.Priority).HasColumnName("priority");
+        entity.Property(x => x.Notes).HasColumnName("notes");
+        entity.Property(x => x.Status).HasColumnName("status");
+        entity.Property(x => x.SavingsGoalId).HasColumnName("savings_goal_id");
+        Timestamps(entity);
+        entity.HasIndex(x => new { x.OwnerUserId, x.Status, x.Priority });
     }
 
     private static void ConfigureIncomePlan(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePlan> entity)

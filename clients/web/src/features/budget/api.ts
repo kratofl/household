@@ -17,6 +17,7 @@ import type {
   InvestmentProjection,
   PlannedExpenseInput,
   SavingsProjection,
+  WishlistItem,
 } from "./types"
 
 export function loadBudgetSetup(accessToken: string) {
@@ -197,4 +198,20 @@ export function createInvestmentEvent(
   body: unknown,
 ) {
   return apiRequest(`/budget/investments/${kind}`, { method: "POST", accessToken, body })
+}
+
+export function loadWishlist(accessToken: string) {
+  return apiRequest<WishlistItem[]>("/budget/wishlist", { accessToken })
+}
+
+export function createWishlistItem(accessToken: string, body: unknown) {
+  return apiRequest<WishlistItem>("/budget/wishlist", { method: "POST", accessToken, body })
+}
+
+export function updateWishlistItem(accessToken: string, itemId: string, body: unknown) {
+  return apiRequest<WishlistItem>(`/budget/wishlist/${itemId}`, { method: "PATCH", accessToken, body })
+}
+
+export function promoteWishlistItem(accessToken: string, itemId: string, body: unknown) {
+  return apiRequest<WishlistItem>(`/budget/wishlist/${itemId}/promote`, { method: "POST", accessToken, body })
 }

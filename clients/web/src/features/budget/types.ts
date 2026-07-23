@@ -401,3 +401,15 @@ export type InvestmentProjection = {
     targetPurposeId: string | null
   }>
 }
+
+export type WishlistItem = {
+  id: string
+  name: string
+  estimatedPriceCents: number | null
+  priority: "low" | "medium" | "high"
+  notes: string
+  status: "active" | "completed" | "removed"
+  savingsGoalId: string | null
+  createdAt: string
+  updatedAt: string
+}

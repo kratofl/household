@@ -1284,6 +1284,82 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Wishlist_items_remain_unfunded_until_atomically_linked_or_promoted()
+    {
+        const string token = LegacyParityFixture.WishlistAccessToken;
+        var cameraResponse = await Post("/api/v1/budget/wishlist", new
+        {
+            name = "Cinema camera", estimatedPriceCents = 120_000,
+            priority = "high", notes = "Financial reminder, not groceries",
+        }, HttpStatusCode.Created);
+        var camera = await cameraResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var cameraId = camera.GetProperty("id").GetGuid();
+        Assert.Equal(JsonValueKind.Null, camera.GetProperty("savingsGoalId").ValueKind);
+
+        var promotion = new
+        {
+            planningMode = "rate", recurringContributionCents = 10_000,
+        };
+        var promotedResponse = await Post(
+            $"/api/v1/budget/wishlist/{cameraId}/promote", promotion, HttpStatusCode.OK);
+        var promoted = await promotedResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var goalId = promoted.GetProperty("savingsGoalId").GetGuid();
+        var retryResponse = await Post(
+            $"/api/v1/budget/wishlist/{cameraId}/promote",
+            new { planningMode = "date", targetDate = "2027-12-31" }, HttpStatusCode.OK);
+        Assert.Equal(goalId, (await retryResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("savingsGoalId").GetGuid());
+
+        using (var savingsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/savings", token))
+        {
+            var savings = await (await fixture.Client.SendAsync(savingsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(0, savings.GetProperty("totalSavedCents").GetInt64());
+            var goal = Assert.Single(savings.GetProperty("purposes").EnumerateArray());
+            Assert.Equal(goalId, goal.GetProperty("id").GetGuid());
+            Assert.Equal(120_000, goal.GetProperty("targetAmountCents").GetInt64());
+            Assert.Equal(0, goal.GetProperty("allocatedCents").GetInt64());
+        }
+
+        var bicycleResponse = await Post("/api/v1/budget/wishlist", new
+        {
+            name = "Cargo bicycle", estimatedPriceCents = 300_000, priority = "medium",
+        }, HttpStatusCode.Created);
+        var bicycleId = (await bicycleResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var linkedResponse = await Post($"/api/v1/budget/wishlist/{bicycleId}/promote",
+            new { savingsGoalId = goalId }, HttpStatusCode.OK);
+        Assert.Equal(goalId, (await linkedResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("savingsGoalId").GetGuid());
+
+        using (var update = Authenticated(HttpMethod.Patch, $"/api/v1/budget/wishlist/{cameraId}", token))
+        {
+            update.Content = JsonContent.Create(new { status = "completed", notes = "Bought elsewhere" });
+            Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(update)).StatusCode);
+        }
+        using (var listRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/wishlist", token))
+        {
+            var items = await (await fixture.Client.SendAsync(listRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            var completed = Assert.Single(items.EnumerateArray(),
+                x => x.GetProperty("id").GetGuid() == cameraId);
+            Assert.Equal("completed", completed.GetProperty("status").GetString());
+            Assert.Equal(goalId, completed.GetProperty("savingsGoalId").GetGuid());
+        }
+        using (var savingsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/savings", token))
+        {
+            var savings = await (await fixture.Client.SendAsync(savingsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Single(savings.GetProperty("purposes").EnumerateArray());
+        }
+
+        async Task<HttpResponseMessage> Post(string path, object body, HttpStatusCode expected)
+        {
+            using var request = Authenticated(HttpMethod.Post, path, token);
+            request.Content = JsonContent.Create(body);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(expected, response.StatusCode);
+            return response;
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);
