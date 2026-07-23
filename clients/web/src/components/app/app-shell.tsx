@@ -71,6 +71,9 @@ import {
   createCommitment,
   createIncomePlan,
   createBudgetLedgerEntry,
+  createSavingsContribution,
+  createSavingsOpeningValue,
+  createSavingsPurpose,
   correctBudgetLedgerEntry,
   editCommitment,
   loadBudgetSummary,
@@ -79,6 +82,7 @@ import {
   loadBudgetTimeline,
   loadCommitments,
   loadIncomePlans,
+  loadSavings,
   editIncomePlan,
   matchCommitmentOccurrence,
   pauseCommitment,
@@ -106,6 +110,7 @@ import type {
   ExpectedIncomeOccurrence,
   IncomePlan,
   IncomePlanProjection,
+  SavingsProjection,
 } from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
 import { ApiError, apiRequest } from "@/lib/api"
@@ -1194,6 +1199,17 @@ function BudgetPanel(props: {
   const [bufferDisposition, setBufferDisposition] = useState<BudgetSetupState["defaultBufferDisposition"]>("retain")
   const [deficitCoverage, setDeficitCoverage] = useState("0")
   const [periodDisposition, setPeriodDisposition] = useState<BudgetSetupState["defaultBufferDisposition"]>("retain")
+  const [savings, setSavings] = useState<SavingsProjection | null>(null)
+  const [savingsPurposeName, setSavingsPurposeName] = useState("")
+  const [savingsFundingKind, setSavingsFundingKind] = useState<"contribution" | "opening">("contribution")
+  const [savingsDescription, setSavingsDescription] = useState("")
+  const [savingsAmount, setSavingsAmount] = useState("")
+  const [savingsDate, setSavingsDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [savingsAllocations, setSavingsAllocations] = useState<Array<{
+    purposeId: string
+    mode: "fixed" | "percentage"
+    value: string
+  }>>([{ purposeId: "", mode: "fixed", value: "" }])
   const [initialIncomeName, setInitialIncomeName] = useState("")
   const [initialIncomeAmount, setInitialIncomeAmount] = useState("")
   const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
@@ -1295,6 +1311,16 @@ function BudgetPanel(props: {
     setCommitmentProjection(await loadCommitments(accessToken, from, end.toISOString().slice(0, 10)))
   }, [accessToken, summary?.period.startDate])
 
+  const loadSavingsState = useCallback(async () => {
+    if (!accessToken) return
+    const data = await loadSavings(accessToken)
+    setSavings(data)
+    setSavingsAllocations((current) => current.map((allocation) => ({
+      ...allocation,
+      purposeId: allocation.purposeId || data.purposes.find((purpose) => !purpose.archived)?.id || "",
+    })))
+  }, [accessToken])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1345,6 +1371,14 @@ function BudgetPanel(props: {
     }, 0)
     return () => window.clearTimeout(timer)
   }, [accessToken, loadRecurringCommitments, loadRecurringIncome, selectedBudgetView, t])
+
+  useEffect(() => {
+    if (!accessToken || selectedBudgetView !== "saving") return
+    const timer = window.setTimeout(() => {
+      void loadSavingsState().catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [accessToken, loadSavingsState, selectedBudgetView, t])
 
   const createTransaction = async () => {
     if (!accessToken) return
@@ -1777,6 +1811,65 @@ function BudgetPanel(props: {
     }
   }
 
+  const addSavingsPurpose = async () => {
+    if (!accessToken || !savingsPurposeName.trim()) {
+      setError(t("budget.savingsPurposeValidation"))
+      return
+    }
+    setSaving(true)
+    try {
+      await createSavingsPurpose(accessToken, savingsPurposeName.trim())
+      setSavingsPurposeName("")
+      await loadSavingsState()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveSavingsFunding = async () => {
+    if (!accessToken) return
+    const amountCents = parseEuroCents(savingsAmount)
+    if (!amountCents || !savingsDescription.trim() || !savingsDate) {
+      setError(t("budget.savingsContributionValidation"))
+      return
+    }
+    const allocations = savingsAllocations
+      .filter((allocation) => allocation.purposeId && allocation.value.trim())
+      .map((allocation) => ({
+        purposeId: allocation.purposeId,
+        mode: allocation.mode,
+        value: allocation.mode === "fixed"
+          ? parseEuroCents(allocation.value)
+          : Math.round(Number(allocation.value.replace(",", ".")) * 100),
+      }))
+    if (allocations.some((allocation) => allocation.value === null || !Number.isFinite(allocation.value) || allocation.value < 0)) {
+      setError(t("budget.savingsContributionValidation"))
+      return
+    }
+    const body = {
+      idempotencyKey: savingsFundingKind === "contribution" ? crypto.randomUUID() : undefined,
+      occurredOn: savingsDate,
+      description: savingsDescription.trim(),
+      amountCents,
+      allocations,
+    }
+    setSaving(true)
+    try {
+      if (savingsFundingKind === "opening") await createSavingsOpeningValue(accessToken, body)
+      else await createSavingsContribution(accessToken, body)
+      setSavingsDescription("")
+      setSavingsAmount("")
+      setSavingsAllocations([{ purposeId: savings?.purposes.find((purpose) => !purpose.archived)?.id ?? "", mode: "fixed", value: "" }])
+      await Promise.all([loadSavingsState(), loadSummary()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const selectTimelineItem = async (item: BudgetTimelineItem) => {
     setSelectedTimeline(item)
     setTimelineAction(null)
@@ -2108,6 +2201,7 @@ function BudgetPanel(props: {
                       { value: "income", label: t("budget.income") },
                       { value: "expense", label: t("budget.expense") },
                       { value: "refund", label: t("budget.refund") },
+                      { value: "savings", label: t("budget.savingsContribution") },
                     ]}
                   />
                   <FormSelect
@@ -2172,7 +2266,8 @@ function BudgetPanel(props: {
                           {selectedTimeline.origin} · {selectedTimeline.status} · {t("budget.ordinaryImpact")}: {currency(selectedTimeline.ordinaryImpactCents)}
                         </p>
                       </div>
-                      {selectedTimeline.entryType === "actual" && selectedTimeline.status === "actual" && selectedTimeline.kind !== "refund" ? (
+                      {selectedTimeline.entryType === "actual" && selectedTimeline.status === "actual" &&
+                      (selectedTimeline.kind === "income" || selectedTimeline.kind === "expense") ? (
                         <div className="flex flex-wrap gap-2">
                           {selectedTimeline.splits.length <= 1 ? (
                             <Button size="sm" variant="outline" onClick={() => setTimelineAction("correction")}>{t("budget.correct")}</Button>
@@ -2809,22 +2904,124 @@ function BudgetPanel(props: {
               </div>
             </div>
             ) : null}
-            {showSaving || showWishlist || showReports ? (
+            {showSaving ? (
+              <div className="space-y-5">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Metric label={t("budget.totalSavings")} value={currency(savings?.totalSavedCents ?? summary.totalSavingsCents)} />
+                  <Metric label={t("budget.unallocatedSavings")} value={currency(savings?.unallocatedCents ?? summary.unallocatedSavingsCents)} />
+                  <Metric label={t("budget.currentSavingsContributions")} value={currency(summary.savingsContributionCents)} />
+                </div>
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.savingsPurposesTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.savingsPurposesDescription")}</p>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <Input value={savingsPurposeName} onChange={(event) => setSavingsPurposeName(event.target.value)} placeholder={t("budget.savingsPurposeName")} />
+                    <Button onClick={addSavingsPurpose} disabled={saving}>{t("budget.addSavingsPurpose")}</Button>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {(savings?.purposes ?? []).map((purpose) => (
+                      <div key={purpose.id} className="rounded-md border p-3">
+                        <p className="font-medium">{purpose.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {t("budget.allocated")}: {currency(purpose.allocatedCents)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.savingsFundingTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.savingsFundingDescription")}</p>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <FormSelect
+                      value={savingsFundingKind}
+                      onValueChange={(value) => setSavingsFundingKind(value as typeof savingsFundingKind)}
+                      options={[
+                        { value: "contribution", label: t("budget.savingsContribution") },
+                        { value: "opening", label: t("budget.openingSavings") },
+                      ]}
+                    />
+                    <Input type="date" value={savingsDate} onChange={(event) => setSavingsDate(event.target.value)} aria-label={t("budget.date")} />
+                    <Input value={savingsDescription} onChange={(event) => setSavingsDescription(event.target.value)} placeholder={t("budget.description")} />
+                    <Input inputMode="decimal" value={savingsAmount} onChange={(event) => setSavingsAmount(event.target.value)} placeholder={t("budget.amount")} />
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {savingsAllocations.map((allocation, index) => (
+                      <div key={index} className="grid gap-3 rounded-md border bg-muted/10 p-3 sm:grid-cols-3">
+                        <FormSelect
+                          value={allocation.purposeId}
+                          onValueChange={(value) => setSavingsAllocations((current) => current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, purposeId: value } : item))}
+                          options={[
+                            { value: "", label: t("budget.selectSavingsPurpose") },
+                            ...(savings?.purposes ?? []).filter((purpose) => !purpose.archived)
+                              .map((purpose) => ({ value: purpose.id, label: purpose.name })),
+                          ]}
+                        />
+                        <FormSelect
+                          value={allocation.mode}
+                          onValueChange={(value) => setSavingsAllocations((current) => current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, mode: value as typeof item.mode } : item))}
+                          options={[
+                            { value: "fixed", label: t("budget.fixedAmount") },
+                            { value: "percentage", label: t("budget.percentage") },
+                          ]}
+                        />
+                        <Input
+                          inputMode="decimal"
+                          value={allocation.value}
+                          onChange={(event) => setSavingsAllocations((current) => current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, value: event.target.value } : item))}
+                          placeholder={allocation.mode === "fixed" ? t("budget.amount") : t("budget.bufferPercent")}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap justify-between gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSavingsAllocations((current) => [
+                        ...current,
+                        { purposeId: savings?.purposes.find((purpose) => !purpose.archived)?.id ?? "", mode: "fixed", value: "" },
+                      ])}
+                    >
+                      {t("budget.addAllocation")}
+                    </Button>
+                    <Button onClick={saveSavingsFunding} disabled={saving}>{t("budget.saveSavingsFunding")}</Button>
+                  </div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.savingsHistory")}</h3>
+                  <div className="mt-3 grid gap-2">
+                    {(savings?.contributions ?? []).map((contribution) => (
+                      <div key={contribution.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                        <div>
+                          <p className="font-medium">{contribution.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {contribution.occurredOn} · {t(contribution.kind === "opening" ? "budget.openingSavings" : "budget.savingsContribution")}
+                            {` · ${t("budget.unallocatedSavings")}: ${currency(contribution.unallocatedCents)}`}
+                          </p>
+                        </div>
+                        <span>{currency(contribution.amountCents)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {showWishlist || showReports ? (
               <div className="rounded-lg border border-dashed bg-muted/10 p-8 text-center sm:p-12">
                 <h3 className="text-lg font-semibold">
                   {t(
-                    showSaving
-                      ? "budget.emptySavingTitle"
-                      : showWishlist
+                    showWishlist
                         ? "budget.emptyWishlistTitle"
                         : "budget.emptyReportsTitle",
                   )}
                 </h3>
                 <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
                   {t(
-                    showSaving
-                      ? "budget.emptySavingDescription"
-                      : showWishlist
+                    showWishlist
                         ? "budget.emptyWishlistDescription"
                         : "budget.emptyReportsDescription",
                   )}

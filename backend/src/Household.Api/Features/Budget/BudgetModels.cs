@@ -47,6 +47,42 @@ public sealed class BudgetPeriodClose
     public DateTime ClosedAt { get; set; }
 }
 
+public sealed class BudgetSavingsPurpose
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string Name { get; set; } = "";
+    public DateTime? ArchivedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class BudgetSavingsContribution
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid PeriodId { get; set; }
+    public string? IdempotencyKey { get; set; }
+    public string Kind { get; set; } = BudgetValues.Contribution;
+    public DateOnly OccurredOn { get; set; }
+    public string Description { get; set; } = "";
+    public long AmountCents { get; set; }
+    public long UnallocatedCents { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<BudgetSavingsAllocation> Allocations { get; set; } = [];
+}
+
+public sealed class BudgetSavingsAllocation
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid ContributionId { get; set; }
+    public Guid PurposeId { get; set; }
+    public string Mode { get; set; } = BudgetValues.FixedBuffer;
+    public long RequestedValue { get; set; }
+    public long AmountCents { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 public sealed class BudgetIncomePlan
 {
     public Guid Id { get; set; }
@@ -410,6 +446,8 @@ public static class BudgetValues
     public const string DuePeriod = "due_period";
     public const string GradualReservation = "gradual_reservation";
     public const string Retain = "retain";
+    public const string Contribution = "contribution";
+    public const string Opening = "opening";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";
@@ -440,6 +478,9 @@ public sealed record BudgetSummary(
     long AccumulatedBufferCents,
     long ProtectedBufferCents,
     long DeficitCarryoverCents,
+    long SavingsContributionCents,
+    long TotalSavingsCents,
+    long UnallocatedSavingsCents,
     long ReservationCents,
     long MaximumOrdinaryCents,
     long OrdinaryAvailableCents,

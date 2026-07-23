@@ -15,6 +15,7 @@ import type {
   IncomePlanInput,
   IncomePlanProjection,
   PlannedExpenseInput,
+  SavingsProjection,
 } from "./types"
 
 export function loadBudgetSetup(accessToken: string) {
@@ -159,4 +160,20 @@ export function autoPostCommitments(accessToken: string, from: string, through: 
 
 export function closeBudgetPeriod(accessToken: string, periodId: string, body: unknown) {
   return apiRequest(`/budget/periods/${periodId}/close`, { method: "POST", accessToken, body })
+}
+
+export function loadSavings(accessToken: string) {
+  return apiRequest<SavingsProjection>("/budget/savings", { accessToken })
+}
+
+export function createSavingsPurpose(accessToken: string, name: string) {
+  return apiRequest("/budget/savings/purposes", { method: "POST", accessToken, body: { name } })
+}
+
+export function createSavingsContribution(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/contributions", { method: "POST", accessToken, body })
+}
+
+export function createSavingsOpeningValue(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/opening-values", { method: "POST", accessToken, body })
 }

@@ -90,6 +90,9 @@ export type BudgetSummary = {
   accumulatedBufferCents: number
   protectedBufferCents: number
   deficitCarryoverCents: number
+  savingsContributionCents: number
+  totalSavingsCents: number
+  unallocatedSavingsCents: number
   reservationCents: number
   maximumOrdinaryCents: number
   ordinaryAvailableCents: number
@@ -140,7 +143,7 @@ export type BudgetLedgerEntryInput = {
 export type BudgetTimelineItem = {
   id: string
   entryType: "actual" | "expected"
-  kind: "income" | "expense" | "refund"
+  kind: "income" | "expense" | "refund" | "savings"
   status: "actual" | "expected" | "confirmed" | "automatically_posted" | "corrected" | "voided"
   occurredOn: string
   description: string
@@ -326,4 +329,30 @@ export type CommitmentInput = {
   budgetingMode: CommitmentPlan["budgetingMode"]
   chargeFirstShortfall: boolean
   automaticPosting: boolean
+}
+
+export type SavingsProjection = {
+  totalSavedCents: number
+  unallocatedCents: number
+  purposes: Array<{
+    id: string
+    name: string
+    archived: boolean
+    allocatedCents: number
+  }>
+  contributions: Array<{
+    id: string
+    kind: "contribution" | "opening"
+    occurredOn: string
+    description: string
+    amountCents: number
+    unallocatedCents: number
+    allocations: Array<{
+      id: string
+      purposeId: string
+      mode: "fixed" | "percentage"
+      requestedValue: number
+      amountCents: number
+    }>
+  }>
 }

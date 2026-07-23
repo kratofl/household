@@ -946,6 +946,104 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Savings_contributions_transfer_funded_value_and_allocate_exactly_once()
+    {
+        const string token = LegacyParityFixture.SavingsAccessToken;
+        using var defaultsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        _ = await fixture.Client.SendAsync(defaultsRequest);
+        await PostLedger("income", "2026-07-23", 100_000);
+        var emergency = await CreatePurpose("Emergency");
+        var holiday = await CreatePurpose("Holiday");
+
+        using var contributionRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/savings/contributions", token);
+        contributionRequest.Content = JsonContent.Create(new
+        {
+            idempotencyKey = "savings-july",
+            occurredOn = "2026-07-23",
+            description = "July savings",
+            amountCents = 60_001,
+            allocations = new[]
+            {
+                new { purposeId = emergency, mode = "fixed", value = 20_000 },
+                new { purposeId = holiday, mode = "percentage", value = 3_333 },
+            },
+        });
+        var contributionResponse = await fixture.Client.SendAsync(contributionRequest);
+        var contribution = await contributionResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, contributionResponse.StatusCode);
+        Assert.Equal(20_003, contribution.GetProperty("unallocatedCents").GetInt64());
+        Assert.Equal(60_001, contribution.GetProperty("amountCents").GetInt64());
+
+        using var retryRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/savings/contributions", token);
+        retryRequest.Content = JsonContent.Create(new
+        {
+            idempotencyKey = "savings-july",
+            occurredOn = "2026-07-23",
+            description = "July savings",
+            amountCents = 60_001,
+            allocations = Array.Empty<object>(),
+        });
+        var retry = await fixture.Client.SendAsync(retryRequest);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+
+        using var openingRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/savings/opening-values", token);
+        openingRequest.Content = JsonContent.Create(new
+        {
+            occurredOn = "2026-07-01", description = "Existing savings", amountCents = 10_000,
+            allocations = new[] { new { purposeId = emergency, mode = "fixed", value = 10_000 } },
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(openingRequest)).StatusCode);
+
+        using var savingsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/savings", token);
+        var savings = await (await fixture.Client.SendAsync(savingsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(70_001, savings.GetProperty("totalSavedCents").GetInt64());
+        Assert.Equal(20_003, savings.GetProperty("unallocatedCents").GetInt64());
+        Assert.Equal(30_000, Assert.Single(savings.GetProperty("purposes").EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == emergency).GetProperty("allocatedCents").GetInt64());
+        Assert.Equal(19_998, Assert.Single(savings.GetProperty("purposes").EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == holiday).GetProperty("allocatedCents").GetInt64());
+
+        using var summaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var summary = await (await fixture.Client.SendAsync(summaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(60_001, summary.GetProperty("savingsContributionCents").GetInt64());
+        Assert.Equal(39_999, summary.GetProperty("ordinaryAvailableCents").GetInt64());
+        Assert.Equal(70_001, summary.GetProperty("totalSavingsCents").GetInt64());
+        using var timelineRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline?kind=savings", token);
+        var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains(timeline.EnumerateArray(), item =>
+            item.GetProperty("description").GetString() == "July savings" &&
+            item.GetProperty("ordinaryImpactCents").GetInt64() == -60_001);
+        Assert.Contains(timeline.EnumerateArray(), item =>
+            item.GetProperty("description").GetString() == "Existing savings" &&
+            item.GetProperty("ordinaryImpactCents").GetInt64() == 0);
+
+        using var overfundedRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/savings/contributions", token);
+        overfundedRequest.Content = JsonContent.Create(new
+        {
+            idempotencyKey = "too-much", occurredOn = "2026-07-24", description = "Too much",
+            amountCents = 40_000, allocations = Array.Empty<object>(),
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await fixture.Client.SendAsync(overfundedRequest)).StatusCode);
+
+        async Task<Guid> CreatePurpose(string name)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/savings/purposes", token);
+            request.Content = JsonContent.Create(new { name });
+            var response = await fixture.Client.SendAsync(request);
+            var purpose = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return purpose.GetProperty("id").GetGuid();
+        }
+
+        async Task PostLedger(string kind, string date, long amountCents)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+            request.Content = JsonContent.Create(new { kind, occurredOn = date, description = "Funding", amountCents });
+            Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(request)).StatusCode);
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

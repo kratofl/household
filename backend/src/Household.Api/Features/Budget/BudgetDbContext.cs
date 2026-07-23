@@ -7,6 +7,9 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetPeriod> Periods => Set<BudgetPeriod>();
     public DbSet<BudgetSettings> Settings => Set<BudgetSettings>();
     public DbSet<BudgetPeriodClose> PeriodCloses => Set<BudgetPeriodClose>();
+    public DbSet<BudgetSavingsPurpose> SavingsPurposes => Set<BudgetSavingsPurpose>();
+    public DbSet<BudgetSavingsContribution> SavingsContributions => Set<BudgetSavingsContribution>();
+    public DbSet<BudgetSavingsAllocation> SavingsAllocations => Set<BudgetSavingsAllocation>();
     public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
     public DbSet<BudgetIncomePlanPause> IncomePlanPauses => Set<BudgetIncomePlanPause>();
     public DbSet<BudgetIncomePlanStop> IncomePlanStops => Set<BudgetIncomePlanStop>();
@@ -38,6 +41,9 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigurePeriod(modelBuilder.Entity<BudgetPeriod>());
         ConfigureSettings(modelBuilder.Entity<BudgetSettings>());
         ConfigurePeriodClose(modelBuilder.Entity<BudgetPeriodClose>());
+        ConfigureSavingsPurpose(modelBuilder.Entity<BudgetSavingsPurpose>());
+        ConfigureSavingsContribution(modelBuilder.Entity<BudgetSavingsContribution>());
+        ConfigureSavingsAllocation(modelBuilder.Entity<BudgetSavingsAllocation>());
         ConfigureIncomePlan(modelBuilder.Entity<BudgetIncomePlan>());
         ConfigureIncomePlanPause(modelBuilder.Entity<BudgetIncomePlanPause>());
         ConfigureIncomePlanStop(modelBuilder.Entity<BudgetIncomePlanStop>());
@@ -197,6 +203,48 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.RetainedBufferCents).HasColumnName("retained_buffer_cents");
         entity.Property(x => x.ClosedAt).HasColumnName("closed_at").HasColumnType("timestamp without time zone");
         entity.HasIndex(x => new { x.OwnerUserId, x.PeriodId }).IsUnique();
+    }
+
+    private static void ConfigureSavingsPurpose(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetSavingsPurpose> entity)
+    {
+        entity.ToTable("savings_purposes"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.Name).HasColumnName("name");
+        entity.Property(x => x.ArchivedAt).HasColumnName("archived_at").HasColumnType("timestamp without time zone");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.Name }).IsUnique();
+    }
+
+    private static void ConfigureSavingsContribution(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetSavingsContribution> entity)
+    {
+        entity.ToTable("savings_contributions"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.PeriodId).HasColumnName("period_id");
+        entity.Property(x => x.IdempotencyKey).HasColumnName("idempotency_key");
+        entity.Property(x => x.Kind).HasColumnName("kind");
+        entity.Property(x => x.OccurredOn).HasColumnName("occurred_on");
+        entity.Property(x => x.Description).HasColumnName("description");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.UnallocatedCents).HasColumnName("unallocated_cents");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasMany(x => x.Allocations).WithOne().HasForeignKey(x => x.ContributionId);
+        entity.HasIndex(x => new { x.OwnerUserId, x.IdempotencyKey }).IsUnique();
+    }
+
+    private static void ConfigureSavingsAllocation(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetSavingsAllocation> entity)
+    {
+        entity.ToTable("savings_allocations"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.ContributionId).HasColumnName("contribution_id");
+        entity.Property(x => x.PurposeId).HasColumnName("purpose_id");
+        entity.Property(x => x.Mode).HasColumnName("mode");
+        entity.Property(x => x.RequestedValue).HasColumnName("requested_value");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.HasIndex(x => new { x.OwnerUserId, x.ContributionId, x.PurposeId }).IsUnique();
     }
 
     private static void ConfigureIncomePlan(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePlan> entity)
