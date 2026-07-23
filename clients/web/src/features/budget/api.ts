@@ -170,10 +170,18 @@ export function createSavingsPurpose(accessToken: string, name: string) {
   return apiRequest("/budget/savings/purposes", { method: "POST", accessToken, body: { name } })
 }
 
+export function createSavingsGoal(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/goals", { method: "POST", accessToken, body })
+}
+
 export function createSavingsContribution(accessToken: string, body: unknown) {
   return apiRequest("/budget/savings/contributions", { method: "POST", accessToken, body })
 }
 
 export function createSavingsOpeningValue(accessToken: string, body: unknown) {
   return apiRequest("/budget/savings/opening-values", { method: "POST", accessToken, body })
+}
+
+export function createSavingsPurchase(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/purchases", { method: "POST", accessToken, body })
 }

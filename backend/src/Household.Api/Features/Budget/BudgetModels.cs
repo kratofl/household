@@ -52,6 +52,14 @@ public sealed class BudgetSavingsPurpose
     public Guid Id { get; set; }
     public Guid OwnerUserId { get; set; }
     public string Name { get; set; } = "";
+    public long? TargetAmountCents { get; set; }
+    public string? PlanningMode { get; set; }
+    public DateOnly? PlanStartedOn { get; set; }
+    public long PlanStartAllocatedCents { get; set; }
+    public DateOnly? TargetDate { get; set; }
+    public long? RecurringContributionCents { get; set; }
+    public bool ContributionsPaused { get; set; }
+    public DateTime? CompletedAt { get; set; }
     public DateTime? ArchivedAt { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -79,6 +87,32 @@ public sealed class BudgetSavingsAllocation
     public Guid PurposeId { get; set; }
     public string Mode { get; set; } = BudgetValues.FixedBuffer;
     public long RequestedValue { get; set; }
+    public long AmountCents { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class BudgetSavingsPurchase
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid PeriodId { get; set; }
+    public Guid LedgerEntryId { get; set; }
+    public string IdempotencyKey { get; set; } = "";
+    public DateOnly OccurredOn { get; set; }
+    public string Description { get; set; } = "";
+    public long AmountCents { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<BudgetSavingsPurchaseFunding> Funding { get; set; } = [];
+}
+
+public sealed class BudgetSavingsPurchaseFunding
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid PurchaseId { get; set; }
+    public int Sequence { get; set; }
+    public string Source { get; set; } = BudgetValues.Goal;
+    public Guid? PurposeId { get; set; }
     public long AmountCents { get; set; }
     public DateTime CreatedAt { get; set; }
 }
@@ -448,6 +482,9 @@ public static class BudgetValues
     public const string Retain = "retain";
     public const string Contribution = "contribution";
     public const string Opening = "opening";
+    public const string DateDriven = "date";
+    public const string RateDriven = "rate";
+    public const string Goal = "goal";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";

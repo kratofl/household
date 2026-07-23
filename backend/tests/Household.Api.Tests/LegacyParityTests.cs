@@ -1044,6 +1044,133 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Savings_goals_replan_pause_and_fund_purchases_without_double_charging_ordinary()
+    {
+        const string token = LegacyParityFixture.SavingsGoalsAccessToken;
+        using (var defaults = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token))
+            Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(defaults)).StatusCode);
+        await Post("/api/v1/budget/ledger/entries", new
+        {
+            kind = "income", occurredOn = "2026-07-23", description = "Funding", amountCents = 200_000,
+        }, HttpStatusCode.Created);
+
+        var camera = await CreateGoal(new
+        {
+            name = "Camera", targetAmountCents = 60_000, planningMode = "date", targetDate = "2026-09-30",
+        });
+        var trip = await CreateGoal(new
+        {
+            name = "Trip", targetAmountCents = 40_000, planningMode = "rate", recurringContributionCents = 10_000,
+        });
+        var laptop = await CreateGoal(new
+        {
+            name = "Laptop", targetAmountCents = 20_000, planningMode = "rate", recurringContributionCents = 10_000,
+        });
+
+        await Post("/api/v1/budget/savings/contributions", new
+        {
+            idempotencyKey = "goal-funding",
+            occurredOn = "2026-07-23",
+            description = "Fund goals",
+            amountCents = 85_000,
+            allocations = new[]
+            {
+                new { purposeId = camera, mode = "fixed", value = 60_000 },
+                new { purposeId = trip, mode = "fixed", value = 5_000 },
+                new { purposeId = laptop, mode = "fixed", value = 20_000 },
+            },
+        }, HttpStatusCode.Created);
+
+        var current = await GetSavings();
+        var cameraBeforePurchase = Purpose(current, camera);
+        var laptopBeforePurchase = Purpose(current, laptop);
+        Assert.Equal("fully_funded", cameraBeforePurchase.GetProperty("status").GetString());
+        Assert.True(cameraBeforePurchase.GetProperty("contributionsPaused").GetBoolean());
+        Assert.Equal("fully_funded", laptopBeforePurchase.GetProperty("status").GetString());
+
+        using (var futureRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/savings?asOf=2026-08-23", token))
+        {
+            var future = await (await fixture.Client.SendAsync(futureRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            var tripProjection = Purpose(future, trip);
+            Assert.Equal("behind", tripProjection.GetProperty("status").GetString());
+            Assert.Equal("2026-10-31", tripProjection.GetProperty("plannedFundingDate").GetString());
+            Assert.Equal("2026-11-30", tripProjection.GetProperty("revisedFundingDate").GetString());
+        }
+
+        var purchaseBody = new
+        {
+            idempotencyKey = "camera-and-laptop-purchase",
+            occurredOn = "2026-07-23",
+            description = "Equipment",
+            amountCents = 55_000,
+            funding = new object[]
+            {
+                new { source = "goal", purposeId = camera, amountCents = 30_000 },
+                new { source = "goal", purposeId = laptop, amountCents = 20_000 },
+                new { source = "ordinary", purposeId = (Guid?)null, amountCents = 5_000 },
+            },
+        };
+        await Post("/api/v1/budget/savings/purchases", purchaseBody, HttpStatusCode.Created);
+        await Post("/api/v1/budget/savings/purchases", purchaseBody, HttpStatusCode.OK);
+
+        var afterPurchase = await GetSavings();
+        Assert.Equal(35_000, afterPurchase.GetProperty("totalSavedCents").GetInt64());
+        Assert.Equal(30_000, Purpose(afterPurchase, camera).GetProperty("allocatedCents").GetInt64());
+        Assert.NotEqual("completed", Purpose(afterPurchase, camera).GetProperty("status").GetString());
+        Assert.Equal("completed", Purpose(afterPurchase, laptop).GetProperty("status").GetString());
+        var purchase = Assert.Single(afterPurchase.GetProperty("purchases").EnumerateArray());
+        Assert.Equal(55_000, purchase.GetProperty("amountCents").GetInt64());
+        Assert.Equal(55_000, purchase.GetProperty("funding").EnumerateArray()
+            .Sum(x => x.GetProperty("amountCents").GetInt64()));
+
+        using (var summaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token))
+        {
+            var summary = await (await fixture.Client.SendAsync(summaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(110_000, summary.GetProperty("ordinaryAvailableCents").GetInt64());
+        }
+        using (var timelineRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline", token))
+        {
+            var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            var purchaseEntry = Assert.Single(timeline.EnumerateArray(),
+                x => x.GetProperty("origin").GetString() == "goal_purchase");
+            Assert.Equal(55_000, purchaseEntry.GetProperty("amountCents").GetInt64());
+            Assert.Equal(-5_000, purchaseEntry.GetProperty("ordinaryImpactCents").GetInt64());
+        }
+
+        await Post("/api/v1/budget/savings/purchases", new
+        {
+            idempotencyKey = "overdraw-goal", occurredOn = "2026-07-23",
+            description = "Too expensive", amountCents = 30_001,
+            funding = new[] { new { source = "goal", purposeId = camera, amountCents = 30_001 } },
+        }, HttpStatusCode.UnprocessableEntity);
+
+        async Task<Guid> CreateGoal(object body)
+        {
+            var response = await Post("/api/v1/budget/savings/goals", body, HttpStatusCode.Created);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        }
+
+        async Task<HttpResponseMessage> Post(string path, object body, HttpStatusCode expected)
+        {
+            using var request = Authenticated(HttpMethod.Post, path, token);
+            request.Content = JsonContent.Create(body);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(expected, response.StatusCode);
+            return response;
+        }
+
+        async Task<JsonElement> GetSavings()
+        {
+            using var request = Authenticated(HttpMethod.Get, "/api/v1/budget/savings", token);
+            return await (await fixture.Client.SendAsync(request)).Content.ReadFromJsonAsync<JsonElement>();
+        }
+
+        static JsonElement Purpose(JsonElement projection, Guid id) =>
+            Assert.Single(projection.GetProperty("purposes").EnumerateArray(),
+                item => item.GetProperty("id").GetGuid() == id);
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

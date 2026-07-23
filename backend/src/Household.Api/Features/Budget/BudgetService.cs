@@ -55,7 +55,7 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
         var savingsContributionCents = await database.SavingsContributions.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id && x.Kind == BudgetValues.Contribution)
             .SumAsync(x => x.AmountCents, cancellationToken);
-        var savingsProjection = await new BudgetSavingsProjector(database).LoadAsync(ownerId, cancellationToken);
+        var savingsProjection = await new BudgetSavingsProjector(database).LoadAsync(ownerId, selectedDate, cancellationToken);
         var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
         var expectedIncome = (await new BudgetIncomePlanProjector(database).LoadAsync(
             ownerId, period.StartDate, period.EndDate, cancellationToken)).Occurrences.Sum(x => x.AmountCents);

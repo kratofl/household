@@ -339,6 +339,15 @@ export type SavingsProjection = {
     name: string
     archived: boolean
     allocatedCents: number
+    targetAmountCents: number | null
+    planningMode: "date" | "rate" | null
+    targetDate: string | null
+    plannedContributionCents: number | null
+    revisedContributionCents: number | null
+    plannedFundingDate: string | null
+    revisedFundingDate: string | null
+    status: "active" | "behind" | "fully_funded" | "completed"
+    contributionsPaused: boolean
   }>
   contributions: Array<{
     id: string
@@ -352,6 +361,19 @@ export type SavingsProjection = {
       purposeId: string
       mode: "fixed" | "percentage"
       requestedValue: number
+      amountCents: number
+    }>
+  }>
+  purchases: Array<{
+    id: string
+    ledgerEntryId: string
+    occurredOn: string
+    description: string
+    amountCents: number
+    status: "actual" | "voided" | "refunded" | "partially_refunded"
+    funding: Array<{
+      source: "goal" | "ordinary"
+      purposeId: string | null
       amountCents: number
     }>
   }>
