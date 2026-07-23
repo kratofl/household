@@ -117,6 +117,21 @@ public sealed class BudgetSavingsPurchaseFunding
     public DateTime CreatedAt { get; set; }
 }
 
+public sealed class BudgetInvestmentEvent
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid PeriodId { get; set; }
+    public string? IdempotencyKey { get; set; }
+    public string Kind { get; set; } = BudgetValues.Contribution;
+    public DateOnly OccurredOn { get; set; }
+    public string Description { get; set; } = "";
+    public long AmountCents { get; set; }
+    public string? Destination { get; set; }
+    public Guid? TargetPurposeId { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 public sealed class BudgetIncomePlan
 {
     public Guid Id { get; set; }
@@ -485,6 +500,8 @@ public static class BudgetValues
     public const string DateDriven = "date";
     public const string RateDriven = "rate";
     public const string Goal = "goal";
+    public const string Valuation = "valuation";
+    public const string Withdrawal = "withdrawal";
     public const string FixedBuffer = "fixed";
     public const string PercentageBuffer = "percentage";
     public const string Income = "income";
@@ -518,6 +535,11 @@ public sealed record BudgetSummary(
     long SavingsContributionCents,
     long TotalSavingsCents,
     long UnallocatedSavingsCents,
+    long InvestmentContributionCents,
+    long TotalInvestmentCents,
+    long InvestmentContributedCapitalCents,
+    long InvestmentGainCents,
+    long InvestmentGainBasisPoints,
     long ReservationCents,
     long MaximumOrdinaryCents,
     long OrdinaryAvailableCents,

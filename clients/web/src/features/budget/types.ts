@@ -93,6 +93,11 @@ export type BudgetSummary = {
   savingsContributionCents: number
   totalSavingsCents: number
   unallocatedSavingsCents: number
+  investmentContributionCents: number
+  totalInvestmentCents: number
+  investmentContributedCapitalCents: number
+  investmentGainCents: number
+  investmentGainBasisPoints: number
   reservationCents: number
   maximumOrdinaryCents: number
   ordinaryAvailableCents: number
@@ -143,7 +148,7 @@ export type BudgetLedgerEntryInput = {
 export type BudgetTimelineItem = {
   id: string
   entryType: "actual" | "expected"
-  kind: "income" | "expense" | "refund" | "savings"
+  kind: "income" | "expense" | "refund" | "savings" | "investment"
   status: "actual" | "expected" | "confirmed" | "automatically_posted" | "corrected" | "voided"
   occurredOn: string
   description: string
@@ -376,5 +381,23 @@ export type SavingsProjection = {
       purposeId: string | null
       amountCents: number
     }>
+  }>
+}
+
+export type InvestmentProjection = {
+  contributedCapitalCents: number
+  currentValueCents: number
+  withdrawnCents: number
+  gainCents: number
+  gainBasisPoints: number
+  latestValuationDate: string | null
+  events: Array<{
+    id: string
+    kind: "opening" | "contribution" | "valuation" | "withdrawal"
+    occurredOn: string
+    description: string
+    amountCents: number
+    destination: "buffer" | "savings" | "ordinary" | null
+    targetPurposeId: string | null
   }>
 }

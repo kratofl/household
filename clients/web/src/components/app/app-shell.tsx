@@ -70,6 +70,7 @@ import {
   createBudgetCategory,
   createCommitment,
   createIncomePlan,
+  createInvestmentEvent,
   createBudgetLedgerEntry,
   createSavingsContribution,
   createSavingsGoal,
@@ -84,6 +85,7 @@ import {
   loadBudgetTimeline,
   loadCommitments,
   loadIncomePlans,
+  loadInvestments,
   loadSavings,
   editIncomePlan,
   matchCommitmentOccurrence,
@@ -112,6 +114,7 @@ import type {
   ExpectedIncomeOccurrence,
   IncomePlan,
   IncomePlanProjection,
+  InvestmentProjection,
   SavingsProjection,
 } from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
@@ -1225,6 +1228,13 @@ function BudgetPanel(props: {
     purposeId: string
     amount: string
   }>>([{ source: "goal", purposeId: "", amount: "" }])
+  const [investments, setInvestments] = useState<InvestmentProjection | null>(null)
+  const [investmentKind, setInvestmentKind] = useState<"opening" | "contribution" | "valuation" | "withdrawal">("contribution")
+  const [investmentDescription, setInvestmentDescription] = useState("")
+  const [investmentAmount, setInvestmentAmount] = useState("")
+  const [investmentDate, setInvestmentDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [investmentDestination, setInvestmentDestination] = useState<"buffer" | "savings" | "ordinary">("buffer")
+  const [investmentTargetPurposeId, setInvestmentTargetPurposeId] = useState("")
   const [initialIncomeName, setInitialIncomeName] = useState("")
   const [initialIncomeAmount, setInitialIncomeAmount] = useState("")
   const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
@@ -1336,6 +1346,11 @@ function BudgetPanel(props: {
     })))
   }, [accessToken])
 
+  const loadInvestmentState = useCallback(async () => {
+    if (!accessToken) return
+    setInvestments(await loadInvestments(accessToken))
+  }, [accessToken])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1390,10 +1405,11 @@ function BudgetPanel(props: {
   useEffect(() => {
     if (!accessToken || selectedBudgetView !== "saving") return
     const timer = window.setTimeout(() => {
-      void loadSavingsState().catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
+      void Promise.all([loadSavingsState(), loadInvestmentState()])
+        .catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [accessToken, loadSavingsState, selectedBudgetView, t])
+  }, [accessToken, loadInvestmentState, loadSavingsState, selectedBudgetView, t])
 
   const createTransaction = async () => {
     if (!accessToken) return
@@ -1954,6 +1970,42 @@ function BudgetPanel(props: {
     }
   }
 
+  const saveInvestmentEvent = async () => {
+    if (!accessToken) return
+    const amountCents = parseEuroCents(investmentAmount)
+    if (amountCents === null || investmentKind !== "valuation" && amountCents <= 0 ||
+        !investmentDate || !investmentDescription.trim() ||
+        investmentKind === "withdrawal" && investmentDestination === "savings" && !investmentTargetPurposeId) {
+      setError(t("budget.investmentValidation"))
+      return
+    }
+    const endpoint = investmentKind === "opening" ? "opening-values" :
+      investmentKind === "contribution" ? "contributions" :
+      investmentKind === "valuation" ? "valuations" : "withdrawals"
+    setSaving(true)
+    try {
+      await createInvestmentEvent(accessToken, endpoint, {
+        idempotencyKey: investmentKind === "contribution" || investmentKind === "withdrawal"
+          ? crypto.randomUUID()
+          : undefined,
+        occurredOn: investmentDate,
+        description: investmentDescription.trim(),
+        amountCents,
+        destination: investmentKind === "withdrawal" ? investmentDestination : undefined,
+        targetPurposeId: investmentKind === "withdrawal" && investmentDestination === "savings"
+          ? investmentTargetPurposeId
+          : undefined,
+      })
+      setInvestmentDescription("")
+      setInvestmentAmount("")
+      await Promise.all([loadInvestmentState(), loadSavingsState(), loadSummary(), loadTimeline()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const selectTimelineItem = async (item: BudgetTimelineItem) => {
     setSelectedTimeline(item)
     setTimelineAction(null)
@@ -2286,6 +2338,7 @@ function BudgetPanel(props: {
                       { value: "expense", label: t("budget.expense") },
                       { value: "refund", label: t("budget.refund") },
                       { value: "savings", label: t("budget.savingsContribution") },
+                      { value: "investment", label: t("budget.investment") },
                     ]}
                   />
                   <FormSelect
@@ -3205,6 +3258,82 @@ function BudgetPanel(props: {
                           </p>
                         </div>
                         <span>{currency(contribution.amountCents)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.investmentTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.investmentDescription")}</p>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <Metric label={t("budget.investmentValue")} value={currency(investments?.currentValueCents ?? 0)} />
+                    <Metric label={t("budget.contributedCapital")} value={currency(investments?.contributedCapitalCents ?? 0)} />
+                    <Metric label={t("budget.investmentGain")} value={currency(investments?.gainCents ?? 0)} />
+                    <Metric
+                      label={t("budget.investmentReturn")}
+                      value={new Intl.NumberFormat(locale, {
+                        style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2,
+                      }).format((investments?.gainBasisPoints ?? 0) / 10_000)}
+                    />
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <FormSelect
+                      value={investmentKind}
+                      onValueChange={(value) => setInvestmentKind(value as typeof investmentKind)}
+                      options={[
+                        { value: "opening", label: t("budget.investmentOpening") },
+                        { value: "contribution", label: t("budget.investmentContribution") },
+                        { value: "valuation", label: t("budget.investmentValuation") },
+                        { value: "withdrawal", label: t("budget.investmentWithdrawal") },
+                      ]}
+                    />
+                    <Input type="date" value={investmentDate} onChange={(event) => setInvestmentDate(event.target.value)} aria-label={t("budget.date")} />
+                    <Input value={investmentDescription} onChange={(event) => setInvestmentDescription(event.target.value)} placeholder={t("budget.description")} />
+                    <Input inputMode="decimal" value={investmentAmount} onChange={(event) => setInvestmentAmount(event.target.value)} placeholder={t("budget.amount")} />
+                  </div>
+                  {investmentKind === "withdrawal" ? (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <FormSelect
+                        value={investmentDestination}
+                        onValueChange={(value) => setInvestmentDestination(value as typeof investmentDestination)}
+                        options={[
+                          { value: "buffer", label: t("budget.withdrawalToBuffer") },
+                          { value: "savings", label: t("budget.withdrawalToSavings") },
+                          { value: "ordinary", label: t("budget.withdrawalToOrdinary") },
+                        ]}
+                      />
+                      {investmentDestination === "savings" ? (
+                        <FormSelect
+                          value={investmentTargetPurposeId}
+                          onValueChange={setInvestmentTargetPurposeId}
+                          options={[
+                            { value: "", label: t("budget.selectSavingsGoal") },
+                            ...(savings?.purposes ?? []).filter((purpose) => !purpose.archived && purpose.status !== "completed")
+                              .map((purpose) => ({ value: purpose.id, label: purpose.name })),
+                          ]}
+                        />
+                      ) : <div />}
+                    </div>
+                  ) : null}
+                  <div className="mt-4 flex justify-end">
+                    <Button onClick={saveInvestmentEvent} disabled={saving}>{t("budget.saveInvestmentEvent")}</Button>
+                  </div>
+                  <div className="mt-4 grid gap-2">
+                    {(investments?.events ?? []).map((event) => (
+                      <div key={event.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm">
+                        <div>
+                          <p className="font-medium">{event.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {event.occurredOn} · {t(
+                              event.kind === "opening" ? "budget.investmentOpening" :
+                              event.kind === "contribution" ? "budget.investmentContribution" :
+                              event.kind === "valuation" ? "budget.investmentValuation" :
+                              "budget.investmentWithdrawal",
+                            )}
+                            {event.destination ? ` · ${event.destination}` : ""}
+                          </p>
+                        </div>
+                        <span>{currency(event.amountCents)}</span>
                       </div>
                     ))}
                   </div>

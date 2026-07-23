@@ -207,6 +207,17 @@ public static class BudgetLedgerEndpoints
                 x.Description, x.AmountCents, x.Kind == BudgetValues.Contribution ? -x.AmountCents : 0,
                 null, "", null, x.Kind == BudgetValues.Contribution ? "savings_contribution" : "savings_opening", []))
             .ToList();
+        var investmentRows = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == user.Id && (!periodId.HasValue || x.PeriodId == periodId))
+            .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt).Take(500)
+            .ToListAsync(cancellationToken);
+        var investmentEvents = investmentRows.Select(x => new BudgetTimelineItem(
+                x.Id.ToString(), "actual", BudgetValues.Investment, "actual", x.OccurredOn,
+                x.Description, x.AmountCents,
+                x.Kind == BudgetValues.Contribution ? -x.AmountCents :
+                x.Kind == BudgetValues.Withdrawal && x.Destination == BudgetValues.Ordinary ? x.AmountCents : 0,
+                null, "", null, $"investment_{x.Kind}", []))
+            .ToList();
 
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         var (currentPeriod, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, today, cancellationToken);
@@ -241,7 +252,7 @@ public static class BudgetLedgerEndpoints
                 .Occurrences.Select(x => new BudgetTimelineItem(
                     x.Id, "expected", BudgetValues.Expense, x.Status, x.OccurredOn,
                     x.Name, x.AmountCents, -x.AmountCents, x.CategoryId, "", null, "commitment_plan", [])).ToList();
-        var result = actual.Concat(savingsFunding).Concat(expectedExpenses).Concat(expectedIncome).Concat(expectedCommitments).Where(item =>
+        var result = actual.Concat(savingsFunding).Concat(investmentEvents).Concat(expectedExpenses).Concat(expectedIncome).Concat(expectedCommitments).Where(item =>
                 (string.IsNullOrWhiteSpace(query) || item.Description.Contains(query, StringComparison.OrdinalIgnoreCase) || item.Merchant.Contains(query, StringComparison.OrdinalIgnoreCase)) &&
                 (string.IsNullOrWhiteSpace(status) || item.Status == status) &&
                 (string.IsNullOrWhiteSpace(kind) || item.Kind == kind) &&

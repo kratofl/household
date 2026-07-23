@@ -14,6 +14,7 @@ import type {
   CommitmentProjection,
   IncomePlanInput,
   IncomePlanProjection,
+  InvestmentProjection,
   PlannedExpenseInput,
   SavingsProjection,
 } from "./types"
@@ -184,4 +185,16 @@ export function createSavingsOpeningValue(accessToken: string, body: unknown) {
 
 export function createSavingsPurchase(accessToken: string, body: unknown) {
   return apiRequest("/budget/savings/purchases", { method: "POST", accessToken, body })
+}
+
+export function loadInvestments(accessToken: string) {
+  return apiRequest<InvestmentProjection>("/budget/investments", { accessToken })
+}
+
+export function createInvestmentEvent(
+  accessToken: string,
+  kind: "opening-values" | "contributions" | "valuations" | "withdrawals",
+  body: unknown,
+) {
+  return apiRequest(`/budget/investments/${kind}`, { method: "POST", accessToken, body })
 }

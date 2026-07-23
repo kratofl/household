@@ -46,11 +46,20 @@ public sealed class BudgetSavingsProjector(BudgetDbContext database)
             .ToList();
         var incomingAllocated = contributions.SelectMany(x => x.Allocations)
             .GroupBy(x => x.PurposeId).ToDictionary(x => x.Key, x => x.Sum(y => y.AmountCents));
+        var investmentWithdrawals = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Withdrawal &&
+                        x.Destination == BudgetValues.Savings && x.TargetPurposeId.HasValue &&
+                        x.OccurredOn <= asOf)
+            .GroupBy(x => x.TargetPurposeId!.Value)
+            .Select(x => new { PurposeId = x.Key, Amount = x.Sum(y => y.AmountCents) })
+            .ToDictionaryAsync(x => x.PurposeId, x => x.Amount, cancellationToken);
         var consumedByPurpose = consumedFunding.Where(x => x.Source == BudgetValues.Goal && x.PurposeId.HasValue)
             .GroupBy(x => x.PurposeId!.Value).ToDictionary(x => x.Key, x => x.Sum(y => y.AmountCents));
         var balances = purposes.ToDictionary(
             x => x.Id,
-            x => checked(incomingAllocated.GetValueOrDefault(x.Id) - consumedByPurpose.GetValueOrDefault(x.Id)));
+            x => checked(incomingAllocated.GetValueOrDefault(x.Id) +
+                         investmentWithdrawals.GetValueOrDefault(x.Id) -
+                         consumedByPurpose.GetValueOrDefault(x.Id)));
 
         var opening = await database.OpeningAllocations.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Savings && x.OccurredOn <= asOf)
@@ -67,7 +76,8 @@ public sealed class BudgetSavingsProjector(BudgetDbContext database)
             .SumAsync(cancellationToken);
         var externalUnallocated = checked(opening + routedIncome + closeDispositions);
         var consumedSavings = consumedFunding.Where(x => x.Source == BudgetValues.Goal).Sum(x => x.AmountCents);
-        var total = checked(contributions.Sum(x => x.AmountCents) + externalUnallocated - consumedSavings);
+        var total = checked(contributions.Sum(x => x.AmountCents) + externalUnallocated +
+                            investmentWithdrawals.Values.Sum() - consumedSavings);
         var preferredStartDay = await database.Settings.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId)
             .Select(x => (int?)x.PreferredPeriodStartDay)

@@ -1171,6 +1171,119 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
                 item => item.GetProperty("id").GetGuid() == id);
     }
 
+    [Fact]
+    public async Task Investments_keep_capital_valuations_and_routed_withdrawals_distinct()
+    {
+        const string token = LegacyParityFixture.InvestmentsAccessToken;
+        await Post("/api/v1/budget/ledger/entries", new
+        {
+            kind = "income", occurredOn = "2026-07-23", description = "Salary", amountCents = 100_000,
+        }, HttpStatusCode.Created);
+        var goalResponse = await Post("/api/v1/budget/savings/goals", new
+        {
+            name = "Future home", targetAmountCents = 100_000,
+            planningMode = "rate", recurringContributionCents = 10_000,
+        }, HttpStatusCode.Created);
+        var goalId = (await goalResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        await Post("/api/v1/budget/investments/opening-values", new
+        {
+            occurredOn = "2026-07-01", description = "Existing portfolio", amountCents = 20_000,
+        }, HttpStatusCode.Created);
+        var contribution = new
+        {
+            idempotencyKey = "investment-contribution", occurredOn = "2026-07-23",
+            description = "ETF contribution", amountCents = 30_000,
+        };
+        await Post("/api/v1/budget/investments/contributions", contribution, HttpStatusCode.Created);
+        await Post("/api/v1/budget/investments/contributions", contribution, HttpStatusCode.OK);
+        await Post("/api/v1/budget/investments/valuations", new
+        {
+            occurredOn = "2026-07-23", description = "Broker statement", amountCents = 70_000,
+        }, HttpStatusCode.Created);
+
+        var valued = await GetInvestment();
+        Assert.Equal(50_000, valued.GetProperty("contributedCapitalCents").GetInt64());
+        Assert.Equal(70_000, valued.GetProperty("currentValueCents").GetInt64());
+        Assert.Equal(20_000, valued.GetProperty("gainCents").GetInt64());
+        Assert.Equal(4_000, valued.GetProperty("gainBasisPoints").GetInt64());
+        using (var summaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token))
+        {
+            var summary = await (await fixture.Client.SendAsync(summaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(70_000, summary.GetProperty("ordinaryAvailableCents").GetInt64());
+        }
+
+        await Post("/api/v1/budget/investments/withdrawals", new
+        {
+            idempotencyKey = "withdraw-buffer", occurredOn = "2026-07-23",
+            description = "Safe default", amountCents = 10_000,
+        }, HttpStatusCode.Created);
+        await Post("/api/v1/budget/investments/withdrawals", new
+        {
+            idempotencyKey = "withdraw-goal", occurredOn = "2026-07-23",
+            description = "Route to home", amountCents = 5_000,
+            destination = "savings", targetPurposeId = goalId,
+        }, HttpStatusCode.Created);
+        await Post("/api/v1/budget/investments/withdrawals", new
+        {
+            idempotencyKey = "withdraw-ordinary", occurredOn = "2026-07-23",
+            description = "Release cash", amountCents = 5_000, destination = "ordinary",
+        }, HttpStatusCode.Created);
+
+        var after = await GetInvestment();
+        Assert.Equal(50_000, after.GetProperty("currentValueCents").GetInt64());
+        Assert.Equal(20_000, after.GetProperty("withdrawnCents").GetInt64());
+        Assert.Equal(20_000, after.GetProperty("gainCents").GetInt64());
+        Assert.Equal(4_000, after.GetProperty("gainBasisPoints").GetInt64());
+        Assert.Equal(4, after.GetProperty("events").EnumerateArray()
+            .Select(x => x.GetProperty("kind").GetString()).Distinct().Count());
+
+        using (var savingsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/savings", token))
+        {
+            var savings = await (await fixture.Client.SendAsync(savingsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(5_000, savings.GetProperty("totalSavedCents").GetInt64());
+            Assert.Equal(5_000, Assert.Single(savings.GetProperty("purposes").EnumerateArray(),
+                x => x.GetProperty("id").GetGuid() == goalId).GetProperty("allocatedCents").GetInt64());
+        }
+        using (var summaryRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token))
+        {
+            var summary = await (await fixture.Client.SendAsync(summaryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(75_000, summary.GetProperty("ordinaryAvailableCents").GetInt64());
+            Assert.Equal(10_000, summary.GetProperty("protectedBufferCents").GetInt64());
+            Assert.Equal(50_000, summary.GetProperty("totalInvestmentCents").GetInt64());
+        }
+        using (var timelineRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/timeline?kind=investment", token))
+        {
+            var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Contains(timeline.EnumerateArray(), x =>
+                x.GetProperty("origin").GetString() == "investment_valuation" &&
+                x.GetProperty("ordinaryImpactCents").GetInt64() == 0);
+            Assert.Contains(timeline.EnumerateArray(), x =>
+                x.GetProperty("origin").GetString() == "investment_withdrawal" &&
+                x.GetProperty("ordinaryImpactCents").GetInt64() == 5_000);
+        }
+        await Post("/api/v1/budget/investments/withdrawals", new
+        {
+            idempotencyKey = "withdraw-too-much", occurredOn = "2026-07-23",
+            description = "Overdraw", amountCents = 50_001,
+        }, HttpStatusCode.UnprocessableEntity);
+
+        async Task<JsonElement> GetInvestment()
+        {
+            using var request = Authenticated(HttpMethod.Get, "/api/v1/budget/investments", token);
+            return await (await fixture.Client.SendAsync(request)).Content.ReadFromJsonAsync<JsonElement>();
+        }
+
+        async Task<HttpResponseMessage> Post(string path, object body, HttpStatusCode expected)
+        {
+            using var request = Authenticated(HttpMethod.Post, path, token);
+            request.Content = JsonContent.Create(body);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(expected, response.StatusCode);
+            return response;
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

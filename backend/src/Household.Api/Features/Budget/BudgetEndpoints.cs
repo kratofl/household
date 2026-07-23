@@ -17,6 +17,7 @@ public static partial class BudgetEndpoints
         budget.MapBudgetCommitmentEndpoints();
         budget.MapBudgetPeriodCloseEndpoints();
         budget.MapBudgetSavingsEndpoints();
+        budget.MapBudgetInvestmentEndpoints();
         budget.MapGet("/healthz", () => Results.NoContent());
         budget.MapGet("/summary", Summary);
         budget.MapGet("/periods/current", GetCurrentPeriod);

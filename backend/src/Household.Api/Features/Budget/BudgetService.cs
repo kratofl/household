@@ -56,6 +56,19 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id && x.Kind == BudgetValues.Contribution)
             .SumAsync(x => x.AmountCents, cancellationToken);
         var savingsProjection = await new BudgetSavingsProjector(database).LoadAsync(ownerId, selectedDate, cancellationToken);
+        var investmentContributionCents = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id && x.Kind == BudgetValues.Contribution)
+            .SumAsync(x => x.AmountCents, cancellationToken);
+        var ordinaryInvestmentWithdrawals = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id &&
+                        x.Kind == BudgetValues.Withdrawal && x.Destination == BudgetValues.Ordinary)
+            .SumAsync(x => x.AmountCents, cancellationToken);
+        var bufferInvestmentWithdrawals = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id &&
+                        x.Kind == BudgetValues.Withdrawal && x.Destination == BudgetValues.Buffer)
+            .SumAsync(x => x.AmountCents, cancellationToken);
+        var investmentProjection = await new BudgetInvestmentProjector(database).LoadAsync(
+            ownerId, selectedDate, cancellationToken);
         var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
         var expectedIncome = (await new BudgetIncomePlanProjector(database).LoadAsync(
             ownerId, period.StartDate, period.EndDate, cancellationToken)).Occurrences.Sum(x => x.AmountCents);
@@ -73,7 +86,7 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             settings?.BufferPercentageBasisPoints ?? 0,
             varianceAllocations.GetValueOrDefault(BudgetValues.Buffer),
             checked(varianceAllocations.GetValueOrDefault(BudgetValues.Savings) + savingsContributionCents),
-            varianceAllocations.GetValueOrDefault(BudgetValues.Investment),
+            checked(varianceAllocations.GetValueOrDefault(BudgetValues.Investment) + investmentContributionCents),
             reservationCents);
         var forecastBufferTarget = settings?.BufferRule == BudgetValues.PercentageBuffer
             ? checked(expectedIncome * (settings?.BufferPercentageBasisPoints ?? 0) / 10_000)
@@ -91,7 +104,8 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
                     x.OwnerUserId == ownerId && x.Kind == BudgetValues.Buffer && x.OccurredOn <= period.EndDate)
                 .SumAsync(x => x.AmountCents, cancellationToken)
             : 0;
-        var accumulatedBuffer = priorClose?.RetainedBufferCents ?? openingBuffer;
+        var accumulatedBuffer = checked((priorClose?.RetainedBufferCents ?? openingBuffer) +
+                                        bufferInvestmentWithdrawals);
         var deficitCarryover = priorClose?.CarriedDeficitCents ?? 0;
         var releasedOrdinary = priorClose?.Disposition == BudgetValues.Ordinary
             ? priorClose.DispositionAmountCents
@@ -100,8 +114,10 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             ?? checked(accumulatedBuffer + availability.FundedBufferCents);
         var maximumOrdinary = Math.Max(
             0,
-            checked(availability.MaximumOrdinaryCents - deficitCarryover + releasedOrdinary));
-        var ordinaryAvailable = checked(availability.OrdinaryAvailableCents - deficitCarryover + releasedOrdinary);
+            checked(availability.MaximumOrdinaryCents - deficitCarryover + releasedOrdinary +
+                    ordinaryInvestmentWithdrawals));
+        var ordinaryAvailable = checked(availability.OrdinaryAvailableCents - deficitCarryover + releasedOrdinary +
+                                        ordinaryInvestmentWithdrawals);
         var plannedSummaries = planned.Select(item => new PlannedExpenseSummary(
             item.Id, item.OwnerUserId, item.AccountId, item.CategoryId, item.Name, item.Kind, item.Cadence,
             item.AmountCents, item.DueDay, item.DueMonth, item.IncludeInLimit, item.Active,
@@ -113,6 +129,9 @@ public sealed class BudgetService(BudgetDbContext database, TimeProvider timePro
             availability.FundedBufferCents, availability.BufferShortfallCents,
             currentClose?.RetainedBufferCents ?? accumulatedBuffer, protectedBuffer, deficitCarryover,
             savingsContributionCents, savingsProjection.TotalSavedCents, savingsProjection.UnallocatedCents,
+            investmentContributionCents, investmentProjection.CurrentValueCents,
+            investmentProjection.ContributedCapitalCents, investmentProjection.GainCents,
+            investmentProjection.GainBasisPoints,
             reservationCents, maximumOrdinary, ordinaryAvailable, ledgerEntries);
     }
 
