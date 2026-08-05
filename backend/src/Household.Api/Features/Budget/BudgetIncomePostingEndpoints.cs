@@ -65,8 +65,13 @@ public static class BudgetIncomePostingEndpoints
         var posted = 0;
         var alreadyPosted = 0;
         foreach (var occurrence in projection.Occurrences.Where(
-                     x => x.Status == "expected" && x.OccurredOn <= end && automaticVersions.Contains(x.VersionId)))
+                     x => x.OccurredOn <= end && automaticVersions.Contains(x.VersionId)))
         {
+            if (occurrence.Status != "expected")
+            {
+                alreadyPosted++;
+                continue;
+            }
             var result = await service.ConfirmAsync(
                 user.Id, occurrence, occurrence.OccurredOn, occurrence.AmountCents,
                 BudgetValues.Automatic, null, cancellationToken);

@@ -1360,6 +1360,352 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Reminder_settings_are_saved_per_plan_and_reject_foreign_series()
+    {
+        const string token = LegacyParityFixture.ReminderSettingsAccessToken;
+        using var defaultsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var defaults = await (await fixture.Client.SendAsync(defaultsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var categoryId = defaults.GetProperty("categories")[0].GetProperty("id").GetGuid();
+        var incomeSeries = await CreateIncomePlan("Reminder salary", "2026-07-23");
+        var commitmentSeries = await CreateCommitment("Reminder rent", "2026-07-31");
+
+        var incomeSetting = await (await Put($"/api/v1/budget/reminders/settings/income/{incomeSeries}",
+            new { dueEnabled = true, overdueEnabled = true }, HttpStatusCode.OK)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("income", incomeSetting.GetProperty("planKind").GetString());
+        Assert.Equal(incomeSeries, incomeSetting.GetProperty("seriesId").GetGuid());
+        Assert.True(incomeSetting.GetProperty("dueEnabled").GetBoolean());
+        Assert.True(incomeSetting.GetProperty("overdueEnabled").GetBoolean());
+        _ = await Put($"/api/v1/budget/reminders/settings/commitment/{commitmentSeries}",
+            new { dueEnabled = true, overdueEnabled = true }, HttpStatusCode.OK);
+
+        using (var listRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/reminders/settings", token))
+        {
+            var settings = await (await fixture.Client.SendAsync(listRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2, settings.GetArrayLength());
+            Assert.Equal("commitment", settings[0].GetProperty("planKind").GetString());
+            Assert.Equal(commitmentSeries, settings[0].GetProperty("seriesId").GetGuid());
+            Assert.Equal("income", settings[1].GetProperty("planKind").GetString());
+            Assert.Equal(incomeSeries, settings[1].GetProperty("seriesId").GetGuid());
+        }
+
+        _ = await Put($"/api/v1/budget/reminders/settings/income/{incomeSeries}",
+            new { dueEnabled = false, overdueEnabled = false }, HttpStatusCode.OK);
+        using (var listRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/reminders/settings", token))
+        {
+            var settings = await (await fixture.Client.SendAsync(listRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(2, settings.GetArrayLength());
+            var income = Assert.Single(settings.EnumerateArray(),
+                x => x.GetProperty("planKind").GetString() == "income");
+            Assert.False(income.GetProperty("dueEnabled").GetBoolean());
+            Assert.False(income.GetProperty("overdueEnabled").GetBoolean());
+        }
+
+        var unknownResponse = await Put($"/api/v1/budget/reminders/settings/income/{Guid.NewGuid()}",
+            new { dueEnabled = true, overdueEnabled = true }, HttpStatusCode.NotFound);
+        var unknown = await unknownResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Recurring plan was not found", unknown.GetProperty("detail").GetString());
+        _ = await Put($"/api/v1/budget/reminders/settings/expense/{incomeSeries}",
+            new { dueEnabled = true, overdueEnabled = true }, HttpStatusCode.NotFound);
+
+        using (var intruderPut = Authenticated(HttpMethod.Put,
+                   $"/api/v1/budget/reminders/settings/income/{incomeSeries}",
+                   LegacyParityFixture.ReminderIntruderAccessToken))
+        {
+            intruderPut.Content = JsonContent.Create(new { dueEnabled = true, overdueEnabled = true });
+            Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.SendAsync(intruderPut)).StatusCode);
+        }
+        using (var intruderList = Authenticated(HttpMethod.Get, "/api/v1/budget/reminders/settings",
+                   LegacyParityFixture.ReminderIntruderAccessToken))
+        {
+            var settings = await (await fixture.Client.SendAsync(intruderList)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(0, settings.GetArrayLength());
+        }
+
+        using (var anonymousPut = new HttpRequestMessage(
+                   HttpMethod.Put, $"/api/v1/budget/reminders/settings/income/{incomeSeries}"))
+        {
+            anonymousPut.Content = JsonContent.Create(new { dueEnabled = true, overdueEnabled = true });
+            Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Client.SendAsync(anonymousPut)).StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await fixture.Client.GetAsync("/api/v1/budget/reminders/settings")).StatusCode);
+
+        async Task<HttpResponseMessage> Put(string path, object body, HttpStatusCode expected)
+        {
+            using var request = Authenticated(HttpMethod.Put, path, token);
+            request.Content = JsonContent.Create(body);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(expected, response.StatusCode);
+            return response;
+        }
+
+        async Task<Guid> CreateIncomePlan(string name, string startDate)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans", token);
+            request.Content = JsonContent.Create(new
+            {
+                name, amountCents = 100_000, cadence = "monthly", intervalCount = 1, startDate,
+                automaticPosting = false,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var plan = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return plan.GetProperty("seriesId").GetGuid();
+        }
+
+        async Task<Guid> CreateCommitment(string name, string startDate)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments", token);
+            request.Content = JsonContent.Create(new
+            {
+                categoryId, kind = "fixed_cost", name, amountCents = 80_000, cadence = "monthly",
+                intervalCount = 1, startDate, budgetingMode = "due_period", automaticPosting = false,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var plan = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return plan.GetProperty("seriesId").GetGuid();
+        }
+    }
+
+    [Fact]
+    public async Task Reminders_surface_due_and_overdue_only_for_enabled_manual_plans()
+    {
+        const string token = LegacyParityFixture.ReminderAccessToken;
+        using var defaultsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var defaults = await (await fixture.Client.SendAsync(defaultsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var categoryId = defaults.GetProperty("categories")[0].GetProperty("id").GetGuid();
+
+        var dueToday = await CreateIncomePlan("Salary due today", 100_000, false, "2026-07-23");
+        var overdueDisabled = await CreateIncomePlan("Missed payout", 50_000, false, "2026-07-18");
+        var future = await CreateIncomePlan("Future bonus", 25_000, false, "2026-08-01");
+        var automatic = await CreateIncomePlan("Automated stipend", 10_000, true, "2026-07-23");
+        _ = await CreateIncomePlan("Unwatched payout", 5_000, false, "2026-07-21");
+        var overdueCommitment = await CreateCommitment("Overdue rent", 80_000, "2026-07-20");
+
+        await SaveSetting("income", dueToday, true, false);
+        await SaveSetting("income", overdueDisabled, true, false);
+        await SaveSetting("income", future, true, true);
+        await SaveSetting("income", automatic, true, true);
+        await SaveSetting("commitment", overdueCommitment, true, true);
+
+        var reminders = await ListReminders(null);
+        Assert.Equal(2, reminders.GetArrayLength());
+        Assert.Equal($"commitment:commitment:{overdueCommitment}:2026-07-20:overdue",
+            reminders[0].GetProperty("id").GetString());
+        Assert.Equal("overdue", reminders[0].GetProperty("kind").GetString());
+        Assert.Equal("2026-07-20", reminders[0].GetProperty("dueOn").GetString());
+        Assert.Equal("Overdue rent", reminders[0].GetProperty("name").GetString());
+        Assert.Equal(80_000, reminders[0].GetProperty("amountCents").GetInt64());
+        Assert.Equal($"income:income:{dueToday}:2026-07-23:due", reminders[1].GetProperty("id").GetString());
+        Assert.Equal("due", reminders[1].GetProperty("kind").GetString());
+        Assert.Equal("2026-07-23", reminders[1].GetProperty("dueOn").GetString());
+        Assert.Equal($"income:{dueToday}:2026-07-23", reminders[1].GetProperty("occurrenceId").GetString());
+        Assert.Equal("Salary due today", reminders[1].GetProperty("name").GetString());
+
+        var reclassified = await ListReminders("2026-07-20");
+        var commitmentDue = Assert.Single(reclassified.EnumerateArray());
+        Assert.Equal("due", commitmentDue.GetProperty("kind").GetString());
+        Assert.Equal(overdueCommitment, commitmentDue.GetProperty("seriesId").GetGuid());
+
+        foreach (var invalid in new[] { "20.07.2026", "2026-7-2" })
+        {
+            using var invalidRequest = Authenticated(HttpMethod.Get, $"/api/v1/budget/reminders?asOf={invalid}", token);
+            var invalidResponse = await fixture.Client.SendAsync(invalidRequest);
+            Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+            var problem = await invalidResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("asOf must use YYYY-MM-DD", problem.GetProperty("detail").GetString());
+        }
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await fixture.Client.GetAsync("/api/v1/budget/reminders")).StatusCode);
+        using (var intruderRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/reminders",
+                   LegacyParityFixture.ReminderIntruderAccessToken))
+        {
+            var intruderReminders = await (await fixture.Client.SendAsync(intruderRequest))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(0, intruderReminders.GetArrayLength());
+        }
+
+        using (var confirm = Authenticated(HttpMethod.Post,
+                   $"/api/v1/budget/income-plans/{dueToday}/occurrences/2026-07-23/confirm", token))
+        {
+            confirm.Content = JsonContent.Create(new { actualOn = "2026-07-23", actualAmountCents = 100_000 });
+            Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(confirm)).StatusCode);
+        }
+        var remaining = await ListReminders(null);
+        var lastReminder = Assert.Single(remaining.EnumerateArray());
+        Assert.Equal("overdue", lastReminder.GetProperty("kind").GetString());
+        Assert.Equal(overdueCommitment, lastReminder.GetProperty("seriesId").GetGuid());
+
+        async Task<Guid> CreateIncomePlan(string name, long amountCents, bool automaticPosting, string startDate)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans", token);
+            request.Content = JsonContent.Create(new
+            {
+                name, amountCents, cadence = "monthly", intervalCount = 1, startDate, automaticPosting,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var plan = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return plan.GetProperty("seriesId").GetGuid();
+        }
+
+        async Task<Guid> CreateCommitment(string name, long amountCents, string startDate)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments", token);
+            request.Content = JsonContent.Create(new
+            {
+                categoryId, kind = "fixed_cost", name, amountCents, cadence = "monthly",
+                intervalCount = 1, startDate, budgetingMode = "due_period", automaticPosting = false,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            var plan = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return plan.GetProperty("seriesId").GetGuid();
+        }
+
+        async Task SaveSetting(string planKind, Guid seriesId, bool dueEnabled, bool overdueEnabled)
+        {
+            using var request = Authenticated(
+                HttpMethod.Put, $"/api/v1/budget/reminders/settings/{planKind}/{seriesId}", token);
+            request.Content = JsonContent.Create(new { dueEnabled, overdueEnabled });
+            Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(request)).StatusCode);
+        }
+
+        async Task<JsonElement> ListReminders(string? asOf)
+        {
+            var path = asOf is null ? "/api/v1/budget/reminders" : $"/api/v1/budget/reminders?asOf={asOf}";
+            using var request = Authenticated(HttpMethod.Get, path, token);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+    }
+
+    [Fact]
+    public async Task Automation_runs_are_deterministic_and_idempotent_with_stable_ledger_counts()
+    {
+        const string token = LegacyParityFixture.AutomationAccessToken;
+        using var defaultsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/summary", token);
+        var defaults = await (await fixture.Client.SendAsync(defaultsRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var categoryId = defaults.GetProperty("categories")[0].GetProperty("id").GetGuid();
+
+        using var incomePlanRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans", token);
+        incomePlanRequest.Content = JsonContent.Create(new
+        {
+            name = "Automated payout", amountCents = 1_000, cadence = "daily", intervalCount = 1,
+            startDate = "2026-07-19", automaticPosting = true,
+        });
+        var incomePlanResponse = await fixture.Client.SendAsync(incomePlanRequest);
+        Assert.Equal(HttpStatusCode.Created, incomePlanResponse.StatusCode);
+        var incomeSeries = (await incomePlanResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("seriesId").GetGuid();
+        using var commitmentRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments", token);
+        commitmentRequest.Content = JsonContent.Create(new
+        {
+            categoryId, kind = "fixed_cost", name = "Automated utility", amountCents = 2_000,
+            cadence = "monthly", intervalCount = 1, startDate = "2026-07-23",
+            budgetingMode = "due_period", automaticPosting = true,
+        });
+        var commitmentResponse = await fixture.Client.SendAsync(commitmentRequest);
+        Assert.Equal(HttpStatusCode.Created, commitmentResponse.StatusCode);
+        var commitmentSeries = (await commitmentResponse.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("seriesId").GetGuid();
+
+        const string incomeAutoPostPath = "/api/v1/budget/income-plans/auto-post?from=2026-07-19&through=2026-07-21";
+        var firstRun = await AutoPost(incomeAutoPostPath);
+        Assert.Equal(3, firstRun.GetProperty("posted").GetInt32());
+        Assert.Equal(0, firstRun.GetProperty("alreadyPosted").GetInt32());
+        var retryRun = await AutoPost(incomeAutoPostPath);
+        Assert.Equal(0, retryRun.GetProperty("posted").GetInt32());
+        Assert.Equal(3, retryRun.GetProperty("alreadyPosted").GetInt32());
+        Assert.Equal(3, await CountLedgerEntries("income_automatic"));
+
+        const string commitmentAutoPostPath = "/api/v1/budget/commitments/auto-post?from=2026-07-23&through=2026-07-23";
+        var commitmentRun = await AutoPost(commitmentAutoPostPath);
+        Assert.Equal(1, commitmentRun.GetProperty("posted").GetInt32());
+        Assert.Equal(0, commitmentRun.GetProperty("alreadyPosted").GetInt32());
+        var commitmentRetry = await AutoPost(commitmentAutoPostPath);
+        Assert.Equal(0, commitmentRetry.GetProperty("posted").GetInt32());
+        Assert.Equal(1, commitmentRetry.GetProperty("alreadyPosted").GetInt32());
+        Assert.Equal(1, await CountLedgerEntries("commitment_automatic"));
+        using (var timelineRequest = Authenticated(
+                   HttpMethod.Get, "/api/v1/budget/timeline?origin=commitment_automatic", token))
+        {
+            var timeline = await (await fixture.Client.SendAsync(timelineRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(1, timeline.EnumerateArray().Count(x => x.GetProperty("entryType").GetString() == "actual"));
+        }
+
+        var firstProjection = await ProjectOccurrences();
+        var secondProjection = await ProjectOccurrences();
+        Assert.Equal(
+        [
+            $"income:{incomeSeries}:2026-07-19", $"income:{incomeSeries}:2026-07-20",
+            $"income:{incomeSeries}:2026-07-21", $"income:{incomeSeries}:2026-07-22",
+            $"income:{incomeSeries}:2026-07-23",
+        ], firstProjection.Select(x => x.Id));
+        Assert.Equal(firstProjection, secondProjection);
+
+        const string concurrentPath = "/api/v1/budget/income-plans/auto-post?from=2026-07-22&through=2026-07-23";
+        using var concurrentA = Authenticated(HttpMethod.Post, concurrentPath, token);
+        using var concurrentB = Authenticated(HttpMethod.Post, concurrentPath, token);
+        var client = fixture.Client;
+        var concurrentResponses = await Task.WhenAll(client.SendAsync(concurrentA), client.SendAsync(concurrentB));
+        var counters = new List<(int Posted, int AlreadyPosted)>();
+        foreach (var response in concurrentResponses)
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            counters.Add((body.GetProperty("posted").GetInt32(), body.GetProperty("alreadyPosted").GetInt32()));
+        }
+        Assert.All(counters, x => Assert.Equal(2, x.Posted + x.AlreadyPosted));
+        Assert.Equal(2, counters.Sum(x => x.Posted));
+        Assert.Equal(5, await CountLedgerEntries("income_automatic"));
+
+        await EnableReminders("income", incomeSeries);
+        await EnableReminders("commitment", commitmentSeries);
+        using (var remindersRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/reminders", token))
+        {
+            var reminders = await (await fixture.Client.SendAsync(remindersRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(0, reminders.GetArrayLength());
+        }
+
+        async Task<JsonElement> AutoPost(string path)
+        {
+            using var request = Authenticated(HttpMethod.Post, path, token);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+
+        async Task<int> CountLedgerEntries(string source)
+        {
+            using var request = Authenticated(HttpMethod.Get, "/api/v1/budget/ledger/entries", token);
+            var entries = await (await fixture.Client.SendAsync(request)).Content.ReadFromJsonAsync<JsonElement>();
+            return entries.EnumerateArray().Count(x => x.GetProperty("source").GetString() == source);
+        }
+
+        async Task<List<(string Id, string Status)>> ProjectOccurrences()
+        {
+            using var request = Authenticated(
+                HttpMethod.Get, "/api/v1/budget/income-plans?from=2026-07-19&through=2026-07-23", token);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var projection = await response.Content.ReadFromJsonAsync<JsonElement>();
+            return projection.GetProperty("occurrences").EnumerateArray()
+                .Select(x => (x.GetProperty("id").GetString()!, x.GetProperty("status").GetString()!)).ToList();
+        }
+
+        async Task EnableReminders(string planKind, Guid seriesId)
+        {
+            using var request = Authenticated(
+                HttpMethod.Put, $"/api/v1/budget/reminders/settings/{planKind}/{seriesId}", token);
+            request.Content = JsonContent.Create(new { dueEnabled = true, overdueEnabled = true });
+            Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(request)).StatusCode);
+        }
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

@@ -35,7 +35,7 @@ public static class BudgetCommitmentEndpoints
 
     private static async Task<IResult> Create(
         CommitmentRequest request, HttpContext context, IIdentityAccess identity,
-        BudgetDbContext database, CancellationToken cancellationToken)
+        BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         var user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
@@ -43,7 +43,7 @@ public static class BudgetCommitmentEndpoints
         if (parsed.Error is not null) return parsed.Error;
         var value = parsed.Value!;
         var seriesId = Guid.NewGuid();
-        var plan = NewVersion(seriesId, user.Id, value, value.StartDate, null, "");
+        var plan = NewVersion(seriesId, user.Id, value, value.StartDate, null, "", timeProvider);
         plan.Id = seriesId;
         database.CommitmentPlans.Add(plan);
         if (value.StopDate.HasValue)
@@ -58,7 +58,7 @@ public static class BudgetCommitmentEndpoints
 
     private static async Task<IResult> Edit(
         Guid seriesId, CommitmentEditRequest request, HttpContext context, IIdentityAccess identity,
-        BudgetDbContext database, CancellationToken cancellationToken)
+        BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         var user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
@@ -84,7 +84,7 @@ public static class BudgetCommitmentEndpoints
         if (parsed.Error is not null) return parsed.Error;
         var previousEnd = source.EffectiveTo;
         if (effectiveOn == source.EffectiveFrom) source.Active = false; else source.EffectiveTo = effectiveOn.AddDays(-1);
-        var version = NewVersion(seriesId, user.Id, parsed.Value!, effectiveOn, previousEnd, request.Reason.Trim());
+        var version = NewVersion(seriesId, user.Id, parsed.Value!, effectiveOn, previousEnd, request.Reason.Trim(), timeProvider);
         database.CommitmentPlans.Add(version);
         await database.SaveChangesAsync(cancellationToken);
         return Results.Ok(version);
@@ -196,13 +196,19 @@ public static class BudgetCommitmentEndpoints
         catch (ArgumentOutOfRangeException exception) { return Invalid(exception.Message); }
         var automatic = projection.Plans.SelectMany(x => x.Versions).Where(x => x.AutomaticPosting).Select(x => x.Id).ToHashSet();
         var posted = 0;
-        foreach (var occurrence in projection.Occurrences.Where(x => x.Status == "expected" && automatic.Contains(x.VersionId)))
+        var alreadyPosted = 0;
+        foreach (var occurrence in projection.Occurrences.Where(x => automatic.Contains(x.VersionId)))
         {
+            if (occurrence.Status != "expected")
+            {
+                alreadyPosted++;
+                continue;
+            }
             var result = await Post(user.Id, occurrence, occurrence.OccurredOn, occurrence.AmountCents,
                 BudgetValues.Automatic, null, database, budgetService, cancellationToken);
-            if (!result.AlreadyPosted) posted++;
+            if (result.AlreadyPosted) alreadyPosted++; else posted++;
         }
-        return Results.Ok(new { posted });
+        return Results.Ok(new { posted, alreadyPosted });
     }
 
     private static async Task<(BudgetCommitmentPosting Posting, bool AlreadyPosted)> Post(
@@ -342,7 +348,8 @@ public static class BudgetCommitmentEndpoints
     }
 
     private static BudgetCommitmentPlan NewVersion(
-        Guid seriesId, Guid ownerId, CommitmentDefinition value, DateOnly effectiveFrom, DateOnly? effectiveTo, string reason) => new()
+        Guid seriesId, Guid ownerId, CommitmentDefinition value, DateOnly effectiveFrom, DateOnly? effectiveTo,
+        string reason, TimeProvider timeProvider) => new()
     {
         SeriesId = seriesId, OwnerUserId = ownerId, CategoryId = value.CategoryId, Kind = value.Kind, Name = value.Name,
         AmountCents = value.AmountCents, Cadence = value.Cadence, IntervalUnit = value.IntervalUnit,
@@ -350,6 +357,8 @@ public static class BudgetCommitmentEndpoints
         EffectiveFrom = effectiveFrom, EffectiveTo = effectiveTo, BudgetingMode = value.BudgetingMode,
         ChargeFirstShortfall = value.ChargeFirstShortfall,
         AutomaticPosting = value.AutomaticPosting, ChangeReason = reason,
+        CreatedAt = DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified),
+        UpdatedAt = DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified),
     };
     private static IReadOnlyList<int> ParseWeekdays(string value) => string.IsNullOrWhiteSpace(value) ? [] : value.Split(',').Select(int.Parse).ToArray();
     private static bool TryDate(string? value, out DateOnly date) => DateOnly.TryParseExact(value, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out date);

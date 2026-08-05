@@ -4,6 +4,8 @@ using System.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 
 namespace Household.Api.Tests;
@@ -25,6 +27,10 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public const string SavingsGoalsAccessToken = "savings-goals-access-token";
     public const string InvestmentsAccessToken = "investments-access-token";
     public const string WishlistAccessToken = "wishlist-access-token";
+    public const string ReminderSettingsAccessToken = "reminder-settings-access-token";
+    public const string ReminderAccessToken = "reminder-access-token";
+    public const string ReminderIntruderAccessToken = "reminder-intruder-access-token";
+    public const string AutomationAccessToken = "automation-access-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
     public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
@@ -56,6 +62,12 @@ public sealed class LegacyParityFixture : IAsyncLifetime
                     ["Seed:DemoUser"] = "false",
                     ["Updates:GitHubRepository"] = "kratofl/household",
                 });
+            });
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(
+                    new FixedTimeProvider(new DateTimeOffset(2026, 7, 23, 12, 0, 0, TimeSpan.Zero)));
             });
         });
         _ = Client;
@@ -93,11 +105,20 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         command.Parameters.AddWithValue("savingsGoalsAccessHash", HashToken(SavingsGoalsAccessToken));
         command.Parameters.AddWithValue("investmentsAccessHash", HashToken(InvestmentsAccessToken));
         command.Parameters.AddWithValue("wishlistAccessHash", HashToken(WishlistAccessToken));
+        command.Parameters.AddWithValue("reminderSettingsAccessHash", HashToken(ReminderSettingsAccessToken));
+        command.Parameters.AddWithValue("reminderAccessHash", HashToken(ReminderAccessToken));
+        command.Parameters.AddWithValue("reminderIntruderAccessHash", HashToken(ReminderIntruderAccessToken));
+        command.Parameters.AddWithValue("automationAccessHash", HashToken(AutomationAccessToken));
         await command.ExecuteNonQueryAsync();
     }
 
     private static string HashToken(string token) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 
     private async Task StartDatabase()
     {
@@ -231,6 +252,26 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b60', '019bd5e4-6c31-7c48-8471-a42157389b5f', @wishlistAccessHash,
                 'wishlist-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b61', 'reminder-settings', 'reminder-settings@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b62', '019bd5e4-6c31-7c48-8471-a42157389b61', @reminderSettingsAccessHash,
+                'reminder-settings-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b63', 'reminder', 'reminder@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b64', '019bd5e4-6c31-7c48-8471-a42157389b63', @reminderAccessHash,
+                'reminder-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b65', 'reminder-intruder', 'reminder-intruder@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b66', '019bd5e4-6c31-7c48-8471-a42157389b65', @reminderIntruderAccessHash,
+                'reminder-intruder-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b67', 'automation', 'automation@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b68', '019bd5e4-6c31-7c48-8471-a42157389b67', @automationAccessHash,
+                'automation-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
 
         CREATE SCHEMA budget;
         CREATE TABLE budget.periods (

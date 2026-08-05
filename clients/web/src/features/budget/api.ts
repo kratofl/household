@@ -5,6 +5,8 @@ import type {
   BudgetLedgerEntry,
   BudgetLedgerEntryInput,
   BudgetPeriodInput,
+  BudgetReminder,
+  BudgetReminderSetting,
   BudgetSummary,
   BudgetTimelineItem,
   BudgetSetupInput,
@@ -16,6 +18,7 @@ import type {
   IncomePlanProjection,
   InvestmentProjection,
   PlannedExpenseInput,
+  ReminderSettingInput,
   SavingsProjection,
   WishlistItem,
 } from "./types"
@@ -214,4 +217,25 @@ export function updateWishlistItem(accessToken: string, itemId: string, body: un
 
 export function promoteWishlistItem(accessToken: string, itemId: string, body: unknown) {
   return apiRequest<WishlistItem>(`/budget/wishlist/${itemId}/promote`, { method: "POST", accessToken, body })
+}
+
+export function loadBudgetReminders(accessToken: string, asOf?: string) {
+  return apiRequest<BudgetReminder[]>(`/budget/reminders${asOf ? `?asOf=${asOf}` : ""}`, { accessToken })
+}
+
+export function loadReminderSettings(accessToken: string) {
+  return apiRequest<BudgetReminderSetting[]>("/budget/reminders/settings", { accessToken })
+}
+
+export function saveReminderSetting(
+  accessToken: string,
+  planKind: "income" | "commitment",
+  seriesId: string,
+  body: ReminderSettingInput,
+) {
+  return apiRequest<BudgetReminderSetting>(`/budget/reminders/settings/${planKind}/${seriesId}`, {
+    method: "PUT",
+    accessToken,
+    body,
+  })
 }

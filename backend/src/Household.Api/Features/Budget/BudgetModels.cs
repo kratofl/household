@@ -146,6 +146,17 @@ public sealed class BudgetWishlistItem
     public DateTime UpdatedAt { get; set; }
 }
 
+public sealed class BudgetReminderSetting
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string PlanKind { get; set; } = BudgetValues.Income;
+    public Guid SeriesId { get; set; }
+    public bool DueEnabled { get; set; }
+    public bool OverdueEnabled { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
 public sealed class BudgetIncomePlan
 {
     public Guid Id { get; set; }

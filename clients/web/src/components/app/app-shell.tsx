@@ -83,10 +83,12 @@ import {
   loadBudgetSummary,
   loadBudgetSetup,
   loadBudgetLedgerDetails,
+  loadBudgetReminders,
   loadBudgetTimeline,
   loadCommitments,
   loadIncomePlans,
   loadInvestments,
+  loadReminderSettings,
   loadWishlist,
   promoteWishlistItem,
   loadSavings,
@@ -98,6 +100,7 @@ import {
   saveBudgetSetup,
   saveDefaultIncomeVarianceRule,
   saveIncomePlanVarianceRule,
+  saveReminderSetting,
   stopCommitment,
   stopIncomePlan,
   updateWishlistItem,
@@ -109,6 +112,8 @@ import {
 import type {
   BudgetCategory,
   BudgetLedgerEntry,
+  BudgetReminder,
+  BudgetReminderSetting,
   BudgetSetupState,
   BudgetSummary,
   BudgetTimelineItem,
@@ -1240,6 +1245,8 @@ function BudgetPanel(props: {
   const [investmentDate, setInvestmentDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [investmentDestination, setInvestmentDestination] = useState<"buffer" | "savings" | "ordinary">("buffer")
   const [investmentTargetPurposeId, setInvestmentTargetPurposeId] = useState("")
+  const [reminders, setReminders] = useState<BudgetReminder[]>([])
+  const [reminderSettings, setReminderSettings] = useState<BudgetReminderSetting[]>([])
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
   const [wishlistName, setWishlistName] = useState("")
   const [wishlistPrice, setWishlistPrice] = useState("")
@@ -1372,6 +1379,16 @@ function BudgetPanel(props: {
     setWishlist(await loadWishlist(accessToken))
   }, [accessToken])
 
+  const loadRemindersState = useCallback(async () => {
+    if (!accessToken) return
+    const [reminderData, settingsData] = await Promise.all([
+      loadBudgetReminders(accessToken),
+      loadReminderSettings(accessToken),
+    ])
+    setReminders(reminderData)
+    setReminderSettings(settingsData)
+  }, [accessToken])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1424,6 +1441,15 @@ function BudgetPanel(props: {
   }, [accessToken, loadRecurringCommitments, loadRecurringIncome, selectedBudgetView, t])
 
   useEffect(() => {
+    if (!accessToken || (selectedBudgetView !== "overview" && selectedBudgetView !== "planning")) return
+    const timer = window.setTimeout(() => {
+      void loadRemindersState()
+        .catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [accessToken, loadRemindersState, selectedBudgetView, t])
+
+  useEffect(() => {
     if (!accessToken || selectedBudgetView !== "saving") return
     const timer = window.setTimeout(() => {
       void Promise.all([loadSavingsState(), loadInvestmentState()])
@@ -1440,6 +1466,35 @@ function BudgetPanel(props: {
     }, 0)
     return () => window.clearTimeout(timer)
   }, [accessToken, loadSavingsState, loadWishlistState, selectedBudgetView, t])
+
+  const reminderSettingFor = (planKind: "income" | "commitment", seriesId: string) => {
+    const setting = reminderSettings.find(
+      (entry) => entry.planKind === planKind && entry.seriesId === seriesId,
+    )
+    return { dueEnabled: setting?.dueEnabled ?? false, overdueEnabled: setting?.overdueEnabled ?? false }
+  }
+
+  const saveReminderToggle = async (
+    planKind: "income" | "commitment",
+    seriesId: string,
+    body: { dueEnabled: boolean; overdueEnabled: boolean },
+  ) => {
+    if (!accessToken) return
+    setSaving(true)
+    try {
+      const saved = await saveReminderSetting(accessToken, planKind, seriesId, body)
+      setReminderSettings((current) => [
+        ...current.filter((entry) => !(entry.planKind === planKind && entry.seriesId === seriesId)),
+        saved,
+      ])
+      setReminders(await loadBudgetReminders(accessToken))
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const createTransaction = async () => {
     if (!accessToken) return
@@ -1659,7 +1714,7 @@ function BudgetPanel(props: {
         })
       }
       setCommitmentAction(null)
-      await Promise.all([loadRecurringCommitments(), loadTimeline(), loadSummary()])
+      await Promise.all([loadRecurringCommitments(), loadTimeline(), loadSummary(), loadRemindersState()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1673,7 +1728,7 @@ function BudgetPanel(props: {
     setSaving(true)
     try {
       await autoPostCommitments(accessToken, from, new Date().toISOString().slice(0, 10))
-      await Promise.all([loadRecurringCommitments(), loadTimeline(), loadSummary()])
+      await Promise.all([loadRecurringCommitments(), loadTimeline(), loadSummary(), loadRemindersState()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1760,7 +1815,7 @@ function BudgetPanel(props: {
         })
       }
       setIncomeAction(null)
-      await Promise.all([loadRecurringIncome(), loadTimeline()])
+      await Promise.all([loadRecurringIncome(), loadTimeline(), loadRemindersState()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -1774,7 +1829,7 @@ function BudgetPanel(props: {
     setSaving(true)
     try {
       await autoPostIncome(accessToken, from, new Date().toISOString().slice(0, 10))
-      await Promise.all([loadRecurringIncome(), loadTimeline(), loadSummary()])
+      await Promise.all([loadRecurringIncome(), loadTimeline(), loadSummary(), loadRemindersState()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t("error.unexpected"))
     } finally {
@@ -2386,6 +2441,57 @@ function BudgetPanel(props: {
                 </div>
               </div>
             ) : null}
+            {showOverview ? (
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-medium">{t("budget.remindersTitle")}</h3>
+                    <p className="text-sm text-muted-foreground">{t("budget.remindersDescription")}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="destructive">
+                      {t("budget.remindersOverdueCount", {
+                        count: reminders.filter((reminder) => reminder.kind === "overdue").length,
+                      })}
+                    </Badge>
+                    <Badge variant="secondary">
+                      {t("budget.remindersDueCount", {
+                        count: reminders.filter((reminder) => reminder.kind === "due").length,
+                      })}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {reminders.length === 0 ? (
+                    <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      {t("budget.noReminders")}
+                    </p>
+                  ) : (
+                    reminders.map((reminder) => (
+                      <div
+                        key={reminder.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm"
+                      >
+                        <div>
+                          <p className="font-medium">{reminder.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(`${reminder.dueOn}T00:00:00`).toLocaleDateString(locale === "de" ? "de-DE" : "en-US")}
+                            {" · "}
+                            {t(reminder.planKind === "income" ? "budget.reminderIncomePlan" : "budget.reminderCommitmentPlan")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>{currency(reminder.amountCents)}</span>
+                          <Badge variant={reminder.kind === "overdue" ? "destructive" : "secondary"}>
+                            {t(reminder.kind === "overdue" ? "budget.reminderOverdue" : "budget.reminderDue")}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
             {showOverview || showTransactions ? (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
               {showOverview ? (
@@ -2837,6 +2943,49 @@ function BudgetPanel(props: {
                         {plan.pauses.map((pause) => `${t("budget.paused")} ${pause.from}–${pause.through}`).join(" · ")}
                       </p>
                     ) : null}
+                    {!plan.stoppedOn ? (
+                      <div className="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-2">
+                        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                          <Label htmlFor={`income-reminder-due-${plan.seriesId}`} className="text-xs">
+                            {t("budget.reminderDueToggle")}
+                          </Label>
+                          <Switch
+                            id={`income-reminder-due-${plan.seriesId}`}
+                            aria-label={t("budget.reminderDueToggle")}
+                            checked={reminderSettingFor("income", plan.seriesId).dueEnabled}
+                            disabled={saving}
+                            onCheckedChange={(checked) =>
+                              saveReminderToggle("income", plan.seriesId, {
+                                ...reminderSettingFor("income", plan.seriesId),
+                                dueEnabled: checked,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                          <Label htmlFor={`income-reminder-overdue-${plan.seriesId}`} className="text-xs">
+                            {t("budget.reminderOverdueToggle")}
+                          </Label>
+                          <Switch
+                            id={`income-reminder-overdue-${plan.seriesId}`}
+                            aria-label={t("budget.reminderOverdueToggle")}
+                            checked={reminderSettingFor("income", plan.seriesId).overdueEnabled}
+                            disabled={saving}
+                            onCheckedChange={(checked) =>
+                              saveReminderToggle("income", plan.seriesId, {
+                                ...reminderSettingFor("income", plan.seriesId),
+                                overdueEnabled: checked,
+                              })
+                            }
+                          />
+                        </div>
+                        {plan.automaticPosting ? (
+                          <p className="text-xs text-muted-foreground sm:col-span-2">
+                            {t("budget.remindersAutomaticHint")}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -3024,6 +3173,49 @@ function BudgetPanel(props: {
                       <p className="mt-2 text-xs text-muted-foreground">
                         {plan.pauses.map((pause) => `${t("budget.paused")} ${pause.from}–${pause.through}`).join(" · ")}
                       </p>
+                    ) : null}
+                    {!plan.stoppedOn ? (
+                      <div className="mt-3 grid gap-2 border-t pt-3 sm:grid-cols-2">
+                        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                          <Label htmlFor={`commitment-reminder-due-${plan.seriesId}`} className="text-xs">
+                            {t("budget.reminderDueToggle")}
+                          </Label>
+                          <Switch
+                            id={`commitment-reminder-due-${plan.seriesId}`}
+                            aria-label={t("budget.reminderDueToggle")}
+                            checked={reminderSettingFor("commitment", plan.seriesId).dueEnabled}
+                            disabled={saving}
+                            onCheckedChange={(checked) =>
+                              saveReminderToggle("commitment", plan.seriesId, {
+                                ...reminderSettingFor("commitment", plan.seriesId),
+                                dueEnabled: checked,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                          <Label htmlFor={`commitment-reminder-overdue-${plan.seriesId}`} className="text-xs">
+                            {t("budget.reminderOverdueToggle")}
+                          </Label>
+                          <Switch
+                            id={`commitment-reminder-overdue-${plan.seriesId}`}
+                            aria-label={t("budget.reminderOverdueToggle")}
+                            checked={reminderSettingFor("commitment", plan.seriesId).overdueEnabled}
+                            disabled={saving}
+                            onCheckedChange={(checked) =>
+                              saveReminderToggle("commitment", plan.seriesId, {
+                                ...reminderSettingFor("commitment", plan.seriesId),
+                                overdueEnabled: checked,
+                              })
+                            }
+                          />
+                        </div>
+                        {plan.automaticPosting ? (
+                          <p className="text-xs text-muted-foreground sm:col-span-2">
+                            {t("budget.remindersAutomaticHint")}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 ))}

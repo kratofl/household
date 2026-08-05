@@ -413,3 +413,28 @@ export type WishlistItem = {
   createdAt: string
   updatedAt: string
 }
+
+export type BudgetReminder = {
+  id: string
+  planKind: "income" | "commitment"
+  seriesId: string
+  occurrenceId: string
+  kind: "due" | "overdue"
+  dueOn: string
+  name: string
+  amountCents: number
+}
+
+export type BudgetReminderSetting = {
+  id: string
+  planKind: "income" | "commitment"
+  seriesId: string
+  dueEnabled: boolean
+  overdueEnabled: boolean
+  updatedAt: string
+}
+
+export type ReminderSettingInput = {
+  dueEnabled: boolean
+  overdueEnabled: boolean
+}
