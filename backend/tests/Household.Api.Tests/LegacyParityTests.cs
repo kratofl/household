@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Household.Api.Features.Budget;
 
 namespace Household.Api.Tests;
 
@@ -1970,6 +1971,223 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         Assert.Equal(10_000, investmentReport.GetProperty("gainCents").GetInt64());
         Assert.Equal(1_000, investmentReport.GetProperty("gainBasisPoints").GetInt64());
         Assert.Equal("2026-07-20", investmentReport.GetProperty("latestValuationDate").GetString());
+    }
+
+    [Fact]
+    public async Task Csv_export_documents_records_with_stable_relationship_identifiers()
+    {
+        const string token = LegacyParityFixture.CsvExportAccessToken;
+
+        using var categoryRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/categories", token);
+        categoryRequest.Content = JsonContent.Create(new { name = "Export Food", color = "#16a34a", icon = "basket", behavior = "include_in_limit" });
+        var categoryResponse = await fixture.Client.SendAsync(categoryRequest);
+        Assert.Equal(HttpStatusCode.Created, categoryResponse.StatusCode);
+        var categoryId = (await categoryResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        using var expenseRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+        expenseRequest.Content = JsonContent.Create(new
+        {
+            kind = "expense", occurredOn = "2026-07-18", description = "Groceries, weekly",
+            amountCents = 10_000, categoryId, merchant = "REWE", affectsOrdinary = true,
+        });
+        var expenseResponse = await fixture.Client.SendAsync(expenseRequest);
+        Assert.Equal(HttpStatusCode.Created, expenseResponse.StatusCode);
+        var expenseId = (await expenseResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        using var correctionRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/ledger/entries/{expenseId}/corrections", token);
+        correctionRequest.Content = JsonContent.Create(new
+        {
+            reason = "Receipt total", description = "Groceries, weekly", occurredOn = "2026-07-18",
+            amountCents = 12_000, categoryId, affectsOrdinary = true, merchant = "REWE",
+        });
+        var correctionResponse = await fixture.Client.SendAsync(correctionRequest);
+        Assert.Equal(HttpStatusCode.Created, correctionResponse.StatusCode);
+        var correctionId = (await correctionResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        using var exportRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/export/transactions", token);
+        var exportResponse = await fixture.Client.SendAsync(exportRequest);
+        Assert.Equal(HttpStatusCode.OK, exportResponse.StatusCode);
+        Assert.Equal("text/csv", exportResponse.Content.Headers.ContentType?.MediaType);
+        var transactions = BudgetCsv.Parse(await exportResponse.Content.ReadAsStringAsync());
+        Assert.Equal(
+            ["id", "kind", "status", "occurredOn", "description", "amount", "ordinaryImpact",
+                "category", "merchant", "merchantNormalized", "brandKey", "source", "correctsEntryId", "relatedEntryId"],
+            transactions[0]);
+        var originalRow = transactions.Single(row => row[0] == expenseId.ToString());
+        var correctionRow = transactions.Single(row => row[0] == correctionId.ToString());
+        Assert.Equal("corrected", originalRow[2]);
+        Assert.Equal("100.00", originalRow[5]);
+        Assert.Equal("actual", correctionRow[2]);
+        Assert.Equal("120.00", correctionRow[5]);
+        Assert.Equal(expenseId.ToString(), correctionRow[12]);
+        Assert.Equal("Export Food", correctionRow[7]);
+        Assert.Equal("2026-07-18", correctionRow[3]);
+
+        using var splitsRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/export/splits", token);
+        var splits = BudgetCsv.Parse(await (await fixture.Client.SendAsync(splitsRequest)).Content.ReadAsStringAsync());
+        Assert.Contains(splits.Skip(1), row => row[1] == correctionId.ToString() && row[2] == categoryId.ToString());
+
+        using var categoriesRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/export/categories", token);
+        var categories = BudgetCsv.Parse(await (await fixture.Client.SendAsync(categoriesRequest)).Content.ReadAsStringAsync());
+        Assert.Contains(categories.Skip(1), row => row[0] == categoryId.ToString() && row[1] == "Export Food");
+
+        using var unknownRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/export/unknown", token);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.SendAsync(unknownRequest)).StatusCode);
+        using var anonymousRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/budget/export/transactions");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Client.SendAsync(anonymousRequest)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Csv_import_stages_validates_reviews_and_commits_idempotently()
+    {
+        const string token = LegacyParityFixture.CsvImportAccessToken;
+        const string csv = """
+            Datum;Art;Beschreibung;Betrag;Kategorie;Haendler
+            15.07.2026;Ausgabe;Wocheneinkauf;45,90;Lebensmittel;REWE
+            16.07.2026;Einnahme;Gehalt;2.500,00;;
+            17.07.2026;Ausgabe;;12,00;;
+            32.07.2026;Ausgabe;Kaputt;5,00;;
+            15.07.2026;Ausgabe;Wocheneinkauf;45,90;Lebensmittel;REWE
+            """;
+
+        using var createRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/import/sessions", token);
+        createRequest.Content = JsonContent.Create(new { fileName = "haushalt.csv", content = csv });
+        var createResponse = await fixture.Client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var sessionId = created.GetProperty("session").GetProperty("id").GetGuid();
+        Assert.Equal(5, created.GetProperty("session").GetProperty("rowCount").GetInt32());
+        var suggested = created.GetProperty("suggestedMapping");
+        Assert.Equal(0, suggested.GetProperty("dateColumn").GetInt32());
+        Assert.Equal(3, suggested.GetProperty("amountColumn").GetInt32());
+        Assert.Equal("dd.MM.yyyy", suggested.GetProperty("dateFormat").GetString());
+        Assert.Equal(",", suggested.GetProperty("decimalSeparator").GetString());
+
+        using var mappingRequest = Authenticated(HttpMethod.Put, $"/api/v1/budget/import/sessions/{sessionId}/mapping", token);
+        mappingRequest.Content = JsonContent.Create(new
+        {
+            dateColumn = 0, amountColumn = 3, descriptionColumn = 2, kindColumn = 1,
+            categoryColumn = 4, merchantColumn = 5, dateFormat = "dd.MM.yyyy", decimalSeparator = ",",
+            defaultKind = "expense",
+        });
+        var mappingResponse = await fixture.Client.SendAsync(mappingRequest);
+        Assert.Equal(HttpStatusCode.OK, mappingResponse.StatusCode);
+        var preview = await mappingResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(3, preview.GetProperty("validRows").GetInt32());
+        Assert.Equal(2, preview.GetProperty("invalidRows").GetInt32());
+        Assert.Equal(1, preview.GetProperty("duplicateRows").GetInt32());
+        var previewRows = preview.GetProperty("rows").EnumerateArray().ToList();
+        Assert.Equal("missing_description", previewRows[2].GetProperty("validationError").GetString());
+        Assert.Equal("invalid_date", previewRows[3].GetProperty("validationError").GetString());
+        Assert.True(previewRows[4].GetProperty("duplicateWarning").GetBoolean());
+        Assert.Equal(4_590, previewRows[0].GetProperty("amountCents").GetInt64());
+        Assert.Equal(250_000, previewRows[1].GetProperty("amountCents").GetInt64());
+        Assert.Equal("income", previewRows[1].GetProperty("kind").GetString());
+
+        using var commitRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/import/sessions/{sessionId}/commit", token);
+        commitRequest.Content = JsonContent.Create(new { includeDuplicates = false });
+        var commitResponse = await fixture.Client.SendAsync(commitRequest);
+        Assert.Equal(HttpStatusCode.OK, commitResponse.StatusCode);
+        var committed = await commitResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, committed.GetProperty("importedRows").GetInt32());
+        Assert.Equal(2, committed.GetProperty("skippedInvalidRows").GetInt32());
+        Assert.Equal(1, committed.GetProperty("skippedDuplicateRows").GetInt32());
+        Assert.Equal("committed", committed.GetProperty("session").GetProperty("status").GetString());
+
+        using var retryRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/import/sessions/{sessionId}/commit", token);
+        retryRequest.Content = JsonContent.Create(new { includeDuplicates = true });
+        var retried = await (await fixture.Client.SendAsync(retryRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, retried.GetProperty("importedRows").GetInt32());
+
+        using var entriesRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/ledger/entries", token);
+        var entries = await (await fixture.Client.SendAsync(entriesRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var imported = entries.EnumerateArray().Where(x => x.GetProperty("source").GetString() == "import").ToList();
+        Assert.Equal(2, imported.Count);
+        var importedExpense = imported.Single(x => x.GetProperty("kind").GetString() == "expense");
+        Assert.Equal(4_590, importedExpense.GetProperty("amountCents").GetInt64());
+        Assert.Equal("REWE", importedExpense.GetProperty("merchantNormalized").GetString());
+        Assert.Equal("Lebensmittel", importedExpense.GetProperty("splits")[0].GetProperty("categoryNameSnapshot").GetString());
+
+        using var lateMappingRequest = Authenticated(HttpMethod.Put, $"/api/v1/budget/import/sessions/{sessionId}/mapping", token);
+        lateMappingRequest.Content = JsonContent.Create(new
+        {
+            dateColumn = 0, amountColumn = 3, dateFormat = "dd.MM.yyyy", decimalSeparator = ",",
+        });
+        Assert.Equal(HttpStatusCode.Conflict, (await fixture.Client.SendAsync(lateMappingRequest)).StatusCode);
+
+        using var intruderRequest = Authenticated(
+            HttpMethod.Get, $"/api/v1/budget/import/sessions/{sessionId}", LegacyParityFixture.ReportsIntruderAccessToken);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.SendAsync(intruderRequest)).StatusCode);
+        using var anonymousRequest = new HttpRequestMessage(HttpMethod.Post, "/api/v1/budget/import/sessions");
+        anonymousRequest.Content = JsonContent.Create(new { content = "a,b\n1,2" });
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Client.SendAsync(anonymousRequest)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Csv_export_import_round_trip_preserves_relationships_and_totals()
+    {
+        const string sourceToken = LegacyParityFixture.CsvSourceAccessToken;
+        const string targetToken = LegacyParityFixture.CsvTargetAccessToken;
+
+        using var categoryRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/categories", sourceToken);
+        categoryRequest.Content = JsonContent.Create(new { name = "Roundtrip Food", color = "#16a34a", icon = "basket", behavior = "include_in_limit" });
+        var categoryId = (await (await fixture.Client.SendAsync(categoryRequest)).Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("id").GetGuid();
+        using var expenseRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", sourceToken);
+        expenseRequest.Content = JsonContent.Create(new
+        {
+            kind = "expense", occurredOn = "2026-07-18", description = "Groceries, weekly",
+            amountCents = 4_590, categoryId, merchant = "REWE", affectsOrdinary = true,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(expenseRequest)).StatusCode);
+        using var incomeRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", sourceToken);
+        incomeRequest.Content = JsonContent.Create(new
+        {
+            kind = "income", occurredOn = "2026-07-15", description = "Salary", amountCents = 100_000,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(incomeRequest)).StatusCode);
+
+        using var exportRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/export/transactions", sourceToken);
+        var exported = await (await fixture.Client.SendAsync(exportRequest)).Content.ReadAsStringAsync();
+
+        using var createRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/import/sessions", targetToken);
+        createRequest.Content = JsonContent.Create(new { fileName = "budget-transactions.csv", content = exported });
+        var created = await (await fixture.Client.SendAsync(createRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var sessionId = created.GetProperty("session").GetProperty("id").GetGuid();
+        using var mappingRequest = Authenticated(HttpMethod.Put, $"/api/v1/budget/import/sessions/{sessionId}/mapping", targetToken);
+        mappingRequest.Content = JsonContent.Create(new
+        {
+            dateColumn = 3, amountColumn = 5, descriptionColumn = 4, kindColumn = 1,
+            categoryColumn = 7, merchantColumn = 8, dateFormat = "yyyy-MM-dd", decimalSeparator = ".",
+            defaultKind = "expense",
+        });
+        var preview = await (await fixture.Client.SendAsync(mappingRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, preview.GetProperty("validRows").GetInt32());
+        Assert.Equal(0, preview.GetProperty("invalidRows").GetInt32());
+        using var commitRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/import/sessions/{sessionId}/commit", targetToken);
+        commitRequest.Content = JsonContent.Create(new { includeDuplicates = false });
+        var committed = await (await fixture.Client.SendAsync(commitRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(2, committed.GetProperty("importedRows").GetInt32());
+
+        async Task<(long NetSpent, long Income, string CategoryName)> Report(string token)
+        {
+            using var spendRequest = Authenticated(
+                HttpMethod.Get, "/api/v1/budget/reports/category-spend?from=2026-07-01&through=2026-07-23", token);
+            var spend = await (await fixture.Client.SendAsync(spendRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            using var incomeReportRequest = Authenticated(
+                HttpMethod.Get, "/api/v1/budget/reports/income?from=2026-07-01&through=2026-07-23", token);
+            var income = await (await fixture.Client.SendAsync(incomeReportRequest)).Content.ReadFromJsonAsync<JsonElement>();
+            return (
+                spend.GetProperty("totalNetSpentCents").GetInt64(),
+                income.GetProperty("actualCents").GetInt64(),
+                spend.GetProperty("rows")[0].GetProperty("name").GetString()!);
+        }
+
+        var source = await Report(sourceToken);
+        var target = await Report(targetToken);
+        Assert.Equal(source.NetSpent, target.NetSpent);
+        Assert.Equal(source.Income, target.Income);
+        Assert.Equal("Roundtrip Food", source.CategoryName);
+        Assert.Equal("Roundtrip Food", target.CategoryName);
     }
 
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)

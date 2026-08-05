@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api"
+import { apiRequest, apiRequestText } from "@/lib/api"
 
 import type {
   BudgetBufferReport,
@@ -23,6 +23,10 @@ import type {
   BudgetTransactionInput,
   CommitmentInput,
   CommitmentProjection,
+  ImportCommitResult,
+  ImportMapping,
+  ImportPreview,
+  ImportSessionCreated,
   IncomePlanInput,
   IncomePlanProjection,
   InvestmentProjection,
@@ -289,4 +293,32 @@ export function loadSavingsGoalReport(accessToken: string, query: BudgetReportQu
 
 export function loadInvestmentReport(accessToken: string, query: BudgetReportQuery = {}) {
   return apiRequest<BudgetInvestmentReport>(`/budget/reports/investments${reportQuery(query)}`, { accessToken })
+}
+
+export function exportBudgetCsv(accessToken: string, type: string) {
+  return apiRequestText(`/budget/export/${type}`, { accessToken })
+}
+
+export function createImportSession(accessToken: string, fileName: string, content: string) {
+  return apiRequest<ImportSessionCreated>("/budget/import/sessions", {
+    method: "POST",
+    accessToken,
+    body: { fileName, content },
+  })
+}
+
+export function applyImportMapping(accessToken: string, sessionId: string, mapping: ImportMapping) {
+  return apiRequest<ImportPreview>(`/budget/import/sessions/${sessionId}/mapping`, {
+    method: "PUT",
+    accessToken,
+    body: mapping,
+  })
+}
+
+export function commitImportSession(accessToken: string, sessionId: string, includeDuplicates: boolean) {
+  return apiRequest<ImportCommitResult>(`/budget/import/sessions/${sessionId}/commit`, {
+    method: "POST",
+    accessToken,
+    body: { includeDuplicates },
+  })
 }

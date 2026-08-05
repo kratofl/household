@@ -614,6 +614,66 @@ export type BudgetSavingsGoalReport = {
   rows: BudgetSavingsGoalReportRow[]
 }
 
+export type ImportMapping = {
+  dateColumn: number
+  amountColumn: number
+  descriptionColumn: number | null
+  kindColumn: number | null
+  categoryColumn: number | null
+  merchantColumn: number | null
+  dateFormat: string
+  decimalSeparator: string
+  defaultKind: "expense" | "income" | null
+}
+
+export type ImportSessionSummary = {
+  id: string
+  fileName: string
+  status: "staged" | "committed"
+  rowCount: number
+  committedEntries: number
+  createdAt: string
+  committedAt: string | null
+}
+
+export type ImportRowView = {
+  id: string
+  rowNumber: number
+  raw: string[]
+  kind: string
+  occurredOn: string | null
+  description: string
+  amountCents: number
+  categoryName: string
+  merchant: string
+  validationError: string
+  duplicateWarning: boolean
+  ledgerEntryId: string | null
+}
+
+export type ImportSessionCreated = {
+  session: ImportSessionSummary
+  header: string[]
+  suggestedMapping: ImportMapping
+  preview: string[][]
+}
+
+export type ImportPreview = {
+  session: ImportSessionSummary
+  rows: ImportRowView[]
+  validRows: number
+  invalidRows: number
+  duplicateRows: number
+}
+
+export type ImportCommitResult = {
+  session: ImportSessionSummary
+  importedRows: number
+  skippedInvalidRows: number
+  skippedDuplicateRows: number
+  rows: ImportRowView[]
+}
+
 export type BudgetInvestmentReport = {
   from: string
   through: string

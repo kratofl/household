@@ -157,6 +157,38 @@ public sealed class BudgetReminderSetting
     public DateTime UpdatedAt { get; set; }
 }
 
+public sealed class BudgetImportSession
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public string FileName { get; set; } = "";
+    public string Status { get; set; } = "staged";
+    public string HeaderJson { get; set; } = "[]";
+    public string MappingJson { get; set; } = "";
+    public int RowCount { get; set; }
+    public int CommittedEntries { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? CommittedAt { get; set; }
+}
+
+public sealed class BudgetImportRow
+{
+    public Guid Id { get; set; }
+    public Guid OwnerUserId { get; set; }
+    public Guid SessionId { get; set; }
+    public int RowNumber { get; set; }
+    public string RawJson { get; set; } = "[]";
+    public string Kind { get; set; } = "";
+    public DateOnly? OccurredOn { get; set; }
+    public string Description { get; set; } = "";
+    public long AmountCents { get; set; }
+    public string CategoryName { get; set; } = "";
+    public string Merchant { get; set; } = "";
+    public string ValidationError { get; set; } = "";
+    public bool DuplicateWarning { get; set; }
+    public Guid? LedgerEntryId { get; set; }
+}
+
 public sealed class BudgetIncomePlan
 {
     public Guid Id { get; set; }

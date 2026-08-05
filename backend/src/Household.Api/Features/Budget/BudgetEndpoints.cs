@@ -21,6 +21,8 @@ public static partial class BudgetEndpoints
         budget.MapBudgetWishlistEndpoints();
         budget.MapBudgetReminderEndpoints();
         budget.MapBudgetReportEndpoints();
+        budget.MapBudgetExportEndpoints();
+        budget.MapBudgetImportEndpoints();
         budget.MapGet("/healthz", () => Results.NoContent());
         budget.MapGet("/summary", Summary);
         budget.MapGet("/periods/current", GetCurrentPeriod);

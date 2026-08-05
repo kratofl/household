@@ -15,6 +15,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<BudgetInvestmentEvent> InvestmentEvents => Set<BudgetInvestmentEvent>();
     public DbSet<BudgetWishlistItem> WishlistItems => Set<BudgetWishlistItem>();
     public DbSet<BudgetReminderSetting> ReminderSettings => Set<BudgetReminderSetting>();
+    public DbSet<BudgetImportSession> ImportSessions => Set<BudgetImportSession>();
+    public DbSet<BudgetImportRow> ImportRows => Set<BudgetImportRow>();
     public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
     public DbSet<BudgetIncomePlanPause> IncomePlanPauses => Set<BudgetIncomePlanPause>();
     public DbSet<BudgetIncomePlanStop> IncomePlanStops => Set<BudgetIncomePlanStop>();
@@ -54,6 +56,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         ConfigureInvestmentEvent(modelBuilder.Entity<BudgetInvestmentEvent>());
         ConfigureWishlistItem(modelBuilder.Entity<BudgetWishlistItem>());
         ConfigureReminderSetting(modelBuilder.Entity<BudgetReminderSetting>());
+        ConfigureImportSession(modelBuilder.Entity<BudgetImportSession>());
+        ConfigureImportRow(modelBuilder.Entity<BudgetImportRow>());
         ConfigureIncomePlan(modelBuilder.Entity<BudgetIncomePlan>());
         ConfigureIncomePlanPause(modelBuilder.Entity<BudgetIncomePlanPause>());
         ConfigureIncomePlanStop(modelBuilder.Entity<BudgetIncomePlanStop>());
@@ -338,6 +342,42 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         entity.Property(x => x.OverdueEnabled).HasColumnName("overdue_enabled");
         entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
         entity.HasIndex(x => new { x.OwnerUserId, x.PlanKind, x.SeriesId }).IsUnique();
+    }
+
+    private static void ConfigureImportSession(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetImportSession> entity)
+    {
+        entity.ToTable("import_sessions"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.FileName).HasColumnName("file_name");
+        entity.Property(x => x.Status).HasColumnName("status");
+        entity.Property(x => x.HeaderJson).HasColumnName("header_json");
+        entity.Property(x => x.MappingJson).HasColumnName("mapping_json");
+        entity.Property(x => x.RowCount).HasColumnName("row_count");
+        entity.Property(x => x.CommittedEntries).HasColumnName("committed_entries");
+        entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
+        entity.Property(x => x.CommittedAt).HasColumnName("committed_at").HasColumnType("timestamp without time zone");
+        entity.HasIndex(x => new { x.OwnerUserId, x.CreatedAt });
+    }
+
+    private static void ConfigureImportRow(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetImportRow> entity)
+    {
+        entity.ToTable("import_rows"); entity.HasKey(x => x.Id);
+        entity.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("uuidv7()");
+        entity.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        entity.Property(x => x.SessionId).HasColumnName("session_id");
+        entity.Property(x => x.RowNumber).HasColumnName("row_number");
+        entity.Property(x => x.RawJson).HasColumnName("raw_json");
+        entity.Property(x => x.Kind).HasColumnName("kind");
+        entity.Property(x => x.OccurredOn).HasColumnName("occurred_on");
+        entity.Property(x => x.Description).HasColumnName("description");
+        entity.Property(x => x.AmountCents).HasColumnName("amount_cents");
+        entity.Property(x => x.CategoryName).HasColumnName("category_name");
+        entity.Property(x => x.Merchant).HasColumnName("merchant");
+        entity.Property(x => x.ValidationError).HasColumnName("validation_error");
+        entity.Property(x => x.DuplicateWarning).HasColumnName("duplicate_warning");
+        entity.Property(x => x.LedgerEntryId).HasColumnName("ledger_entry_id");
+        entity.HasIndex(x => new { x.SessionId, x.RowNumber }).IsUnique();
     }
 
     private static void ConfigureIncomePlan(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<BudgetIncomePlan> entity)

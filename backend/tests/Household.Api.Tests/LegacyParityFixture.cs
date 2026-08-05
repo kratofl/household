@@ -34,6 +34,10 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public const string ReportsAccessToken = "reports-access-token";
     public const string ReportsIntruderAccessToken = "reports-intruder-access-token";
     public const string ReportsPlanAccessToken = "reports-plan-access-token";
+    public const string CsvExportAccessToken = "csv-export-access-token";
+    public const string CsvImportAccessToken = "csv-import-access-token";
+    public const string CsvSourceAccessToken = "csv-source-access-token";
+    public const string CsvTargetAccessToken = "csv-target-access-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
     public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
@@ -115,6 +119,10 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         command.Parameters.AddWithValue("reportsAccessHash", HashToken(ReportsAccessToken));
         command.Parameters.AddWithValue("reportsIntruderAccessHash", HashToken(ReportsIntruderAccessToken));
         command.Parameters.AddWithValue("reportsPlanAccessHash", HashToken(ReportsPlanAccessToken));
+        command.Parameters.AddWithValue("csvExportAccessHash", HashToken(CsvExportAccessToken));
+        command.Parameters.AddWithValue("csvImportAccessHash", HashToken(CsvImportAccessToken));
+        command.Parameters.AddWithValue("csvSourceAccessHash", HashToken(CsvSourceAccessToken));
+        command.Parameters.AddWithValue("csvTargetAccessHash", HashToken(CsvTargetAccessToken));
         await command.ExecuteNonQueryAsync();
     }
 
@@ -293,6 +301,26 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b6e', '019bd5e4-6c31-7c48-8471-a42157389b6d', @reportsPlanAccessHash,
                 'reports-plan-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b6f', 'csv-export', 'csv-export@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b70', '019bd5e4-6c31-7c48-8471-a42157389b6f', @csvExportAccessHash,
+                'csv-export-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b71', 'csv-import', 'csv-import@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b72', '019bd5e4-6c31-7c48-8471-a42157389b71', @csvImportAccessHash,
+                'csv-import-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b73', 'csv-source', 'csv-source@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b74', '019bd5e4-6c31-7c48-8471-a42157389b73', @csvSourceAccessHash,
+                'csv-source-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b75', 'csv-target', 'csv-target@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b76', '019bd5e4-6c31-7c48-8471-a42157389b75', @csvTargetAccessHash,
+                'csv-target-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
 
         CREATE SCHEMA budget;
         CREATE TABLE budget.periods (

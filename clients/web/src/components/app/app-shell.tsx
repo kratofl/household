@@ -62,9 +62,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
+  applyImportMapping,
   autoPostCommitments,
   autoPostIncome,
   closeBudgetPeriod,
+  commitImportSession,
+  createImportSession,
+  exportBudgetCsv,
   confirmCommitmentOccurrence,
   confirmIncomeOccurrence,
   createBudgetCategory,
@@ -130,6 +134,10 @@ import type {
   BudgetReminder,
   BudgetReminderSetting,
   BudgetSavingsGoalReport,
+  ImportCommitResult,
+  ImportMapping,
+  ImportPreview,
+  ImportSessionCreated,
   BudgetSetupState,
   BudgetSummary,
   BudgetTimelineItem,
@@ -1292,6 +1300,12 @@ function BudgetPanel(props: {
   const [reportCategoryId, setReportCategoryId] = useState("")
   const [reportMerchant, setReportMerchant] = useState("")
   const [reportMerchantApplied, setReportMerchantApplied] = useState("")
+  const [importSession, setImportSession] = useState<ImportSessionCreated | null>(null)
+  const [importMapping, setImportMapping] = useState<ImportMapping | null>(null)
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
+  const [importResult, setImportResult] = useState<ImportCommitResult | null>(null)
+  const [importIncludeDuplicates, setImportIncludeDuplicates] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [initialIncomeName, setInitialIncomeName] = useState("")
   const [initialIncomeAmount, setInitialIncomeAmount] = useState("")
   const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
@@ -2315,6 +2329,85 @@ function BudgetPanel(props: {
     }
   }
 
+  const downloadCsv = async (type: string) => {
+    if (!accessToken) return
+    setExporting(true)
+    try {
+      const content = await exportBudgetCsv(accessToken, type)
+      const url = URL.createObjectURL(new Blob([content], { type: "text/csv" }))
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = `budget-${type}.csv`
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const uploadImportFile = async (file: File) => {
+    if (!accessToken) return
+    setSaving(true)
+    try {
+      const created = await createImportSession(accessToken, file.name, await file.text())
+      setImportSession(created)
+      setImportMapping(created.suggestedMapping)
+      setImportPreview(null)
+      setImportResult(null)
+      setImportIncludeDuplicates(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateImportMapping = (patch: Partial<ImportMapping>) =>
+    setImportMapping((current) => (current ? { ...current, ...patch } : current))
+
+  const previewImport = async () => {
+    if (!accessToken || !importSession || !importMapping) return
+    setSaving(true)
+    try {
+      setImportPreview(await applyImportMapping(accessToken, importSession.session.id, importMapping))
+      setImportResult(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const commitImport = async () => {
+    if (!accessToken || !importSession) return
+    setSaving(true)
+    try {
+      setImportResult(await commitImportSession(accessToken, importSession.session.id, importIncludeDuplicates))
+      setImportPreview(null)
+      await loadSummary()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("error.unexpected"))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const importErrorLabel = (code: string) =>
+    code === "invalid_date" ? t("budget.importErrorInvalidDate") :
+    code === "invalid_amount" ? t("budget.importErrorInvalidAmount") :
+    code === "unsupported_kind" ? t("budget.importErrorUnsupportedKind") :
+    t("budget.importErrorMissingDescription")
+
+  const importColumnOptions = (required: boolean) => [
+    ...(required ? [] : [{ value: "-1", label: t("budget.importColumnNone") }]),
+    ...(importSession?.header ?? []).map((name, index) => ({
+      value: String(index),
+      label: name || String(index + 1),
+    })),
+  ]
+
   const showOverview = selectedBudgetView === "overview"
   const showTransactions = selectedBudgetView === "transactions"
   const showPlanning = selectedBudgetView === "planning"
@@ -2835,6 +2928,214 @@ function BudgetPanel(props: {
             </div>
             ) : null}
             {showSettings ? setupFields(false) : null}
+            {showSettings ? (
+              <div className="grid gap-5 xl:grid-cols-2">
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.exportTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.exportDescription")}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {([
+                      ["transactions", "budget.exportTransactions"],
+                      ["splits", "budget.exportSplits"],
+                      ["categories", "budget.exportCategories"],
+                      ["income-plans", "budget.exportIncomePlans"],
+                      ["commitments", "budget.exportCommitments"],
+                      ["savings-purposes", "budget.exportSavingsPurposes"],
+                      ["savings-contributions", "budget.exportSavingsContributions"],
+                      ["savings-allocations", "budget.exportSavingsAllocations"],
+                      ["investment-events", "budget.exportInvestmentEvents"],
+                    ] as const).map(([type, key]) => (
+                      <Button key={type} variant="outline" size="sm" disabled={exporting} onClick={() => downloadCsv(type)}>
+                        {t(key)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.importTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.importDescription")}</p>
+                  <div className="mt-4 grid gap-1.5">
+                    <Label htmlFor="import-file">{t("budget.importFile")}</Label>
+                    <Input
+                      id="import-file"
+                      type="file"
+                      accept=".csv,text/csv"
+                      disabled={saving}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        if (file) void uploadImportFile(file)
+                      }}
+                    />
+                  </div>
+                  {importSession && importMapping ? (
+                    <div className="mt-4 space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        {importSession.session.fileName || t("budget.importFile")}
+                        {" · "}
+                        {t("budget.importStaged", { count: importSession.session.rowCount })}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importDateColumn")}</Label>
+                          <FormSelect
+                            value={String(importMapping.dateColumn)}
+                            onValueChange={(value) => updateImportMapping({ dateColumn: Number(value) })}
+                            options={importColumnOptions(true)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importAmountColumn")}</Label>
+                          <FormSelect
+                            value={String(importMapping.amountColumn)}
+                            onValueChange={(value) => updateImportMapping({ amountColumn: Number(value) })}
+                            options={importColumnOptions(true)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importDescriptionColumn")}</Label>
+                          <FormSelect
+                            value={String(importMapping.descriptionColumn ?? -1)}
+                            onValueChange={(value) => updateImportMapping({ descriptionColumn: value === "-1" ? null : Number(value) })}
+                            options={importColumnOptions(false)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importKindColumn")}</Label>
+                          <FormSelect
+                            value={String(importMapping.kindColumn ?? -1)}
+                            onValueChange={(value) => updateImportMapping({ kindColumn: value === "-1" ? null : Number(value) })}
+                            options={importColumnOptions(false)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importCategoryColumn")}</Label>
+                          <FormSelect
+                            value={String(importMapping.categoryColumn ?? -1)}
+                            onValueChange={(value) => updateImportMapping({ categoryColumn: value === "-1" ? null : Number(value) })}
+                            options={importColumnOptions(false)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importMerchantColumn")}</Label>
+                          <FormSelect
+                            value={String(importMapping.merchantColumn ?? -1)}
+                            onValueChange={(value) => updateImportMapping({ merchantColumn: value === "-1" ? null : Number(value) })}
+                            options={importColumnOptions(false)}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importDateFormat")}</Label>
+                          <FormSelect
+                            value={importMapping.dateFormat}
+                            onValueChange={(value) => updateImportMapping({ dateFormat: value })}
+                            options={[
+                              { value: "yyyy-MM-dd", label: "2026-07-15" },
+                              { value: "dd.MM.yyyy", label: "15.07.2026" },
+                              { value: "MM/dd/yyyy", label: "07/15/2026" },
+                              { value: "dd/MM/yyyy", label: "15/07/2026" },
+                            ]}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importDecimalSeparator")}</Label>
+                          <FormSelect
+                            value={importMapping.decimalSeparator}
+                            onValueChange={(value) => updateImportMapping({ decimalSeparator: value })}
+                            options={[
+                              { value: ",", label: "1.234,56" },
+                              { value: ".", label: "1,234.56" },
+                            ]}
+                          />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label>{t("budget.importDefaultKind")}</Label>
+                          <FormSelect
+                            value={importMapping.defaultKind ?? "expense"}
+                            onValueChange={(value) => updateImportMapping({ defaultKind: value as ImportMapping["defaultKind"] })}
+                            options={[
+                              { value: "expense", label: t("budget.importKindExpense") },
+                              { value: "income", label: t("budget.importKindIncome") },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button onClick={previewImport} disabled={saving || importSession.session.status === "committed"}>
+                          {t("budget.importPreviewAction")}
+                        </Button>
+                        {importPreview ? (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                id="import-include-duplicates"
+                                checked={importIncludeDuplicates}
+                                onCheckedChange={setImportIncludeDuplicates}
+                                disabled={saving}
+                              />
+                              <Label htmlFor="import-include-duplicates">{t("budget.importIncludeDuplicates")}</Label>
+                            </div>
+                            <Button onClick={commitImport} disabled={saving}>
+                              {t("budget.importCommit")}
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                      {importPreview ? (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary">
+                              {t("budget.importValidRows", { count: importPreview.validRows })}
+                            </Badge>
+                            <Badge variant={importPreview.invalidRows > 0 ? "destructive" : "secondary"}>
+                              {t("budget.importInvalidRows", { count: importPreview.invalidRows })}
+                            </Badge>
+                            <Badge variant="outline">
+                              {t("budget.importDuplicateRows", { count: importPreview.duplicateRows })}
+                            </Badge>
+                          </div>
+                          <div className="max-h-80 space-y-2 overflow-y-auto">
+                            {importPreview.rows.slice(0, 100).map((row) => (
+                              <div
+                                key={row.id}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-sm"
+                              >
+                                <div>
+                                  <p className="font-medium">
+                                    {row.rowNumber}. {row.description || row.merchant || "—"}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {row.occurredOn ? reportDate(row.occurredOn) : "—"}
+                                    {row.categoryName ? ` · ${row.categoryName}` : ""}
+                                    {row.merchant ? ` · ${row.merchant}` : ""}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span>{currency(row.kind === "income" ? row.amountCents : -row.amountCents)}</span>
+                                  {row.validationError ? (
+                                    <Badge variant="destructive">{importErrorLabel(row.validationError)}</Badge>
+                                  ) : row.duplicateWarning ? (
+                                    <Badge variant="outline">{t("budget.importDuplicateBadge")}</Badge>
+                                  ) : null}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {importResult ? (
+                        <p className="rounded-md border bg-muted/20 p-3 text-sm">
+                          {t("budget.importCommitted", {
+                            imported: importResult.importedRows,
+                            invalid: importResult.skippedInvalidRows,
+                            duplicates: importResult.skippedDuplicateRows,
+                          })}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             {showSettings || showCategories ? (
             <div className="grid gap-5 xl:grid-cols-[24rem_minmax(0,1fr)]">
               {showSettings ? (
