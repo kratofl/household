@@ -25,7 +25,17 @@ import {
   IconUserCircle,
   IconWallet,
 } from "@tabler/icons-react"
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react"
+import {
+  type ReactElement,
+  type ReactNode,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from "react"
 import { Bar, BarChart, CartesianGrid, Cell, XAxis } from "recharts"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -4771,10 +4781,11 @@ function Field({
   label: string
   children: ReactNode
 }) {
+  const id = useId()
   return (
     <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
+      <Label htmlFor={id}>{label}</Label>
+      {isValidElement(children) ? cloneElement(children as ReactElement<{ id?: string }>, { id }) : children}
     </div>
   )
 }

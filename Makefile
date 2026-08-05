@@ -37,6 +37,7 @@ help:
 	@echo "  make backend-build          Build API and updater binaries"
 	@echo "  make web-lint               Lint web app"
 	@echo "  make web-build              Build web app"
+	@echo "  make browser-test           Run browser journeys against the real API"
 	@echo "  make compose-config         Validate Compose configuration"
 	@echo ""
 	@echo "Production:"
@@ -105,8 +106,8 @@ validate-prod-env: require-env
 # ----------------------
 # QUALITY
 # ----------------------
-.PHONY: check test build backend-test backend-build web-build web-lint compose-config
-check: backend-test backend-build web-lint web-build compose-config
+.PHONY: check test build backend-test backend-build web-build web-lint browser-test compose-config
+check: backend-test backend-build web-lint web-build browser-test compose-config
 
 test: backend-test
 
@@ -127,6 +128,10 @@ web-build:
 web-lint:
 	@echo ">> Linting web"
 	@cd $(WEB_DIR) && npm run lint
+
+browser-test: web-build
+	@echo ">> Running browser journeys against the real API"
+	@cd $(WEB_DIR) && npx playwright test
 
 compose-config:
 	@echo ">> Validating production Compose"

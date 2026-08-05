@@ -12,19 +12,22 @@ Household is early-stage self-hosted software. The current work is focused on ma
 - Password change for logged-in users.
 - GitHub Release checks and updater sidecar integration.
 - Feature-owned database schemas and startup migrations.
+- Complete Budget slice on the .NET modular monolith: append-only ledger,
+  categories with history, recurring income and commitments, buffer and period
+  close, savings goals, investments, wishlist, reminders, reports, and reviewed
+  CSV import/export — localized in German and English with browser-tested
+  journeys.
 
 ## In progress
 
-- Budget domain modeling and UI.
 - Public documentation and release hardening.
-- CI coverage for backend, web, Docker, and Compose.
+- CI coverage for backend, web, browser journeys, Docker, and Compose.
 - Safer, clearer release bundles for home-server installs.
 
 ## Planned product areas
 
 - Polished multi-step registration and cross-product account onboarding, building
   on the functional Budget setup included in the Budget slice.
-- Budget accounts, categories, monthly limits, planned expenses, subscriptions, savings plans, and month-specific snapshots.
 - Shopping list.
 - Recipes and meal planning.
 - Calendar.
