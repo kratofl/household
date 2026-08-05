@@ -1706,6 +1706,272 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
         }
     }
 
+    [Fact]
+    public async Task Reports_aggregate_effective_corrected_state_with_exact_shares_and_filters()
+    {
+        const string token = LegacyParityFixture.ReportsAccessToken;
+        var foodId = await CreateCategory("Food", "#16a34a", "basket");
+        var funId = await CreateCategory("Fun", "#7c3aed", "sparkles");
+
+        using var incomeRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+        incomeRequest.Content = JsonContent.Create(new
+        {
+            kind = "income", occurredOn = "2026-07-15", description = "Salary", amountCents = 100_000,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(incomeRequest)).StatusCode);
+
+        using var splitRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+        splitRequest.Content = JsonContent.Create(new
+        {
+            kind = "expense", occurredOn = "2026-07-20", description = "Shared Disney purchase",
+            merchant = "  Disney+ ", amountCents = 10_001, affectsOrdinary = true,
+            splits = new object[]
+            {
+                new { categoryId = foodId, amountCents = 3_333, useRemaining = false, affectsOrdinary = true },
+                new { categoryId = funId, amountCents = (long?)null, useRemaining = true, affectsOrdinary = true },
+            },
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(splitRequest)).StatusCode);
+
+        var groceriesId = await PostExpense("Groceries run", 10_000, foodId, "REWE", "2026-07-18");
+        using var correctionRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/ledger/entries/{groceriesId}/corrections", token);
+        correctionRequest.Content = JsonContent.Create(new
+        {
+            reason = "Receipt showed a different total", description = "Groceries run corrected",
+            occurredOn = "2026-07-18", amountCents = 12_000, categoryId = foodId,
+            affectsOrdinary = true, merchant = "REWE",
+        });
+        var correctionResponse = await fixture.Client.SendAsync(correctionRequest);
+        Assert.Equal(HttpStatusCode.Created, correctionResponse.StatusCode);
+        var correctionId = (await correctionResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var duplicateId = await PostExpense("Duplicate expense", 5_000, foodId, "REWE", "2026-07-19");
+        using var voidRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/ledger/entries/{duplicateId}/voids", token);
+        voidRequest.Content = JsonContent.Create(new { reason = "Duplicate import" });
+        Assert.Equal(HttpStatusCode.NoContent, (await fixture.Client.SendAsync(voidRequest)).StatusCode);
+
+        using var refundRequest = Authenticated(HttpMethod.Post, $"/api/v1/budget/ledger/entries/{correctionId}/refunds", token);
+        refundRequest.Content = JsonContent.Create(new { occurredOn = "2026-07-21", amountCents = 2_000, description = "Partial refund" });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(refundRequest)).StatusCode);
+
+        var categorySpend = await GetReport("/api/v1/budget/reports/category-spend");
+        var food = CategoryRow(categorySpend, foodId);
+        var fun = CategoryRow(categorySpend, funId);
+        Assert.Equal(15_333, food.GetProperty("grossExpenseCents").GetInt64());
+        Assert.Equal(2_000, food.GetProperty("refundCents").GetInt64());
+        Assert.Equal(13_333, food.GetProperty("netSpentCents").GetInt64());
+        Assert.Equal(6_668, fun.GetProperty("netSpentCents").GetInt64());
+        Assert.Equal(20_001, categorySpend.GetProperty("totalNetSpentCents").GetInt64());
+        Assert.Equal(6_666, food.GetProperty("shareBasisPoints").GetInt64());
+        Assert.Equal(3_334, fun.GetProperty("shareBasisPoints").GetInt64());
+        Assert.Equal(10_000, categorySpend.GetProperty("rows").EnumerateArray()
+            .Sum(x => x.GetProperty("shareBasisPoints").GetInt64()));
+        Assert.Equal("Food", food.GetProperty("name").GetString());
+        Assert.Equal("#16a34a", food.GetProperty("color").GetString());
+
+        var merchantSpend = await GetReport("/api/v1/budget/reports/merchant-spend");
+        var disney = merchantSpend.GetProperty("rows").EnumerateArray()
+            .Single(x => x.GetProperty("brandKey").GetString() == "disney-plus");
+        var rewe = merchantSpend.GetProperty("rows").EnumerateArray()
+            .Single(x => x.GetProperty("merchant").GetString() == "REWE");
+        Assert.Equal(10_001, disney.GetProperty("netSpentCents").GetInt64());
+        Assert.Equal(12_000, rewe.GetProperty("grossExpenseCents").GetInt64());
+        Assert.Equal(2_000, rewe.GetProperty("refundCents").GetInt64());
+        Assert.Equal(10_000, rewe.GetProperty("netSpentCents").GetInt64());
+
+        var filteredByCategory = await GetReport($"/api/v1/budget/reports/category-spend?categoryId={foodId}");
+        Assert.Equal(13_333, filteredByCategory.GetProperty("totalNetSpentCents").GetInt64());
+        Assert.Equal(10_000, CategoryRow(filteredByCategory, foodId).GetProperty("shareBasisPoints").GetInt64());
+
+        var filteredByMerchant = await GetReport("/api/v1/budget/reports/category-spend?merchant=REWE");
+        Assert.Equal(10_000, filteredByMerchant.GetProperty("totalNetSpentCents").GetInt64());
+
+        var refundDay = await GetReport("/api/v1/budget/reports/category-spend?from=2026-07-21&through=2026-07-21");
+        Assert.Equal(-2_000, refundDay.GetProperty("totalNetSpentCents").GetInt64());
+        Assert.Equal(0, CategoryRow(refundDay, foodId).GetProperty("shareBasisPoints").GetInt64());
+
+        var comparison = await GetReport("/api/v1/budget/reports/period-comparison");
+        var july = comparison.GetProperty("rows").EnumerateArray()
+            .Single(x => x.GetProperty("startDate").GetString() == "2026-07-01");
+        Assert.Equal(100_000, july.GetProperty("incomeCents").GetInt64());
+        Assert.Equal(20_001, july.GetProperty("netSpendCents").GetInt64());
+        Assert.False(july.GetProperty("closed").GetBoolean());
+
+        var incomeReport = await GetReport("/api/v1/budget/reports/income");
+        Assert.Equal(0, incomeReport.GetProperty("expectedCents").GetInt64());
+        Assert.Equal(100_000, incomeReport.GetProperty("actualCents").GetInt64());
+        Assert.Equal(JsonValueKind.Null, incomeReport.GetProperty("varianceBasisPoints").ValueKind);
+
+        var buffer = await GetReport("/api/v1/budget/reports/buffer");
+        var openRow = buffer.GetProperty("rows").EnumerateArray().Single(x => x.GetProperty("open").GetBoolean());
+        Assert.Equal("2026-07-01", openRow.GetProperty("startDate").GetString());
+
+        using var renameRequest = Authenticated(HttpMethod.Patch, $"/api/v1/budget/categories/{foodId}", token);
+        renameRequest.Content = JsonContent.Create(new
+        {
+            name = "Groceries", color = "#15803d", icon = "shopping-cart", behavior = "include_in_limit", archived = false,
+        });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(renameRequest)).StatusCode);
+        var afterRename = await GetReport("/api/v1/budget/reports/category-spend");
+        var historicalFood = CategoryRow(afterRename, foodId);
+        Assert.Equal("Food", historicalFood.GetProperty("name").GetString());
+        Assert.Equal("#16a34a", historicalFood.GetProperty("color").GetString());
+        Assert.Equal(13_333, historicalFood.GetProperty("netSpentCents").GetInt64());
+
+        using var badDateRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/reports/category-spend?from=21.07.2026", token);
+        Assert.Equal(HttpStatusCode.BadRequest, (await fixture.Client.SendAsync(badDateRequest)).StatusCode);
+        using var invertedRequest = Authenticated(
+            HttpMethod.Get, "/api/v1/budget/reports/category-spend?from=2026-07-21&through=2026-07-01", token);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await fixture.Client.SendAsync(invertedRequest)).StatusCode);
+        using var foreignCategoryRequest = Authenticated(
+            HttpMethod.Get, $"/api/v1/budget/reports/category-spend?categoryId={foodId}",
+            LegacyParityFixture.ReportsIntruderAccessToken);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.SendAsync(foreignCategoryRequest)).StatusCode);
+        using var intruderRequest = Authenticated(
+            HttpMethod.Get, "/api/v1/budget/reports/category-spend", LegacyParityFixture.ReportsIntruderAccessToken);
+        var intruderReport = await (await fixture.Client.SendAsync(intruderRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, intruderReport.GetProperty("rows").GetArrayLength());
+        Assert.Equal(0, intruderReport.GetProperty("totalNetSpentCents").GetInt64());
+        using var anonymousRequest = new HttpRequestMessage(HttpMethod.Get, "/api/v1/budget/reports/category-spend");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await fixture.Client.SendAsync(anonymousRequest)).StatusCode);
+
+        async Task<Guid> CreateCategory(string name, string color, string icon)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/categories", token);
+            request.Content = JsonContent.Create(new { name, color, icon, behavior = "include_in_limit" });
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        }
+
+        async Task<Guid> PostExpense(string description, long amountCents, Guid categoryId, string merchant, string occurredOn)
+        {
+            using var request = Authenticated(HttpMethod.Post, "/api/v1/budget/ledger/entries", token);
+            request.Content = JsonContent.Create(new
+            {
+                kind = "expense", occurredOn, description, amountCents, categoryId, merchant, affectsOrdinary = true,
+            });
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        }
+
+        async Task<JsonElement> GetReport(string path)
+        {
+            using var request = Authenticated(HttpMethod.Get, path, token);
+            var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return await response.Content.ReadFromJsonAsync<JsonElement>();
+        }
+
+        static JsonElement CategoryRow(JsonElement report, Guid categoryId) =>
+            report.GetProperty("rows").EnumerateArray().Single(x =>
+                x.GetProperty("categoryId").ValueKind != JsonValueKind.Null &&
+                x.GetProperty("categoryId").GetGuid() == categoryId);
+    }
+
+    [Fact]
+    public async Task Planned_vs_actual_savings_and_investment_reports_match_postings()
+    {
+        const string token = LegacyParityFixture.ReportsPlanAccessToken;
+
+        using var planRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/income-plans", token);
+        planRequest.Content = JsonContent.Create(new
+        {
+            name = "Report salary", amountCents = 100_000, cadence = "monthly",
+            automaticPosting = false, startDate = "2026-07-02",
+        });
+        var planResponse = await fixture.Client.SendAsync(planRequest);
+        Assert.Equal(HttpStatusCode.Created, planResponse.StatusCode);
+        var planSeriesId = (await planResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("seriesId").GetGuid();
+        using var confirmIncomeRequest = Authenticated(
+            HttpMethod.Post, $"/api/v1/budget/income-plans/{planSeriesId}/occurrences/2026-07-02/confirm", token);
+        confirmIncomeRequest.Content = JsonContent.Create(new { actualOn = "2026-07-02", actualAmountCents = 90_000 });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(confirmIncomeRequest)).StatusCode);
+
+        using var commitmentRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/commitments", token);
+        commitmentRequest.Content = JsonContent.Create(new
+        {
+            name = "Report insurance", kind = "fixed_cost", cadence = "monthly", amountCents = 8_000,
+            startDate = "2026-07-10", budgetingMode = "due_period", chargeFirstShortfall = false, automaticPosting = false,
+        });
+        var commitmentResponse = await fixture.Client.SendAsync(commitmentRequest);
+        Assert.Equal(HttpStatusCode.Created, commitmentResponse.StatusCode);
+        var commitmentSeriesId = (await commitmentResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("seriesId").GetGuid();
+        using var confirmCommitmentRequest = Authenticated(
+            HttpMethod.Post, $"/api/v1/budget/commitments/{commitmentSeriesId}/occurrences/2026-07-10/confirm", token);
+        confirmCommitmentRequest.Content = JsonContent.Create(new { actualOn = "2026-07-10", actualAmountCents = 8_450 });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(confirmCommitmentRequest)).StatusCode);
+
+        using var reportRequest = Authenticated(
+            HttpMethod.Get, "/api/v1/budget/reports/planned-vs-actual?from=2026-07-01&through=2026-07-23", token);
+        var report = await (await fixture.Client.SendAsync(reportRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var incomeRow = report.GetProperty("income").EnumerateArray()
+            .Single(x => x.GetProperty("seriesId").GetGuid() == planSeriesId);
+        Assert.Equal(100_000, incomeRow.GetProperty("plannedCents").GetInt64());
+        Assert.Equal(90_000, incomeRow.GetProperty("actualCents").GetInt64());
+        Assert.Equal(-10_000, incomeRow.GetProperty("varianceCents").GetInt64());
+        Assert.Equal(-1_000, incomeRow.GetProperty("varianceBasisPoints").GetInt64());
+        Assert.Equal(1, incomeRow.GetProperty("postedCount").GetInt32());
+        var commitmentRow = report.GetProperty("commitments").EnumerateArray()
+            .Single(x => x.GetProperty("seriesId").GetGuid() == commitmentSeriesId);
+        Assert.Equal(8_000, commitmentRow.GetProperty("plannedCents").GetInt64());
+        Assert.Equal(8_450, commitmentRow.GetProperty("actualCents").GetInt64());
+        Assert.Equal(562, commitmentRow.GetProperty("varianceBasisPoints").GetInt64());
+
+        using var filteredRequest = Authenticated(
+            HttpMethod.Get, "/api/v1/budget/reports/planned-vs-actual?from=2026-07-01&through=2026-07-23&categoryId="
+            + Guid.NewGuid(), token);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Client.SendAsync(filteredRequest)).StatusCode);
+
+        using var goalRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/savings/goals", token);
+        goalRequest.Content = JsonContent.Create(new
+        {
+            name = "Report goal", targetAmountCents = 50_000, planningMode = "rate", recurringContributionCents = 10_000,
+        });
+        var goalResponse = await fixture.Client.SendAsync(goalRequest);
+        Assert.Equal(HttpStatusCode.Created, goalResponse.StatusCode);
+        var goalId = (await goalResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        using var contributionRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/savings/contributions", token);
+        contributionRequest.Content = JsonContent.Create(new
+        {
+            idempotencyKey = "report-saving-1", occurredOn = "2026-07-12", description = "Report saving",
+            amountCents = 10_000,
+            allocations = new object[] { new { purposeId = goalId, mode = "fixed", value = 10_000 } },
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(contributionRequest)).StatusCode);
+
+        using var goalsReportRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/reports/savings-goals", token);
+        var goalsReport = await (await fixture.Client.SendAsync(goalsReportRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        var goalRow = goalsReport.GetProperty("rows").EnumerateArray()
+            .Single(x => x.GetProperty("purposeId").GetGuid() == goalId);
+        Assert.Equal(10_000, goalRow.GetProperty("allocatedCents").GetInt64());
+        Assert.Equal(10_000, goalRow.GetProperty("allocatedInRangeCents").GetInt64());
+        Assert.Equal(2_000, goalRow.GetProperty("progressBasisPoints").GetInt64());
+
+        using var openingRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/investments/opening-values", token);
+        openingRequest.Content = JsonContent.Create(new
+        {
+            idempotencyKey = "report-invest-opening", occurredOn = "2026-07-01", description = "Opening depot",
+            amountCents = 100_000,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(openingRequest)).StatusCode);
+        using var valuationRequest = Authenticated(HttpMethod.Post, "/api/v1/budget/investments/valuations", token);
+        valuationRequest.Content = JsonContent.Create(new
+        {
+            idempotencyKey = "report-invest-valuation", occurredOn = "2026-07-20", description = "July valuation",
+            amountCents = 110_000,
+        });
+        Assert.Equal(HttpStatusCode.Created, (await fixture.Client.SendAsync(valuationRequest)).StatusCode);
+
+        using var investmentReportRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/reports/investments", token);
+        var investmentReport = await (await fixture.Client.SendAsync(investmentReportRequest)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(110_000, investmentReport.GetProperty("currentValueCents").GetInt64());
+        Assert.Equal(10_000, investmentReport.GetProperty("gainCents").GetInt64());
+        Assert.Equal(1_000, investmentReport.GetProperty("gainBasisPoints").GetInt64());
+        Assert.Equal("2026-07-20", investmentReport.GetProperty("latestValuationDate").GetString());
+    }
+
     private static HttpRequestMessage Authenticated(HttpMethod method, string path, string token = LegacyParityFixture.AccessToken)
     {
         var request = new HttpRequestMessage(method, path);

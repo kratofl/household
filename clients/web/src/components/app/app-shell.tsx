@@ -85,10 +85,18 @@ import {
   loadBudgetLedgerDetails,
   loadBudgetReminders,
   loadBudgetTimeline,
+  loadBufferReport,
+  loadCategorySpendReport,
   loadCommitments,
   loadIncomePlans,
+  loadIncomeReport,
+  loadInvestmentReport,
   loadInvestments,
+  loadMerchantSpendReport,
+  loadPeriodComparisonReport,
+  loadPlannedVsActualReport,
   loadReminderSettings,
+  loadSavingsGoalReport,
   loadWishlist,
   promoteWishlistItem,
   loadSavings,
@@ -110,10 +118,18 @@ import {
   voidBudgetLedgerEntry,
 } from "@/features/budget/api"
 import type {
+  BudgetBufferReport,
   BudgetCategory,
+  BudgetCategorySpendReport,
+  BudgetIncomeReport,
+  BudgetInvestmentReport,
   BudgetLedgerEntry,
+  BudgetMerchantSpendReport,
+  BudgetPeriodComparisonReport,
+  BudgetPlannedVsActualReport,
   BudgetReminder,
   BudgetReminderSetting,
+  BudgetSavingsGoalReport,
   BudgetSetupState,
   BudgetSummary,
   BudgetTimelineItem,
@@ -155,6 +171,17 @@ type CurrentUser = {
   email: string
   role: "admin" | "user"
   status: "pending" | "active" | "blocked"
+}
+
+type BudgetReportsState = {
+  comparison: BudgetPeriodComparisonReport
+  categorySpend: BudgetCategorySpendReport
+  merchantSpend: BudgetMerchantSpendReport
+  plannedVsActual: BudgetPlannedVsActualReport
+  income: BudgetIncomeReport
+  buffer: BudgetBufferReport
+  savingsGoals: BudgetSavingsGoalReport
+  investments: BudgetInvestmentReport
 }
 
 type UpdateCandidate = {
@@ -1258,6 +1285,13 @@ function BudgetPanel(props: {
   const [wishlistPromotionDate, setWishlistPromotionDate] = useState("")
   const [wishlistPromotionRate, setWishlistPromotionRate] = useState("")
   const [wishlistPromotionGoalId, setWishlistPromotionGoalId] = useState("")
+  const [reports, setReports] = useState<BudgetReportsState | null>(null)
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [reportFrom, setReportFrom] = useState("")
+  const [reportThrough, setReportThrough] = useState("")
+  const [reportCategoryId, setReportCategoryId] = useState("")
+  const [reportMerchant, setReportMerchant] = useState("")
+  const [reportMerchantApplied, setReportMerchantApplied] = useState("")
   const [initialIncomeName, setInitialIncomeName] = useState("")
   const [initialIncomeAmount, setInitialIncomeAmount] = useState("")
   const [openingKind, setOpeningKind] = useState<"buffer" | "savings" | "investment">("buffer")
@@ -1281,6 +1315,30 @@ function BudgetPanel(props: {
         currency: setup?.baseCurrency ?? "EUR",
       }).format(cents / 100),
     [locale, setup?.baseCurrency],
+  )
+
+  const basisPoints = useCallback(
+    (value: number) =>
+      new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-US", {
+        style: "percent",
+        maximumFractionDigits: 1,
+        signDisplay: "exceptZero",
+      }).format(value / 10_000),
+    [locale],
+  )
+
+  const share = useCallback(
+    (value: number) =>
+      new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-US", {
+        style: "percent",
+        maximumFractionDigits: 1,
+      }).format(value / 10_000),
+    [locale],
+  )
+
+  const reportDate = useCallback(
+    (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString(locale === "de" ? "de-DE" : "en-US"),
+    [locale],
   )
 
   const hydrateSetup = useCallback((data: BudgetSetupState) => {
@@ -1389,6 +1447,36 @@ function BudgetPanel(props: {
     setReminderSettings(settingsData)
   }, [accessToken])
 
+  const loadReportsState = useCallback(async () => {
+    if (!accessToken) return
+    setReportsLoading(true)
+    try {
+      const range = {
+        from: reportFrom || undefined,
+        through: reportThrough || undefined,
+      }
+      const spendQuery = {
+        ...range,
+        categoryId: reportCategoryId || undefined,
+        merchant: reportMerchantApplied || undefined,
+      }
+      const [comparison, categorySpend, merchantSpend, plannedVsActual, income, buffer, savingsGoals, investments] =
+        await Promise.all([
+          loadPeriodComparisonReport(accessToken, spendQuery),
+          loadCategorySpendReport(accessToken, spendQuery),
+          loadMerchantSpendReport(accessToken, spendQuery),
+          loadPlannedVsActualReport(accessToken, { ...range, categoryId: reportCategoryId || undefined }),
+          loadIncomeReport(accessToken, range),
+          loadBufferReport(accessToken, range),
+          loadSavingsGoalReport(accessToken, range),
+          loadInvestmentReport(accessToken, range),
+        ])
+      setReports({ comparison, categorySpend, merchantSpend, plannedVsActual, income, buffer, savingsGoals, investments })
+    } finally {
+      setReportsLoading(false)
+    }
+  }, [accessToken, reportCategoryId, reportFrom, reportMerchantApplied, reportThrough])
+
   useEffect(() => {
     if (!accessToken) return
 
@@ -1457,6 +1545,15 @@ function BudgetPanel(props: {
     }, 0)
     return () => window.clearTimeout(timer)
   }, [accessToken, loadInvestmentState, loadSavingsState, selectedBudgetView, t])
+
+  useEffect(() => {
+    if (!accessToken || selectedBudgetView !== "reports") return
+    const timer = window.setTimeout(() => {
+      void loadReportsState()
+        .catch((err) => setError(err instanceof Error ? err.message : t("error.unexpected")))
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [accessToken, loadReportsState, selectedBudgetView, t])
 
   useEffect(() => {
     if (!accessToken || selectedBudgetView !== "wishlist") return
@@ -3743,13 +3840,392 @@ function BudgetPanel(props: {
               </div>
             ) : null}
             {showReports ? (
-              <div className="rounded-lg border border-dashed bg-muted/10 p-8 text-center sm:p-12">
-                <h3 className="text-lg font-semibold">
-                  {t("budget.emptyReportsTitle")}
-                </h3>
-                <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-                  {t("budget.emptyReportsDescription")}
-                </p>
+              <div className="space-y-5">
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium">{t("budget.reportsTitle")}</h3>
+                  <p className="text-sm text-muted-foreground">{t("budget.reportsDescription")}</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="report-from">{t("budget.reportFrom")}</Label>
+                      <Input
+                        id="report-from"
+                        type="date"
+                        value={reportFrom}
+                        onChange={(event) => setReportFrom(event.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="report-through">{t("budget.reportThrough")}</Label>
+                      <Input
+                        id="report-through"
+                        type="date"
+                        value={reportThrough}
+                        onChange={(event) => setReportThrough(event.target.value)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label>{t("budget.reportCategory")}</Label>
+                      <FormSelect
+                        value={reportCategoryId}
+                        onValueChange={setReportCategoryId}
+                        options={[
+                          { value: "", label: t("budget.allCategories") },
+                          ...summary.categories.map((category) => ({ value: category.id, label: category.name })),
+                        ]}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="report-merchant">{t("budget.reportMerchant")}</Label>
+                      <Input
+                        id="report-merchant"
+                        value={reportMerchant}
+                        onChange={(event) => setReportMerchant(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") setReportMerchantApplied(reportMerchant.trim())
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <Button onClick={() => setReportMerchantApplied(reportMerchant.trim())} disabled={reportsLoading}>
+                        {t("budget.applyFilters")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={reportsLoading}
+                        onClick={() => {
+                          setReportFrom("")
+                          setReportThrough("")
+                          setReportCategoryId("")
+                          setReportMerchant("")
+                          setReportMerchantApplied("")
+                        }}
+                      >
+                        {t("budget.resetFilters")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                {!reports ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                ) : (
+                  <div className="grid gap-5 xl:grid-cols-2">
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportPeriodComparison")}</h3>
+                      {reports.comparison.rows.length === 0 ? (
+                        <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          {t("budget.reportsEmpty")}
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {reports.comparison.rows.map((row) => (
+                            <div key={row.periodId} className="rounded-md border p-3 text-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="font-medium">{row.name}</p>
+                                <div className="flex items-center gap-2">
+                                  {row.changeVsPreviousBasisPoints !== null ? (
+                                    <Badge variant={row.changeVsPreviousBasisPoints > 0 ? "destructive" : "secondary"}>
+                                      {basisPoints(row.changeVsPreviousBasisPoints)} {t("budget.reportChangeVsPrevious")}
+                                    </Badge>
+                                  ) : null}
+                                  {!row.closed ? <Badge variant="outline">{t("budget.reportOpenPeriod")}</Badge> : null}
+                                </div>
+                              </div>
+                              <div className="mt-2 grid gap-1 text-muted-foreground sm:grid-cols-2">
+                                <p>
+                                  {t("budget.reportIncomeLabel")}:{" "}
+                                  <span className="text-foreground">{currency(row.incomeCents)}</span>
+                                </p>
+                                <p>
+                                  {t("budget.reportNetSpend")}:{" "}
+                                  <span className="text-foreground">{currency(row.netSpendCents)}</span>
+                                </p>
+                                <p>
+                                  {t("budget.reportSavingsContributions")}:{" "}
+                                  <span className="text-foreground">{currency(row.savingsContributionCents)}</span>
+                                </p>
+                                <p>
+                                  {t("budget.reportInvestmentContributions")}:{" "}
+                                  <span className="text-foreground">{currency(row.investmentContributionCents)}</span>
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportCategorySpend")}</h3>
+                      {reports.categorySpend.rows.length === 0 ? (
+                        <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          {t("budget.reportsEmpty")}
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {reports.categorySpend.rows.map((row) => (
+                            <div
+                              key={row.categoryId ?? "uncategorized"}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  aria-hidden
+                                  className="size-3 rounded-full"
+                                  style={{ backgroundColor: row.color || "var(--muted-foreground)" }}
+                                />
+                                <div>
+                                  <p className="font-medium">{row.name || t("budget.reportUncategorized")}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {t("budget.reportEntries", { count: row.entryCount })}
+                                    {row.refundCents > 0
+                                      ? ` · ${t("budget.reportRefunds")}: ${currency(row.refundCents)}`
+                                      : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span>{currency(row.netSpentCents)}</span>
+                                <Badge variant="secondary">{share(row.shareBasisPoints)}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                          <p className="text-sm text-muted-foreground">
+                            {t("budget.reportNetSpend")}:{" "}
+                            <span className="text-foreground">{currency(reports.categorySpend.totalNetSpentCents)}</span>
+                            {" · "}
+                            {t("budget.reportRefunds")}:{" "}
+                            <span className="text-foreground">{currency(reports.categorySpend.totalRefundCents)}</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportMerchantSpend")}</h3>
+                      {reports.merchantSpend.rows.length === 0 ? (
+                        <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          {t("budget.reportsEmpty")}
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {reports.merchantSpend.rows.map((row) => (
+                            <div
+                              key={row.merchant || "unspecified"}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
+                            >
+                              <div>
+                                <p className="font-medium">{row.merchant || t("budget.reportUnspecifiedMerchant")}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {t("budget.reportEntries", { count: row.entryCount })}
+                                  {row.refundCents > 0
+                                    ? ` · ${t("budget.reportRefunds")}: ${currency(row.refundCents)}`
+                                    : ""}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span>{currency(row.netSpentCents)}</span>
+                                <Badge variant="secondary">{share(row.shareBasisPoints)}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportPlannedVsActual")}</h3>
+                      {reports.plannedVsActual.income.length === 0 && reports.plannedVsActual.commitments.length === 0 ? (
+                        <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          {t("budget.reportsEmpty")}
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {[...reports.plannedVsActual.income, ...reports.plannedVsActual.commitments].map((row) => (
+                            <div key={row.seriesId} className="rounded-md border p-3 text-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="font-medium">{row.name}</p>
+                                <div className="flex items-center gap-2">
+                                  {row.varianceBasisPoints !== null ? (
+                                    <Badge variant={row.varianceCents < 0 === (row.kind === "income") ? "destructive" : "secondary"}>
+                                      {basisPoints(row.varianceBasisPoints)}
+                                    </Badge>
+                                  ) : null}
+                                  <Badge variant="outline">
+                                    {t(row.kind === "income" ? "budget.reminderIncomePlan" : "budget.reminderCommitmentPlan")}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <p className="mt-1 text-muted-foreground">
+                                {t("budget.reportPlanned")}: <span className="text-foreground">{currency(row.plannedCents)}</span>
+                                {" · "}
+                                {t("budget.reportActual")}: <span className="text-foreground">{currency(row.actualCents)}</span>
+                                {" · "}
+                                {t("budget.variance")}: <span className="text-foreground">{currency(row.varianceCents)}</span>
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {t("budget.reportPostedOf", { posted: row.postedCount, count: row.occurrenceCount })}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportIncome")}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t("budget.reportExpected")}: <span className="text-foreground">{currency(reports.income.expectedCents)}</span>
+                        {" · "}
+                        {t("budget.reportActual")}: <span className="text-foreground">{currency(reports.income.actualCents)}</span>
+                        {" · "}
+                        {t("budget.variance")}: <span className="text-foreground">{currency(reports.income.varianceCents)}</span>
+                        {reports.income.varianceBasisPoints !== null ? ` (${basisPoints(reports.income.varianceBasisPoints)})` : ""}
+                      </p>
+                      {reports.income.routing.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {reports.income.routing.map((route) => (
+                            <Badge key={route.destination} variant="outline">
+                              {t(
+                                route.destination === "buffer" ? "budget.routeBuffer" :
+                                route.destination === "savings" ? "budget.routeSavings" :
+                                route.destination === "investment" ? "budget.routeInvestment" : "budget.routeOrdinary",
+                              )}
+                              : {currency(route.amountCents)}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                      {reports.income.rows.length === 0 ? (
+                        <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          {t("budget.reportsEmpty")}
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {reports.income.rows.map((row) => (
+                            <div
+                              key={row.periodId}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
+                            >
+                              <p className="font-medium">{row.name}</p>
+                              <p className="text-muted-foreground">
+                                {t("budget.reportExpected")}: <span className="text-foreground">{currency(row.expectedCents)}</span>
+                                {" · "}
+                                {t("budget.reportActual")}: <span className="text-foreground">{currency(row.actualCents)}</span>
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportBuffer")}</h3>
+                      {reports.buffer.rows.length === 0 ? (
+                        <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          {t("budget.reportsEmpty")}
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {reports.buffer.rows.map((row) => (
+                            <div key={row.periodId} className="rounded-md border p-3 text-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="font-medium">{row.name}</p>
+                                <div className="flex items-center gap-2">
+                                  {row.fundedShareBasisPoints !== null ? (
+                                    <Badge variant="secondary">{share(row.fundedShareBasisPoints)}</Badge>
+                                  ) : null}
+                                  {row.open ? <Badge variant="outline">{t("budget.reportOpenPeriod")}</Badge> : null}
+                                </div>
+                              </div>
+                              <p className="mt-1 text-muted-foreground">
+                                {t("budget.reportBufferTarget")}: <span className="text-foreground">{currency(row.actualBufferTargetCents)}</span>
+                                {" · "}
+                                {t("budget.reportBufferFunded")}: <span className="text-foreground">{currency(row.fundedBufferCents)}</span>
+                                {row.bufferShortfallCents > 0
+                                  ? ` · ${t("budget.reportBufferShortfall")}: ${currency(row.bufferShortfallCents)}`
+                                  : ""}
+                                {row.retainedBufferCents !== null
+                                  ? ` · ${t("budget.reportBufferRetained")}: ${currency(row.retainedBufferCents)}`
+                                  : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportSavingsGoals")}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {t("budget.reportTotalSaved")}: <span className="text-foreground">{currency(reports.savingsGoals.totalSavedCents)}</span>
+                        {" · "}
+                        {t("budget.reportUnallocated")}: <span className="text-foreground">{currency(reports.savingsGoals.unallocatedCents)}</span>
+                      </p>
+                      {reports.savingsGoals.rows.length === 0 ? (
+                        <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                          {t("budget.reportsEmpty")}
+                        </p>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {reports.savingsGoals.rows.map((row) => (
+                            <div key={row.purposeId} className="rounded-md border p-3 text-sm">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="font-medium">{row.name}</p>
+                                <div className="flex items-center gap-2">
+                                  {row.progressBasisPoints !== null ? (
+                                    <Badge variant="secondary">{share(row.progressBasisPoints)}</Badge>
+                                  ) : null}
+                                  <Badge variant="outline">
+                                    {t(
+                                      row.status === "completed" ? "budget.goalCompleted" :
+                                      row.status === "fully_funded" ? "budget.goalFullyFunded" :
+                                      row.status === "behind" ? "budget.goalBehind" : "budget.goalActive",
+                                    )}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <p className="mt-1 text-muted-foreground">
+                                {t("budget.allocated")}: <span className="text-foreground">{currency(row.allocatedCents)}</span>
+                                {row.targetAmountCents ? ` / ${currency(row.targetAmountCents)}` : ""}
+                                {" · "}
+                                {t("budget.reportAllocatedInRange")}: <span className="text-foreground">{currency(row.allocatedInRangeCents)}</span>
+                                {row.consumedInRangeCents > 0
+                                  ? ` · ${t("budget.reportConsumedInRange")}: ${currency(row.consumedInRangeCents)}`
+                                  : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border p-4">
+                      <h3 className="font-medium">{t("budget.reportInvestments")}</h3>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-md border p-3 text-sm">
+                          <p className="text-muted-foreground">{t("budget.reportContributedCapital")}</p>
+                          <p className="font-medium">{currency(reports.investments.contributedCapitalCents)}</p>
+                        </div>
+                        <div className="rounded-md border p-3 text-sm">
+                          <p className="text-muted-foreground">{t("budget.reportCurrentValue")}</p>
+                          <p className="font-medium">{currency(reports.investments.currentValueCents)}</p>
+                        </div>
+                        <div className="rounded-md border p-3 text-sm">
+                          <p className="text-muted-foreground">{t("budget.reportGain")}</p>
+                          <p className="font-medium">
+                            {currency(reports.investments.gainCents)} ({basisPoints(reports.investments.gainBasisPoints)})
+                          </p>
+                        </div>
+                        <div className="rounded-md border p-3 text-sm">
+                          <p className="text-muted-foreground">{t("budget.reportValueDelta")}</p>
+                          <p className="font-medium">{currency(reports.investments.valueDeltaCents)}</p>
+                        </div>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {t("budget.reportContributedDelta")}: {currency(reports.investments.contributedDeltaCents)}
+                        {reports.investments.latestValuationDate
+                          ? ` · ${t("budget.reportLatestValuation")}: ${reportDate(reports.investments.latestValuationDate)}`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
           </>

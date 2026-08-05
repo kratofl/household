@@ -1,12 +1,21 @@
 import { apiRequest } from "@/lib/api"
 
 import type {
+  BudgetBufferReport,
   BudgetCategoryInput,
+  BudgetCategorySpendReport,
+  BudgetIncomeReport,
+  BudgetInvestmentReport,
   BudgetLedgerEntry,
   BudgetLedgerEntryInput,
+  BudgetMerchantSpendReport,
+  BudgetPeriodComparisonReport,
   BudgetPeriodInput,
+  BudgetPlannedVsActualReport,
   BudgetReminder,
   BudgetReminderSetting,
+  BudgetReportQuery,
+  BudgetSavingsGoalReport,
   BudgetSummary,
   BudgetTimelineItem,
   BudgetSetupInput,
@@ -238,4 +247,46 @@ export function saveReminderSetting(
     accessToken,
     body,
   })
+}
+
+function reportQuery(query: BudgetReportQuery) {
+  const params = new URLSearchParams()
+  if (query.from) params.set("from", query.from)
+  if (query.through) params.set("through", query.through)
+  if (query.categoryId) params.set("categoryId", query.categoryId)
+  if (query.merchant) params.set("merchant", query.merchant)
+  const value = params.toString()
+  return value ? `?${value}` : ""
+}
+
+export function loadPeriodComparisonReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetPeriodComparisonReport>(`/budget/reports/period-comparison${reportQuery(query)}`, { accessToken })
+}
+
+export function loadCategorySpendReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetCategorySpendReport>(`/budget/reports/category-spend${reportQuery(query)}`, { accessToken })
+}
+
+export function loadMerchantSpendReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetMerchantSpendReport>(`/budget/reports/merchant-spend${reportQuery(query)}`, { accessToken })
+}
+
+export function loadPlannedVsActualReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetPlannedVsActualReport>(`/budget/reports/planned-vs-actual${reportQuery(query)}`, { accessToken })
+}
+
+export function loadIncomeReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetIncomeReport>(`/budget/reports/income${reportQuery(query)}`, { accessToken })
+}
+
+export function loadBufferReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetBufferReport>(`/budget/reports/buffer${reportQuery(query)}`, { accessToken })
+}
+
+export function loadSavingsGoalReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetSavingsGoalReport>(`/budget/reports/savings-goals${reportQuery(query)}`, { accessToken })
+}
+
+export function loadInvestmentReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetInvestmentReport>(`/budget/reports/investments${reportQuery(query)}`, { accessToken })
 }

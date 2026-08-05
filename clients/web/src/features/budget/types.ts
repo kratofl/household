@@ -438,3 +438,192 @@ export type ReminderSettingInput = {
   dueEnabled: boolean
   overdueEnabled: boolean
 }
+
+export type BudgetReportQuery = {
+  from?: string
+  through?: string
+  categoryId?: string
+  merchant?: string
+}
+
+export type BudgetCategorySpendRow = {
+  categoryId: string | null
+  name: string
+  color: string
+  icon: string
+  grossExpenseCents: number
+  refundCents: number
+  netSpentCents: number
+  shareBasisPoints: number
+  entryCount: number
+}
+
+export type BudgetCategorySpendReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  merchant: string | null
+  totalGrossExpenseCents: number
+  totalRefundCents: number
+  totalNetSpentCents: number
+  rows: BudgetCategorySpendRow[]
+}
+
+export type BudgetMerchantSpendRow = {
+  merchant: string
+  brandKey: string | null
+  grossExpenseCents: number
+  refundCents: number
+  netSpentCents: number
+  shareBasisPoints: number
+  entryCount: number
+}
+
+export type BudgetMerchantSpendReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  merchant: string | null
+  totalGrossExpenseCents: number
+  totalRefundCents: number
+  totalNetSpentCents: number
+  rows: BudgetMerchantSpendRow[]
+}
+
+export type BudgetPeriodComparisonRow = {
+  periodId: string
+  name: string
+  startDate: string
+  endDate: string
+  closed: boolean
+  incomeCents: number
+  grossExpenseCents: number
+  refundCents: number
+  netSpendCents: number
+  savingsContributionCents: number
+  investmentContributionCents: number
+  fundedBufferCents: number | null
+  retainedBufferCents: number | null
+  changeVsPreviousBasisPoints: number | null
+}
+
+export type BudgetPeriodComparisonReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  merchant: string | null
+  rows: BudgetPeriodComparisonRow[]
+}
+
+export type BudgetPlannedVsActualRow = {
+  seriesId: string
+  name: string
+  kind: string
+  categoryId: string | null
+  plannedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+  occurrenceCount: number
+  postedCount: number
+}
+
+export type BudgetPlannedVsActualReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  plannedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+  income: BudgetPlannedVsActualRow[]
+  commitments: BudgetPlannedVsActualRow[]
+}
+
+export type BudgetIncomeReportRow = {
+  periodId: string
+  name: string
+  startDate: string
+  endDate: string
+  expectedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+}
+
+export type BudgetIncomeReport = {
+  from: string
+  through: string
+  expectedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+  routing: Array<{ destination: string; amountCents: number }>
+  rows: BudgetIncomeReportRow[]
+}
+
+export type BudgetBufferReportRow = {
+  periodId: string
+  name: string
+  startDate: string
+  endDate: string
+  open: boolean
+  forecastBufferTargetCents: number
+  actualBufferTargetCents: number
+  fundedBufferCents: number
+  bufferShortfallCents: number
+  fundedShareBasisPoints: number | null
+  deficitCents: number | null
+  coveredFromBufferCents: number | null
+  carriedDeficitCents: number | null
+  disposition: string | null
+  dispositionAmountCents: number | null
+  retainedBufferCents: number | null
+  protectedBufferCents: number
+  closedAt: string | null
+}
+
+export type BudgetBufferReport = {
+  from: string
+  through: string
+  rows: BudgetBufferReportRow[]
+}
+
+export type BudgetSavingsGoalReportRow = {
+  purposeId: string
+  name: string
+  status: "active" | "behind" | "fully_funded" | "completed"
+  archived: boolean
+  targetAmountCents: number | null
+  allocatedCents: number
+  progressBasisPoints: number | null
+  allocatedInRangeCents: number
+  consumedInRangeCents: number
+  plannedContributionCents: number | null
+  revisedContributionCents: number | null
+  plannedFundingDate: string | null
+  revisedFundingDate: string | null
+  contributionsPaused: boolean
+}
+
+export type BudgetSavingsGoalReport = {
+  from: string
+  through: string
+  totalSavedCents: number
+  unallocatedCents: number
+  rows: BudgetSavingsGoalReportRow[]
+}
+
+export type BudgetInvestmentReport = {
+  from: string
+  through: string
+  contributedCapitalCents: number
+  currentValueCents: number
+  withdrawnCents: number
+  gainCents: number
+  gainBasisPoints: number
+  latestValuationDate: string | null
+  contributedDeltaCents: number
+  valueDeltaCents: number
+  events: InvestmentProjection["events"]
+}

@@ -31,6 +31,9 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public const string ReminderAccessToken = "reminder-access-token";
     public const string ReminderIntruderAccessToken = "reminder-intruder-access-token";
     public const string AutomationAccessToken = "automation-access-token";
+    public const string ReportsAccessToken = "reports-access-token";
+    public const string ReportsIntruderAccessToken = "reports-intruder-access-token";
+    public const string ReportsPlanAccessToken = "reports-plan-access-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
     public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
@@ -109,6 +112,9 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         command.Parameters.AddWithValue("reminderAccessHash", HashToken(ReminderAccessToken));
         command.Parameters.AddWithValue("reminderIntruderAccessHash", HashToken(ReminderIntruderAccessToken));
         command.Parameters.AddWithValue("automationAccessHash", HashToken(AutomationAccessToken));
+        command.Parameters.AddWithValue("reportsAccessHash", HashToken(ReportsAccessToken));
+        command.Parameters.AddWithValue("reportsIntruderAccessHash", HashToken(ReportsIntruderAccessToken));
+        command.Parameters.AddWithValue("reportsPlanAccessHash", HashToken(ReportsPlanAccessToken));
         await command.ExecuteNonQueryAsync();
     }
 
@@ -272,6 +278,21 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b68', '019bd5e4-6c31-7c48-8471-a42157389b67', @automationAccessHash,
                 'automation-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b69', 'reports', 'reports@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b6a', '019bd5e4-6c31-7c48-8471-a42157389b69', @reportsAccessHash,
+                'reports-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b6b', 'reports-intruder', 'reports-intruder@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b6c', '019bd5e4-6c31-7c48-8471-a42157389b6b', @reportsIntruderAccessHash,
+                'reports-intruder-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b6d', 'reports-plan', 'reports-plan@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b6e', '019bd5e4-6c31-7c48-8471-a42157389b6d', @reportsPlanAccessHash,
+                'reports-plan-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
 
         CREATE SCHEMA budget;
         CREATE TABLE budget.periods (
