@@ -50,6 +50,10 @@ dotnet test Household.slnx
 dotnet build Household.slnx
 ```
 
+The Makefile recipes need a POSIX `sh` (run them from Git Bash or WSL). From Windows
+PowerShell use the equivalent task runner instead: `.\make.ps1 <target>` (same target
+names; see `.\make.ps1 help`).
+
 Backend integration tests launch PostgreSQL through Docker, so Docker must be running.
 Browser tests (`make browser-test`, Playwright in `clients/web/e2e/`) start their own
 PostgreSQL container and the real .NET API, so Docker must be running for them too.
