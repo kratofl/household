@@ -22,6 +22,8 @@ Household is early-stage self-hosted software. The current work is focused on ma
 
 ## Planned product areas
 
+- Polished multi-step registration and cross-product account onboarding, building
+  on the functional Budget setup included in the Budget slice.
 - Budget accounts, categories, monthly limits, planned expenses, subscriptions, savings plans, and month-specific snapshots.
 - Shopping list.
 - Recipes and meal planning.
