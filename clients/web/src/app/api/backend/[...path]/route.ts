@@ -32,11 +32,26 @@ async function proxy(request: NextRequest, context: RouteContext<"/api/backend/[
     ? undefined
     : await request.text()
 
-  const response = await fetch(target, {
-    method: request.method,
-    headers: forwardedHeaders(request),
-    body,
-  })
+  let response: Response
+  try {
+    response = await fetch(target, {
+      method: request.method,
+      headers: forwardedHeaders(request),
+      body,
+    })
+  } catch {
+    // The API process is unreachable (not started, wrong port, container down).
+    // Answer with a problem response so the client shows a meaningful error
+    // instead of an opaque runtime failure.
+    return Response.json(
+      {
+        title: "Backend unavailable",
+        detail: `The Household API at ${API_BASE_URL} did not respond. Start it with "make api-dev" (or ".\\make.ps1 api-dev" on Windows PowerShell).`,
+        status: 502,
+      },
+      { status: 502, headers: { "Content-Type": "application/problem+json" } },
+    )
+  }
 
   return new Response(response.body, {
     status: response.status,
