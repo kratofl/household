@@ -10,7 +10,9 @@ services:
     ports:
       - "${HOUSEHOLD_DB_PORT:-5432}:5432"
     volumes:
-      - household_db_data:/var/lib/postgresql/data
+      # PostgreSQL 18+ images require the mount at /var/lib/postgresql and place
+      # the cluster in a version-specific subdirectory.
+      - household_db_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d \"$${POSTGRES_DB}\" -U \"$${POSTGRES_USER}\""]
       interval: 30s
