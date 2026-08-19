@@ -11,39 +11,17 @@ if (!germanCatalog?.groups?.body) {
   throw new Error("Could not find the German translation catalog")
 }
 
-const asciiSubstitutions = [
-  /aender/i,
-  /abschliess|schliess/i,
-  /auswaehl/i,
-  /beitraeg/i,
-  /bestaet/i,
-  /faell/i,
-  /fuer/i,
-  /gehoer/i,
-  /geschuetz/i,
-  /groess/i,
-  /guelt/i,
-  /haendl/i,
-  /hinzufueg/i,
-  /hoech/i,
-  /koenn/i,
-  /laed/i,
-  /loesch/i,
-  /moeg/i,
-  /naech/i,
-  /noet/i,
-  /oeff/i,
-  /plaen/i,
-  /pruef/i,
-  /regelmaess/i,
-  /spaet/i,
-  /ueber/i,
-  /unterstuetz/i,
-  /verfueg/i,
-  /waehr/i,
-  /waehl/i,
-  /zurueck/i,
-]
+const legitimateVowelPairs = /^(?:aktuell(?:e|en|er|es)?|finanzierungsquelle|manuelle|neue[ns]?|steuern)$/i
+
+function usesAsciiUmlautSubstitution(value) {
+  const words = value.match(/[A-Za-zÄÖÜäöüß]+/g) ?? []
+
+  return words.some(
+    (word) =>
+      (/(?:ae|oe|ue)/i.test(word) && !legitimateVowelPairs.test(word)) ||
+      /(?:gross|schliess)/i.test(word),
+  )
+}
 
 const invalidEntries = germanCatalog.groups.body
   .split("\n")
@@ -51,7 +29,7 @@ const invalidEntries = germanCatalog.groups.body
     const entry = line.match(/^\s*"(?<key>[^"]+)":\s*"(?<value>[^"]*)",?$/)
     if (!entry?.groups) return []
 
-    return asciiSubstitutions.some((pattern) => pattern.test(entry.groups.value))
+    return usesAsciiUmlautSubstitution(entry.groups.value)
       ? [`${entry.groups.key}: ${entry.groups.value}`]
       : []
   })

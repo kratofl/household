@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "check:i18n": "node scripts/check-german-translations.mjs",
-    "lint": "eslint"
+    "lint": "npm run check:i18n && eslint"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
