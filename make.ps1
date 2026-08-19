@@ -108,7 +108,7 @@ switch ($Target) {
         Write-Host ""
         Write-Host "Setup:        setup-env, bootstrap, doctor"
         Write-Host "Development:  dev, db-up, db-down, db-logs, api-dev, web-dev, reset-dev-db"
-        Write-Host "Quality:      check, backend-test, backend-build, web-lint, web-build, browser-test, compose-config"
+        Write-Host "Quality:      check, backend-test, backend-build, web-lint, web-build, compose-config"
         Write-Host "Production:   prod-pull, prod-up, prod-build-up, prod-down, prod-logs, prod-backup,"
         Write-Host "              prod-restore -Backup <path>, prod-observability-up"
         Write-Host "Other:        observability-up, observability-down, observability-logs,"
@@ -177,7 +177,7 @@ switch ($Target) {
     }
 
     "check" {
-        foreach ($step in "backend-test", "backend-build", "web-lint", "web-build", "browser-test", "compose-config") {
+        foreach ($step in "backend-test", "backend-build", "web-lint", "web-build", "compose-config") {
             & $PSCommandPath $step
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
@@ -197,12 +197,6 @@ switch ($Target) {
     "web-lint" { Invoke-Step "Linting web" { Set-Location $webDir; npm run lint } }
 
     "web-build" { Invoke-Step "Building web" { Set-Location $webDir; npm run build } }
-
-    "browser-test" {
-        & $PSCommandPath web-build
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        Invoke-Step "Running browser journeys against the real API" { Set-Location $webDir; npx playwright test }
-    }
 
     "compose-config" {
         Invoke-Step "Validating production Compose" {

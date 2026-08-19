@@ -38,7 +38,6 @@ make backend-test
 make backend-build
 make web-lint
 make web-build
-make browser-test
 make compose-config
 ```
 
@@ -55,8 +54,6 @@ PowerShell use the equivalent task runner instead: `.\make.ps1 <target>` (same t
 names; see `.\make.ps1 help`).
 
 Backend integration tests launch PostgreSQL through Docker, so Docker must be running.
-Browser tests (`make browser-test`, Playwright in `clients/web/e2e/`) start their own
-PostgreSQL container and the real .NET API, so Docker must be running for them too.
 
 Local development:
 

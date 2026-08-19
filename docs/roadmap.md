@@ -15,13 +15,12 @@ Household is early-stage self-hosted software. The current work is focused on ma
 - Complete Budget slice on the .NET modular monolith: append-only ledger,
   categories with history, recurring income and commitments, buffer and period
   close, savings goals, investments, wishlist, reminders, reports, and reviewed
-  CSV import/export — localized in German and English with browser-tested
-  journeys.
+  CSV import/export — localized in German and English.
 
 ## In progress
 
 - Public documentation and release hardening.
-- CI coverage for backend, web, browser journeys, Docker, and Compose.
+- CI coverage for backend, web, Docker, and Compose.
 - Safer, clearer release bundles for home-server installs.
 
 ## Planned product areas
