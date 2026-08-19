@@ -12,7 +12,7 @@ COMPOSE_EXAMPLE=docker compose --env-file $(ENV_EXAMPLE_FILE)
 
 BACKEND_DIR=backend
 WEB_DIR=clients/web
-BUILD_DIR=/private/tmp/household-build
+BUILD_DIR=tmp/household-build
 
 .PHONY: help
 help:
