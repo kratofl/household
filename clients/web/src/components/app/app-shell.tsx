@@ -43,6 +43,13 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { FormSelect } from "@/components/app/form-select"
 import {
+  HeroMetric,
+  InlineStat,
+  KeyValueRow,
+  Metric,
+  meterTone,
+} from "@/components/app/metrics"
+import {
   SettingsField,
   SettingsRow,
   SettingsSection,
@@ -307,7 +314,9 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
       : isSettings
         ? t("settings.title")
         : selectedModule
-          ? moduleName(selectedModule, locale)
+          ? selectedModule.key === "budget"
+            ? t(budgetViews[budgetViewFromPath(pathname)].labelKey)
+            : moduleName(selectedModule, locale)
           : t("app.name")
 
   const staticRoutes = useMemo(
@@ -713,7 +722,9 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
           <header className="border-b px-5 py-4 lg:px-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">{t("app.subtitle")}</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedModule ? moduleName(selectedModule, locale) : t("app.subtitle")}
+                </p>
                 <h2 className="text-2xl font-semibold tracking-tight">{selectedTitle}</h2>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -2428,7 +2439,7 @@ function BudgetPanel(props: {
   const showSettings = selectedBudgetView === "settings"
 
   const setupFields = (onboarding: boolean) => (
-    <div className="rounded-lg border bg-muted/10 p-4 sm:p-6">
+    <div className="rounded-lg border bg-card p-4 sm:p-6">
       <div className="max-w-2xl">
         <h3 className="text-lg font-semibold">
           {t(onboarding ? "budget.setupTitle" : "budget.configurationTitle")}
@@ -2560,17 +2571,7 @@ function BudgetPanel(props: {
   )
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-4">
-        <div>
-          <CardTitle>{t("budget.previewTitle")}</CardTitle>
-          <CardDescription>{t("budget.previewDescription")}</CardDescription>
-        </div>
-        <Button variant="outline" size="icon" onClick={loadSummary} disabled={loading} aria-label={t("budget.reload")}>
-          <IconRefresh className="size-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-5">
+    <div className="space-y-5">
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>{t("error.title")}</AlertTitle>
@@ -2588,27 +2589,42 @@ function BudgetPanel(props: {
         ) : summary ? (
           <>
             {showOverview ? (
-            <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-              <Metric label={t("budget.actualIncome")} value={currency(summary.actualIncomeCents)} />
-              <Metric label={t("budget.fundedBuffer")} value={currency(summary.fundedBufferCents)} />
-              <Metric label={t("budget.reservedCommitments")} value={currency(summary.reservationCents)} />
-              <Metric label={t("budget.maximumOrdinary")} value={currency(summary.maximumOrdinaryCents)} />
-              <Metric label={t("budget.remaining")} value={currency(summary.ordinaryAvailableCents)} />
-            </div>
+              <HeroMetric
+                label={t("budget.heroAvailable")}
+                value={currency(summary.ordinaryAvailableCents)}
+                tone={
+                  summary.ordinaryAvailableCents < 0
+                    ? "critical"
+                    : meterTone(ordinaryUsedFraction(summary))
+                }
+                usedFraction={ordinaryUsedFraction(summary)}
+                caption={t("budget.heroUsage", {
+                  spent: currency(summary.maximumOrdinaryCents - summary.ordinaryAvailableCents),
+                  limit: currency(summary.maximumOrdinaryCents),
+                })}
+                stats={
+                  <>
+                    <InlineStat label={t("budget.actualIncome")} value={currency(summary.actualIncomeCents)} />
+                    <InlineStat label={t("budget.fundedBuffer")} value={currency(summary.fundedBufferCents)} />
+                    <InlineStat label={t("budget.reservedCommitments")} value={currency(summary.reservationCents)} />
+                    <InlineStat label={t("budget.maximumOrdinary")} value={currency(summary.maximumOrdinaryCents)} />
+                  </>
+                }
+              />
             ) : null}
             {showOverview ? (
-              <div className="rounded-lg border p-4">
+              <div className="rounded-lg border bg-card p-4">
                 <div>
                   <h3 className="font-medium">{t("budget.bufferAndCloseTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.bufferAndCloseDescription")}</p>
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                  <Metric label={t("budget.forecastBufferTarget")} value={currency(summary.forecastBufferTargetCents)} />
-                  <Metric label={t("budget.actualBufferTarget")} value={currency(summary.actualBufferTargetCents)} />
-                  <Metric label={t("budget.bufferShortfall")} value={currency(summary.bufferShortfallCents)} />
-                  <Metric label={t("budget.protectedBuffer")} value={currency(summary.protectedBufferCents)} />
-                  <Metric label={t("budget.accumulatedBuffer")} value={currency(summary.accumulatedBufferCents)} />
-                  <Metric label={t("budget.deficitCarryover")} value={currency(summary.deficitCarryoverCents)} />
+                <div className="mt-2 grid gap-x-10 sm:grid-cols-2">
+                  <KeyValueRow label={t("budget.forecastBufferTarget")} value={currency(summary.forecastBufferTargetCents)} />
+                  <KeyValueRow label={t("budget.actualBufferTarget")} value={currency(summary.actualBufferTargetCents)} />
+                  <KeyValueRow label={t("budget.bufferShortfall")} value={currency(summary.bufferShortfallCents)} />
+                  <KeyValueRow label={t("budget.protectedBuffer")} value={currency(summary.protectedBufferCents)} />
+                  <KeyValueRow label={t("budget.accumulatedBuffer")} value={currency(summary.accumulatedBufferCents)} />
+                  <KeyValueRow label={t("budget.deficitCarryover")} value={currency(summary.deficitCarryoverCents)} />
                 </div>
                 <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[1fr_1fr_auto]">
                   <div className="grid gap-1.5">
@@ -2642,7 +2658,7 @@ function BudgetPanel(props: {
               </div>
             ) : null}
             {showOverview ? (
-              <div className="rounded-lg border p-4">
+              <div className="rounded-lg border bg-card p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="font-medium">{t("budget.remindersTitle")}</h3>
@@ -2695,7 +2711,7 @@ function BudgetPanel(props: {
             {showOverview || showTransactions ? (
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
               {showOverview ? (
-              <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="rounded-lg border bg-card p-4">
                 <div className="mb-4">
                   <h3 className="font-medium">{t("chart.title")}</h3>
                   <p className="text-sm text-muted-foreground">{summary.period.name}</p>
@@ -2724,7 +2740,7 @@ function BudgetPanel(props: {
               </div>
               ) : null}
               {showTransactions ? (
-              <div className="rounded-lg border bg-muted/10 p-4">
+              <div className="rounded-lg border bg-card p-4">
                 <div className="mb-4">
                   <h3 className="font-medium">{t("budget.ledgerTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.ledgerDescription")}</p>
@@ -2832,9 +2848,9 @@ function BudgetPanel(props: {
                         ))}
                       </div>
                     ) : null}
-                    {selectedDetails ? (
+                    {selectedDetails && Array.isArray(selectedDetails.auditHistory) && selectedDetails.auditHistory.length > 0 ? (
                       <p className="mt-3 text-xs text-muted-foreground">
-                        {t("budget.auditAvailable")}: {JSON.stringify(selectedDetails.auditHistory)}
+                        {t("budget.auditAvailable")}: {selectedDetails.auditHistory.length}
                       </p>
                     ) : null}
                     {timelineAction ? (
@@ -2854,7 +2870,7 @@ function BudgetPanel(props: {
               </div>
               ) : null}
               {showTransactions ? (
-              <div className="rounded-lg border p-4">
+              <div className="rounded-lg border bg-card p-4">
                 <h3 className="font-medium">{t("budget.newTransaction")}</h3>
                 <div className="mt-4 grid gap-3">
                   <div className="grid gap-1.5">
@@ -2940,7 +2956,7 @@ function BudgetPanel(props: {
             {showSettings ? setupFields(false) : null}
             {showSettings ? (
               <div className="grid gap-5 xl:grid-cols-2">
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.exportTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.exportDescription")}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -2961,7 +2977,7 @@ function BudgetPanel(props: {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.importTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.importDescription")}</p>
                   <div className="mt-4 grid gap-1.5">
@@ -3149,7 +3165,7 @@ function BudgetPanel(props: {
             {showSettings || showCategories ? (
             <div className="grid gap-5 xl:grid-cols-[24rem_minmax(0,1fr)]">
               {showSettings ? (
-              <div className="rounded-lg border p-4">
+              <div className="rounded-lg border bg-card p-4">
                 <h3 className="font-medium">{t("budget.periodSettings")}</h3>
                 <div className="mt-4 grid gap-3">
                   <div className="grid gap-1.5">
@@ -3165,7 +3181,7 @@ function BudgetPanel(props: {
               </div>
               ) : null}
               {showCategories ? (
-              <div className="rounded-lg border p-4">
+              <div className="rounded-lg border bg-card p-4">
                 <h3 className="font-medium">{t("budget.categoriesTitle")}</h3>
                 <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(8rem,1fr)_7rem_8rem_10rem_auto]">
                   <Input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder={t("budget.categoryName")} />
@@ -3228,7 +3244,7 @@ function BudgetPanel(props: {
             ) : null}
             {showPlanning ? (
             <div className="space-y-5">
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="font-medium">{t("budget.incomePlansTitle")}</h3>
@@ -3456,7 +3472,7 @@ function BudgetPanel(props: {
                 </div>
               ) : null}
             </div>
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 className="font-medium">{t("budget.commitmentsTitle")}</h3>
@@ -3748,7 +3764,7 @@ function BudgetPanel(props: {
                   <Metric label={t("budget.unallocatedSavings")} value={currency(savings?.unallocatedCents ?? summary.unallocatedSavingsCents)} />
                   <Metric label={t("budget.currentSavingsContributions")} value={currency(summary.savingsContributionCents)} />
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.savingsPurposesTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.savingsPurposesDescription")}</p>
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -3816,7 +3832,7 @@ function BudgetPanel(props: {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.savingsFundingTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.savingsFundingDescription")}</p>
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -3878,7 +3894,7 @@ function BudgetPanel(props: {
                     <Button onClick={saveSavingsFunding} disabled={saving}>{t("budget.saveSavingsFunding")}</Button>
                   </div>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.goalPurchaseTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.goalPurchaseDescription")}</p>
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -3945,7 +3961,7 @@ function BudgetPanel(props: {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.savingsHistory")}</h3>
                   <div className="mt-3 grid gap-2">
                     {(savings?.contributions ?? []).map((contribution) => (
@@ -3962,7 +3978,7 @@ function BudgetPanel(props: {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.investmentTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.investmentDescription")}</p>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -4042,7 +4058,7 @@ function BudgetPanel(props: {
             ) : null}
             {showWishlist ? (
               <div className="space-y-5">
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.wishlistTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.wishlistDescription")}</p>
                   <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -4065,7 +4081,7 @@ function BudgetPanel(props: {
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {wishlist.filter((item) => item.status !== "removed").map((item) => (
-                    <div key={item.id} className="rounded-lg border p-4">
+                    <div key={item.id} className="rounded-lg border bg-card p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <h3 className="font-medium">{item.name}</h3>
@@ -4102,7 +4118,7 @@ function BudgetPanel(props: {
                   ))}
                 </div>
                 {wishlistPromotionId ? (
-                  <div className="rounded-lg border p-4">
+                  <div className="rounded-lg border bg-card p-4">
                     <h3 className="font-medium">{t("budget.promoteWishlistTitle")}</h3>
                     <p className="text-sm text-muted-foreground">{t("budget.promoteWishlistDescription")}</p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -4152,7 +4168,7 @@ function BudgetPanel(props: {
             ) : null}
             {showReports ? (
               <div className="space-y-5">
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border bg-card p-4">
                   <h3 className="font-medium">{t("budget.reportsTitle")}</h3>
                   <p className="text-sm text-muted-foreground">{t("budget.reportsDescription")}</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -4223,7 +4239,7 @@ function BudgetPanel(props: {
                   </div>
                 ) : (
                   <div className="grid gap-5 xl:grid-cols-2">
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportPeriodComparison")}</h3>
                       {reports.comparison.rows.length === 0 ? (
                         <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -4267,7 +4283,7 @@ function BudgetPanel(props: {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportCategorySpend")}</h3>
                       {reports.categorySpend.rows.length === 0 ? (
                         <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -4312,7 +4328,7 @@ function BudgetPanel(props: {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportMerchantSpend")}</h3>
                       {reports.merchantSpend.rows.length === 0 ? (
                         <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -4343,7 +4359,7 @@ function BudgetPanel(props: {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportPlannedVsActual")}</h3>
                       {reports.plannedVsActual.income.length === 0 && reports.plannedVsActual.commitments.length === 0 ? (
                         <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -4381,7 +4397,7 @@ function BudgetPanel(props: {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportIncome")}</h3>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {t("budget.reportExpected")}: <span className="text-foreground">{currency(reports.income.expectedCents)}</span>
@@ -4427,7 +4443,7 @@ function BudgetPanel(props: {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportBuffer")}</h3>
                       {reports.buffer.rows.length === 0 ? (
                         <p className="mt-3 rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -4462,7 +4478,7 @@ function BudgetPanel(props: {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportSavingsGoals")}</h3>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {t("budget.reportTotalSaved")}: <span className="text-foreground">{currency(reports.savingsGoals.totalSavedCents)}</span>
@@ -4506,7 +4522,7 @@ function BudgetPanel(props: {
                         </div>
                       )}
                     </div>
-                    <div className="rounded-lg border p-4">
+                    <div className="rounded-lg border bg-card p-4">
                       <h3 className="font-medium">{t("budget.reportInvestments")}</h3>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         <div className="rounded-md border p-3 text-sm">
@@ -4541,8 +4557,7 @@ function BudgetPanel(props: {
             ) : null}
           </>
         ) : null}
-      </CardContent>
-    </Card>
+    </div>
   )
 }
 
@@ -4550,6 +4565,12 @@ function parseEuroCents(value: string) {
   const parsed = Number(value.replace(",", "."))
   if (!Number.isFinite(parsed) || parsed < 0) return null
   return Math.round(parsed * 100)
+}
+
+function ordinaryUsedFraction(summary: BudgetSummary) {
+  const spent = summary.maximumOrdinaryCents - summary.ordinaryAvailableCents
+  if (summary.maximumOrdinaryCents <= 0) return spent > 0 ? 1 : 0
+  return spent / summary.maximumOrdinaryCents
 }
 
 function centsToInput(cents: number) {
@@ -4699,15 +4720,6 @@ function CompactNav(props: {
         </Button>
       ) : null}
     </nav>
-  )
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border bg-background p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-    </div>
   )
 }
 

@@ -1,12 +1,11 @@
 "use client"
 
-import { IconWallet } from "@tabler/icons-react"
 import { useEffect, useMemo, useState } from "react"
 
+import { HeroMetric, InlineStat, meterTone } from "@/components/app/metrics"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -93,53 +92,56 @@ export function DashboardPage({
         </Alert>
       ) : null}
 
-      <div>
-        <h3 className="text-xl font-semibold tracking-tight">{t("dashboard.title")}</h3>
-        <p className="text-sm text-muted-foreground">{t("dashboard.description")}</p>
-      </div>
-
       {budgetModule ? (
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle>{t("dashboard.budgetCardTitle")}</CardTitle>
-                <CardDescription>{t("dashboard.budgetCardDescription")}</CardDescription>
-              </div>
-              <IconWallet className="size-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loadingBudget && !budgetSummary ? (
-              <div className="grid gap-4 md:grid-cols-4">
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-                <Skeleton className="h-24" />
-              </div>
-            ) : budgetSummary ? (
-              <div className="grid gap-4 md:grid-cols-4">
-                <DashboardMetric label={t("budget.monthlyLimit")} value={currency.format(budgetSummary.period.spendingLimitCents / 100)} />
-                <DashboardMetric label={t("budget.spent")} value={currency.format(budgetSummary.spentInLimitCents / 100)} />
-                <DashboardMetric label={t("budget.remaining")} value={currency.format(budgetSummary.remainingCents / 100)} />
-                <DashboardMetric label={t("budget.accountBalance")} value={currency.format(budgetSummary.accountBalanceCents / 100)} />
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("dashboard.sliceUnavailable")}</p>
-            )}
-          </CardContent>
-        </Card>
+        loadingBudget && !budgetSummary ? (
+          <Skeleton className="h-40" />
+        ) : budgetSummary ? (
+          <HeroMetric
+            eyebrow={t("dashboard.budgetCardTitle")}
+            label={t("budget.heroAvailable")}
+            value={currency.format(budgetSummary.remainingCents / 100)}
+            tone={
+              budgetSummary.remainingCents < 0
+                ? "critical"
+                : meterTone(spentFraction(budgetSummary))
+            }
+            usedFraction={spentFraction(budgetSummary)}
+            caption={t("budget.heroUsage", {
+              spent: currency.format(budgetSummary.spentInLimitCents / 100),
+              limit: currency.format(budgetSummary.period.spendingLimitCents / 100),
+            })}
+            stats={
+              <>
+                <InlineStat
+                  label={t("budget.monthlyLimit")}
+                  value={currency.format(budgetSummary.period.spendingLimitCents / 100)}
+                />
+                <InlineStat
+                  label={t("budget.spent")}
+                  value={currency.format(budgetSummary.spentInLimitCents / 100)}
+                />
+                <InlineStat
+                  label={t("budget.accountBalance")}
+                  value={currency.format(budgetSummary.accountBalanceCents / 100)}
+                />
+              </>
+            }
+          />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("dashboard.budgetCardTitle")}</CardTitle>
+              <CardDescription>{t("dashboard.sliceUnavailable")}</CardDescription>
+            </CardHeader>
+          </Card>
+        )
       ) : null}
 
     </div>
   )
 }
 
-function DashboardMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border bg-background p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-    </div>
-  )
+function spentFraction(summary: BudgetSummary) {
+  if (summary.period.spendingLimitCents <= 0) return summary.spentInLimitCents > 0 ? 1 : 0
+  return summary.spentInLimitCents / summary.period.spendingLimitCents
 }
