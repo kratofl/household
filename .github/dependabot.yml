@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: gomod
+  - package-ecosystem: nuget
     directory: /backend
     schedule:
       interval: weekly

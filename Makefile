@@ -12,7 +12,6 @@ COMPOSE_EXAMPLE=docker compose --env-file $(ENV_EXAMPLE_FILE)
 
 BACKEND_DIR=backend
 WEB_DIR=clients/web
-BUILD_DIR=tmp/household-build
 
 .PHONY: help
 help:
@@ -20,7 +19,7 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make setup-env              Copy deployments/.env.example to deployments/.env if missing"
-	@echo "  make bootstrap              Download Go modules and install web dependencies"
+	@echo "  make bootstrap              Restore .NET and web dependencies"
 	@echo "  make doctor                 Check required local tools"
 	@echo ""
 	@echo "Development:"
@@ -28,13 +27,13 @@ help:
 	@echo "  make db-up                  Start local dev Postgres in Docker"
 	@echo "  make db-down                Stop local dev Postgres"
 	@echo "  make db-logs                Follow local dev Postgres logs"
-	@echo "  make api-dev                Start local API with Air if installed, otherwise go run"
+	@echo "  make api-dev                Start the ASP.NET Core API with dotnet watch"
 	@echo "  make web-dev                Start Next.js web dev server"
 	@echo "  make reset-dev-db           Remove the dev Postgres volume"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make check                  Run backend, web, and Compose checks"
-	@echo "  make backend-test           Run Go tests"
+	@echo "  make backend-test           Run .NET tests"
 	@echo "  make backend-build          Build API and updater binaries"
 	@echo "  make web-lint               Lint web app"
 	@echo "  make web-build              Build web app"
@@ -54,7 +53,7 @@ help:
 	@echo "  make observability-up       Start dev Grafana, Loki, and Alloy"
 	@echo "  make observability-down     Stop dev observability stack"
 	@echo "  make observability-logs     Follow dev observability logs"
-	@echo "  make create-migration feature=<name> name=<migration_name>"
+	@echo "  make create-migration feature=<identity|budget|audit> name=<migration_name>"
 
 # ----------------------
 # SETUP
@@ -69,14 +68,14 @@ setup-env:
 	fi
 
 bootstrap: setup-env
-	@echo ">> Downloading backend dependencies"
-	@cd $(BACKEND_DIR) && go mod download
+	@echo ">> Restoring backend dependencies"
+	@cd $(BACKEND_DIR) && dotnet restore Household.slnx
 	@echo ">> Installing web dependencies"
 	@cd $(WEB_DIR) && npm ci
 
 doctor:
 	@missing=0; \
-	for cmd in go node npm docker; do \
+	for cmd in dotnet node npm docker; do \
 		if ! command -v "$$cmd" >/dev/null 2>&1; then \
 			echo "Missing required tool: $$cmd"; \
 			missing=1; \
@@ -114,13 +113,12 @@ test: backend-test
 build: backend-build
 
 backend-test:
-	@echo ">> Testing $(BACKEND_DIR)"
-	@cd $(BACKEND_DIR) && go test ./...
+	@echo ">> Testing $(BACKEND_DIR) against PostgreSQL"
+	@cd $(BACKEND_DIR) && dotnet test Household.slnx --configuration Release
 
 backend-build:
-	@mkdir -p $(BUILD_DIR)
 	@echo ">> Building household-api and household-updater"
-	@cd $(BACKEND_DIR) && go build -o $(BUILD_DIR)/household-api ./cmd/household-api && go build -o $(BUILD_DIR)/household-updater ./cmd/household-updater
+	@cd $(BACKEND_DIR) && dotnet build Household.slnx --configuration Release
 
 web-build:
 	@echo ">> Building web"
@@ -179,7 +177,7 @@ api-dev:
 	export HOUSEHOLD_SEED_DEMO_USER_EMAIL=$${HOUSEHOLD_SEED_DEMO_USER_EMAIL:-admin@household.local}; \
 	export HOUSEHOLD_SEED_DEMO_USER_PASSWORD=$${HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD:-admin}; \
 	cd $(BACKEND_DIR); \
-	if command -v air >/dev/null 2>&1; then air -c .air.toml; else go run ./cmd/household-api; fi
+	dotnet watch --project src/Household.Api/Household.Api.csproj run
 
 logs: db-logs
 
@@ -264,8 +262,17 @@ create-migration:
 	@if [ -z "$(name)" ]; then \
 		echo "Please add name: make create-migration feature=budget name=add_accounts"; exit 1; \
 	fi
-	@if ! command -v migrate >/dev/null 2>&1; then \
-		echo "golang-migrate CLI not found, installing..."; \
-		go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest; \
-	fi
-	@migrate create -ext sql -dir "$(BACKEND_DIR)/internal/features/$(feature)/migrations" -format "20060102150405" $(name)
+	@case "$(feature)" in \
+		identity) context=IdentityDbContext ;; \
+		budget) context=BudgetDbContext ;; \
+		audit) context=AuditDbContext ;; \
+		*) echo "Unknown feature: $(feature)"; exit 1 ;; \
+	esac; \
+	if ! command -v dotnet-ef >/dev/null 2>&1; then \
+		echo "dotnet-ef not found, installing..."; \
+		dotnet tool install --global dotnet-ef --version 10.0.10; \
+	fi; \
+	cd $(BACKEND_DIR) && dotnet ef migrations add "$(name)" \
+		--project src/Household.Api/Household.Api.csproj \
+		--context "$$context" \
+		--output-dir "Features/$(feature)/Migrations"

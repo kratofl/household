@@ -34,7 +34,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Einkaufsliste", en: "Shopping List" },
     description: {
-      de: "Gemeinsame Listen fuer Haushaltseinkaeufe.",
+      de: "Gemeinsame Listen für Haushaltseinkäufe.",
       en: "Plan and share household shopping lists.",
     },
   },
@@ -44,7 +44,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Rezepte", en: "Recipes" },
     description: {
-      de: "Rezepte sammeln und fuer Essensplaene verwenden.",
+      de: "Rezepte sammeln und für Essenspläne verwenden.",
       en: "Manage recipes and reuse them for meal plans.",
     },
   },
@@ -54,7 +54,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Essensplan", en: "Meal Plan" },
     description: {
-      de: "Mahlzeiten ueber Woche und Kalender planen.",
+      de: "Mahlzeiten über Woche und Kalender planen.",
       en: "Plan meals across the week and calendar.",
     },
   },
@@ -72,9 +72,9 @@ export const moduleCatalog = {
     route: "/waste-schedule",
     defaultEnabled: false,
     defaultActive: false,
-    name: { de: "Muellplan", en: "Waste Schedule" },
+    name: { de: "Müllplan", en: "Waste Schedule" },
     description: {
-      de: "Abholtermine und Erinnerungen fuer Tonnen.",
+      de: "Abholtermine und Erinnerungen für Tonnen.",
       en: "Track waste collection dates and reminders.",
     },
   },
@@ -90,11 +90,18 @@ export const budgetViews = {
     labelKey: "budget.nav.transactions",
   },
   planning: { route: "/budget/planning", segment: "planning", labelKey: "budget.nav.planning" },
+  saving: {
+    route: "/budget/saving-investing",
+    segment: "saving-investing",
+    labelKey: "budget.nav.saving",
+  },
+  wishlist: { route: "/budget/wishlist", segment: "wishlist", labelKey: "budget.nav.wishlist" },
   categories: {
     route: "/budget/categories",
     segment: "categories",
     labelKey: "budget.nav.categories",
   },
+  reports: { route: "/budget/reports", segment: "reports", labelKey: "budget.nav.reports" },
   settings: { route: "/budget/settings", segment: "settings", labelKey: "budget.nav.settings" },
 } as const
 

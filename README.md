@@ -9,7 +9,7 @@ The project is early-stage. The install, identity foundation, module toggles, up
 ## Why run it?
 
 - **Home-server first:** designed for trusted local networks, NAS boxes, small VMs, and homelabs.
-- **One Compose stack:** web UI, Go API, updater sidecar, and Postgres.
+- **One Compose stack:** web UI, .NET modular-monolith API, updater sidecar, and PostgreSQL.
 - **Public-image installs:** normal installs use published container images, not local source builds.
 - **Admin-gated identity:** users can register, remain pending, and be approved by an admin.
 - **Modular foundation:** one backend process with feature-owned packages and Postgres schemas.
@@ -53,7 +53,7 @@ Full guide: [docs/install/home-server.md](docs/install/home-server.md)
 
 ## Develop locally
 
-Requirements: Go 1.26.x, Node.js 24.x, npm, Docker Engine with the Compose plugin.
+Requirements: .NET 10 SDK, Node.js 24.x, npm, Docker Engine with the Compose plugin.
 
 ```bash
 git clone https://github.com/kratofl/household.git
@@ -64,7 +64,7 @@ make doctor
 make dev
 ```
 
-Local development starts Postgres in Docker and runs the Go API and Next.js locally. The default local admin is `admin` / `admin`.
+Local development starts PostgreSQL in Docker and runs the .NET API and Next.js locally. The default local admin is `admin` / `admin`.
 
 Run checks:
 
@@ -102,7 +102,7 @@ Useful docs:
 
 Household is moving toward a modular monolith:
 
-- `backend/`: Go API, updater, feature modules, migrations, and platform code.
+- `backend/`: .NET 10 API, updater, feature modules, EF Core migrations, and platform code.
 - `clients/web/`: Next.js 16 App Router UI.
 - `deployments/`: Docker Compose and observability configuration.
 - `docs/`: install, operations, architecture, and contributor documentation.
