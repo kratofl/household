@@ -103,7 +103,16 @@ export const budgetViews = {
   },
   reports: { route: "/budget/reports", segment: "reports", labelKey: "budget.nav.reports" },
   settings: { route: "/budget/settings", segment: "settings", labelKey: "budget.nav.settings" },
+  previewOverview: { route: "/budget/preview", segment: "preview", labelKey: "budget.nav.preview" },
+  previewExpenses: { route: "/budget/preview/expenses", segment: "preview/expenses", labelKey: "budget.nav.transactions" },
+  previewPlan: { route: "/budget/preview/plan", segment: "preview/plan", labelKey: "budget.nav.planning" },
+  previewSavings: { route: "/budget/preview/savings", segment: "preview/savings", labelKey: "budget.nav.previewSavings" },
 } as const
+
+export function visibleBudgetViews(pathname: string) {
+  const preview = pathname === "/budget/preview" || pathname.startsWith("/budget/preview/")
+  return Object.entries(budgetViews).filter(([key]) => preview ? key.startsWith("preview") : !key.startsWith("preview") || key === "previewOverview")
+}
 
 export type BudgetViewKey = keyof typeof budgetViews
 

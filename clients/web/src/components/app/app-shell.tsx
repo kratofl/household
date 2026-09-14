@@ -169,12 +169,14 @@ import type {
   SavingsProjection,
 } from "@/features/budget/types"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
+import { MonthlyBudget } from "@/features/budget/monthly/monthly-budget"
 import { ApiError, apiRequest } from "@/lib/api"
 import { type Locale, isLocale, supportedLocales, translate } from "@/lib/i18n"
 import {
   fallbackModules,
   budgetViewFromPath,
   budgetViews,
+  visibleBudgetViews,
   moduleCatalog,
   moduleDescription,
   moduleHref,
@@ -259,12 +261,8 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
 
   const pathname = usePathname()
   const router = useRouter()
-  const [locale, setLocale] = useState<Locale>(() => {
-    if (typeof window === "undefined") return "de"
-
-    const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY)
-    return isLocale(storedLocale) ? storedLocale : "de"
-  })
+  const [locale, setLocale] = useState<Locale>("de")
+  const [localeReady, setLocaleReady] = useState(false)
   const [tokens, setTokens] = useState<TokenPair | null>(null)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [modules, setModules] = useState<AppModule[]>(fallbackModules("de"))
@@ -361,8 +359,17 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
   )
 
   useEffect(() => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
-  }, [locale])
+    const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY)
+    const timer = window.setTimeout(() => {
+      if (isLocale(storedLocale)) setLocale(storedLocale)
+      setLocaleReady(true)
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    if (localeReady) window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
+  }, [locale, localeReady])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1169,7 +1176,9 @@ function DashboardPanel(props: {
   return (
     <div className="space-y-5">
       {props.selectedModule.key === "budget" ? (
-        <BudgetPanel accessToken={props.accessToken} locale={props.locale} pathname={props.pathname} t={props.t} />
+        props.pathname === "/budget/preview" || props.pathname.startsWith("/budget/preview/") ? (
+          <MonthlyBudget accessToken={props.accessToken} locale={props.locale} pathname={props.pathname} />
+        ) : <BudgetPanel accessToken={props.accessToken} locale={props.locale} pathname={props.pathname} t={props.t} />
       ) : (
         <Card>
           <CardHeader>
@@ -4598,7 +4607,7 @@ function SidebarModuleItem(props: {
   const isActive = props.pathname === href || props.pathname.startsWith(`${href}/`)
   const children =
     props.module.key === "budget"
-      ? Object.entries(budgetViews).map(([key, view]) => ({
+      ? visibleBudgetViews(props.pathname).map(([key, view]) => ({
           key,
           href: view.route,
           label: props.t(view.labelKey),
@@ -4698,7 +4707,7 @@ function CompactNav(props: {
             <Link href={moduleHref(module)}>{moduleName(module, props.locale)}</Link>
           </Button>
           {module.key === "budget" && props.pathname.startsWith("/budget") ? (
-            Object.entries(budgetViews).map(([key, view]) => (
+            visibleBudgetViews(props.pathname).map(([key, view]) => (
               <Button
                 key={key}
                 variant={budgetViewFromPath(props.pathname) === key ? "secondary" : "outline"}

@@ -2,49 +2,50 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Household.Api.Features.Budget;
 
-public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbContext(options)
+public sealed partial class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbContext(options)
 {
-    public DbSet<BudgetPeriod> Periods => Set<BudgetPeriod>();
-    public DbSet<BudgetSettings> Settings => Set<BudgetSettings>();
-    public DbSet<BudgetPeriodClose> PeriodCloses => Set<BudgetPeriodClose>();
-    public DbSet<BudgetSavingsPurpose> SavingsPurposes => Set<BudgetSavingsPurpose>();
-    public DbSet<BudgetSavingsContribution> SavingsContributions => Set<BudgetSavingsContribution>();
-    public DbSet<BudgetSavingsAllocation> SavingsAllocations => Set<BudgetSavingsAllocation>();
-    public DbSet<BudgetSavingsPurchase> SavingsPurchases => Set<BudgetSavingsPurchase>();
-    public DbSet<BudgetSavingsPurchaseFunding> SavingsPurchaseFunding => Set<BudgetSavingsPurchaseFunding>();
-    public DbSet<BudgetInvestmentEvent> InvestmentEvents => Set<BudgetInvestmentEvent>();
-    public DbSet<BudgetWishlistItem> WishlistItems => Set<BudgetWishlistItem>();
-    public DbSet<BudgetReminderSetting> ReminderSettings => Set<BudgetReminderSetting>();
-    public DbSet<BudgetImportSession> ImportSessions => Set<BudgetImportSession>();
-    public DbSet<BudgetImportRow> ImportRows => Set<BudgetImportRow>();
-    public DbSet<BudgetIncomePlan> IncomePlans => Set<BudgetIncomePlan>();
-    public DbSet<BudgetIncomePlanPause> IncomePlanPauses => Set<BudgetIncomePlanPause>();
-    public DbSet<BudgetIncomePlanStop> IncomePlanStops => Set<BudgetIncomePlanStop>();
-    public DbSet<BudgetIncomeOccurrenceOverride> IncomeOccurrenceOverrides => Set<BudgetIncomeOccurrenceOverride>();
-    public DbSet<BudgetIncomePosting> IncomePostings => Set<BudgetIncomePosting>();
-    public DbSet<BudgetIncomeVarianceRule> IncomeVarianceRules => Set<BudgetIncomeVarianceRule>();
-    public DbSet<BudgetIncomeVarianceRuleRoute> IncomeVarianceRuleRoutes => Set<BudgetIncomeVarianceRuleRoute>();
-    public DbSet<BudgetIncomeVarianceAllocation> IncomeVarianceAllocations => Set<BudgetIncomeVarianceAllocation>();
-    public DbSet<BudgetCommitmentPlan> CommitmentPlans => Set<BudgetCommitmentPlan>();
-    public DbSet<BudgetCommitmentPause> CommitmentPauses => Set<BudgetCommitmentPause>();
-    public DbSet<BudgetCommitmentStop> CommitmentStops => Set<BudgetCommitmentStop>();
-    public DbSet<BudgetCommitmentOccurrenceOverride> CommitmentOccurrenceOverrides => Set<BudgetCommitmentOccurrenceOverride>();
-    public DbSet<BudgetCommitmentPosting> CommitmentPostings => Set<BudgetCommitmentPosting>();
-    public DbSet<BudgetOpeningAllocation> OpeningAllocations => Set<BudgetOpeningAllocation>();
-    public DbSet<BudgetLedgerEntry> LedgerEntries => Set<BudgetLedgerEntry>();
-    public DbSet<BudgetMigrationIssue> MigrationIssues => Set<BudgetMigrationIssue>();
-    public DbSet<BudgetLedgerSplit> LedgerSplits => Set<BudgetLedgerSplit>();
-    public DbSet<BudgetCategoryVersion> CategoryVersions => Set<BudgetCategoryVersion>();
-    public DbSet<BudgetLedgerAction> LedgerActions => Set<BudgetLedgerAction>();
-    public DbSet<BudgetCategory> Categories => Set<BudgetCategory>();
-    public DbSet<BudgetAccount> Accounts => Set<BudgetAccount>();
-    public DbSet<BudgetTransaction> Transactions => Set<BudgetTransaction>();
-    public DbSet<PlannedExpense> PlannedExpenses => Set<PlannedExpense>();
-    public DbSet<PlannedExpenseApplication> PlannedExpenseApplications => Set<PlannedExpenseApplication>();
+    public DbSet<BudgetPeriod> Periods => this.Set<BudgetPeriod>();
+    public DbSet<BudgetSettings> Settings => this.Set<BudgetSettings>();
+    public DbSet<BudgetPeriodClose> PeriodCloses => this.Set<BudgetPeriodClose>();
+    public DbSet<BudgetSavingsPurpose> SavingsPurposes => this.Set<BudgetSavingsPurpose>();
+    public DbSet<BudgetSavingsContribution> SavingsContributions => this.Set<BudgetSavingsContribution>();
+    public DbSet<BudgetSavingsAllocation> SavingsAllocations => this.Set<BudgetSavingsAllocation>();
+    public DbSet<BudgetSavingsPurchase> SavingsPurchases => this.Set<BudgetSavingsPurchase>();
+    public DbSet<BudgetSavingsPurchaseFunding> SavingsPurchaseFunding => this.Set<BudgetSavingsPurchaseFunding>();
+    public DbSet<BudgetInvestmentEvent> InvestmentEvents => this.Set<BudgetInvestmentEvent>();
+    public DbSet<BudgetWishlistItem> WishlistItems => this.Set<BudgetWishlistItem>();
+    public DbSet<BudgetReminderSetting> ReminderSettings => this.Set<BudgetReminderSetting>();
+    public DbSet<BudgetImportSession> ImportSessions => this.Set<BudgetImportSession>();
+    public DbSet<BudgetImportRow> ImportRows => this.Set<BudgetImportRow>();
+    public DbSet<BudgetIncomePlan> IncomePlans => this.Set<BudgetIncomePlan>();
+    public DbSet<BudgetIncomePlanPause> IncomePlanPauses => this.Set<BudgetIncomePlanPause>();
+    public DbSet<BudgetIncomePlanStop> IncomePlanStops => this.Set<BudgetIncomePlanStop>();
+    public DbSet<BudgetIncomeOccurrenceOverride> IncomeOccurrenceOverrides => this.Set<BudgetIncomeOccurrenceOverride>();
+    public DbSet<BudgetIncomePosting> IncomePostings => this.Set<BudgetIncomePosting>();
+    public DbSet<BudgetIncomeVarianceRule> IncomeVarianceRules => this.Set<BudgetIncomeVarianceRule>();
+    public DbSet<BudgetIncomeVarianceRuleRoute> IncomeVarianceRuleRoutes => this.Set<BudgetIncomeVarianceRuleRoute>();
+    public DbSet<BudgetIncomeVarianceAllocation> IncomeVarianceAllocations => this.Set<BudgetIncomeVarianceAllocation>();
+    public DbSet<BudgetCommitmentPlan> CommitmentPlans => this.Set<BudgetCommitmentPlan>();
+    public DbSet<BudgetCommitmentPause> CommitmentPauses => this.Set<BudgetCommitmentPause>();
+    public DbSet<BudgetCommitmentStop> CommitmentStops => this.Set<BudgetCommitmentStop>();
+    public DbSet<BudgetCommitmentOccurrenceOverride> CommitmentOccurrenceOverrides => this.Set<BudgetCommitmentOccurrenceOverride>();
+    public DbSet<BudgetCommitmentPosting> CommitmentPostings => this.Set<BudgetCommitmentPosting>();
+    public DbSet<BudgetOpeningAllocation> OpeningAllocations => this.Set<BudgetOpeningAllocation>();
+    public DbSet<BudgetLedgerEntry> LedgerEntries => this.Set<BudgetLedgerEntry>();
+    public DbSet<BudgetMigrationIssue> MigrationIssues => this.Set<BudgetMigrationIssue>();
+    public DbSet<BudgetLedgerSplit> LedgerSplits => this.Set<BudgetLedgerSplit>();
+    public DbSet<BudgetCategoryVersion> CategoryVersions => this.Set<BudgetCategoryVersion>();
+    public DbSet<BudgetLedgerAction> LedgerActions => this.Set<BudgetLedgerAction>();
+    public DbSet<BudgetCategory> Categories => this.Set<BudgetCategory>();
+    public DbSet<BudgetAccount> Accounts => this.Set<BudgetAccount>();
+    public DbSet<BudgetTransaction> Transactions => this.Set<BudgetTransaction>();
+    public DbSet<PlannedExpense> PlannedExpenses => this.Set<PlannedExpense>();
+    public DbSet<PlannedExpenseApplication> PlannedExpenseApplications => this.Set<PlannedExpenseApplication>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("budget");
+        ConfigureMonthlyBudget(modelBuilder);
         ConfigurePeriod(modelBuilder.Entity<BudgetPeriod>());
         ConfigureSettings(modelBuilder.Entity<BudgetSettings>());
         ConfigurePeriodClose(modelBuilder.Entity<BudgetPeriodClose>());

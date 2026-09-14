@@ -9,7 +9,8 @@ public static partial class BudgetEndpoints
 {
     public static IEndpointRouteBuilder MapBudgetEndpoints(this IEndpointRouteBuilder routes)
     {
-        var budget = routes.MapGroup("/budget");
+        Microsoft.AspNetCore.Routing.RouteGroupBuilder budget = routes.MapGroup("/budget");
+        budget.MapMonthlyBudgetEndpoints();
         budget.MapBudgetSetupEndpoints();
         budget.MapBudgetLedgerEndpoints();
         budget.MapBudgetIncomePlanEndpoints();
