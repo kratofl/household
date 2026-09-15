@@ -4,13 +4,18 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  Design tokens. The neutral system follows Apple's grouped backgrounds and
+  hairline separators; the accent comes from the user's theme (see lib/theme.ts).
+  Glass is reserved for the navigation layer, content stays on opaque surfaces.
+*/
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-serif);
-  --font-heading: var(--font-heading);
+  --font-heading: var(--font-inter);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -40,6 +45,23 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+  --color-fill-3: var(--fill-3);
+  --color-hairline: var(--hairline);
+  --color-separator: var(--separator);
+  --color-positive: var(--sys-green);
+  --color-warning: var(--sys-orange);
+  --color-sys-blue: var(--sys-blue);
+  --color-sys-green: var(--sys-green);
+  --color-sys-orange: var(--sys-orange);
+  --color-sys-red: var(--sys-red);
+  --color-sys-indigo: var(--sys-indigo);
+  --color-sys-purple: var(--sys-purple);
+  --color-sys-pink: var(--sys-pink);
+  --color-sys-teal: var(--sys-teal);
+  --color-sys-brown: var(--sys-brown);
+  --color-sys-gray: var(--sys-gray);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -50,82 +72,252 @@
 }
 
 :root {
-  --background: oklch(0.976 0.003 67.8);
-  --foreground: oklch(0.147 0.004 49.3);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.147 0.004 49.3);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.147 0.004 49.3);
-  --primary: oklch(0.555 0.163 48.998);
-  --primary-foreground: oklch(0.987 0.022 95.277);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.96 0.002 17.2);
-  --muted-foreground: oklch(0.547 0.021 43.1);
-  --accent: oklch(0.96 0.002 17.2);
-  --accent-foreground: oklch(0.214 0.009 43.1);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.005 34.3);
-  --input: oklch(0.922 0.005 34.3);
-  --ring: oklch(0.714 0.014 41.2);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
-  --sidebar: oklch(0.986 0.002 67.8);
-  --sidebar-foreground: oklch(0.147 0.004 49.3);
-  --sidebar-primary: oklch(0.666 0.179 58.318);
-  --sidebar-primary-foreground: oklch(0.987 0.022 95.277);
-  --sidebar-accent: oklch(0.96 0.002 17.2);
-  --sidebar-accent-foreground: oklch(0.214 0.009 43.1);
-  --sidebar-border: oklch(0.922 0.005 34.3);
-  --sidebar-ring: oklch(0.714 0.014 41.2);
+  --background: #f2f2f7;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --primary: #ff6a00;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e5ea;
+  --secondary-foreground: #1d1d1f;
+  --muted: #e5e5ea;
+  --muted-foreground: rgb(60 60 67 / 0.6);
+  --accent: rgb(118 118 128 / 0.12);
+  --accent-foreground: #1d1d1f;
+  --destructive: #ff3b30;
+  --border: rgb(0 0 0 / 0.1);
+  --input: rgb(120 120 128 / 0.16);
+  --ring: #ff6a00;
+  --chart-1: #007aff;
+  --chart-2: #34c759;
+  --chart-3: #ff9500;
+  --chart-4: #af52de;
+  --chart-5: #30b0c7;
+  --sidebar: rgb(242 242 247 / 0.72);
+  --sidebar-foreground: #1d1d1f;
+  --sidebar-primary: #ff6a00;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(0 0 0 / 0.07);
+  --sidebar-accent-foreground: #1d1d1f;
+  --sidebar-border: rgb(0 0 0 / 0.08);
+  --sidebar-ring: #ff6a00;
+  --separator: rgb(60 60 67 / 0.29);
+  --hairline: rgb(0 0 0 / 0.1);
+  --fill: rgb(120 120 128 / 0.2);
+  --fill-2: rgb(120 120 128 / 0.16);
+  --fill-3: rgb(118 118 128 / 0.12);
+  --glass: rgb(255 255 255 / 0.72);
+  --sys-blue: #007aff;
+  --sys-green: #34c759;
+  --sys-orange: #ff9500;
+  --sys-red: #ff3b30;
+  --sys-indigo: #5856d6;
+  --sys-purple: #af52de;
+  --sys-pink: #ff2d55;
+  --sys-teal: #30b0c7;
+  --sys-brown: #a2845e;
+  --sys-gray: #8e8e93;
 }
 
 .dark {
-  --background: oklch(0.147 0.004 49.3);
-  --foreground: oklch(0.986 0.002 67.8);
-  --card: oklch(0.214 0.009 43.1);
-  --card-foreground: oklch(0.986 0.002 67.8);
-  --popover: oklch(0.214 0.009 43.1);
-  --popover-foreground: oklch(0.986 0.002 67.8);
-  --primary: oklch(0.473 0.137 46.201);
-  --primary-foreground: oklch(0.987 0.022 95.277);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.268 0.011 36.5);
-  --muted-foreground: oklch(0.714 0.014 41.2);
-  --accent: oklch(0.268 0.011 36.5);
-  --accent-foreground: oklch(0.986 0.002 67.8);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.547 0.021 43.1);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.214 0.009 43.1);
-  --sidebar-foreground: oklch(0.986 0.002 67.8);
-  --sidebar-primary: oklch(0.769 0.188 70.08);
-  --sidebar-primary-foreground: oklch(0.279 0.077 45.635);
-  --sidebar-accent: oklch(0.268 0.011 36.5);
-  --sidebar-accent-foreground: oklch(0.986 0.002 67.8);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.547 0.021 43.1);
+  --background: #1c1c1e;
+  --foreground: #f5f5f7;
+  --card: #2c2c2e;
+  --card-foreground: #f5f5f7;
+  --popover: #2c2c2e;
+  --popover-foreground: #f5f5f7;
+  --primary: #ff7d1f;
+  --primary-foreground: #ffffff;
+  --secondary: #3a3a3c;
+  --secondary-foreground: #f5f5f7;
+  --muted: #3a3a3c;
+  --muted-foreground: rgb(235 235 245 / 0.6);
+  --accent: rgb(118 118 128 / 0.24);
+  --accent-foreground: #f5f5f7;
+  --destructive: #ff453a;
+  --border: rgb(255 255 255 / 0.12);
+  --input: rgb(120 120 128 / 0.32);
+  --ring: #ff7d1f;
+  --chart-1: #0a84ff;
+  --chart-2: #30d158;
+  --chart-3: #ff9f0a;
+  --chart-4: #bf5af2;
+  --chart-5: #40c8e0;
+  --sidebar: rgb(28 28 30 / 0.7);
+  --sidebar-foreground: #f5f5f7;
+  --sidebar-primary: #ff7d1f;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(255 255 255 / 0.1);
+  --sidebar-accent-foreground: #f5f5f7;
+  --sidebar-border: rgb(255 255 255 / 0.1);
+  --sidebar-ring: #ff7d1f;
+  --separator: rgb(84 84 88 / 0.6);
+  --hairline: rgb(255 255 255 / 0.12);
+  --fill: rgb(120 120 128 / 0.36);
+  --fill-2: rgb(120 120 128 / 0.32);
+  --fill-3: rgb(118 118 128 / 0.24);
+  --glass: rgb(28 28 30 / 0.72);
+  --sys-blue: #0a84ff;
+  --sys-green: #30d158;
+  --sys-orange: #ff9f0a;
+  --sys-red: #ff453a;
+  --sys-indigo: #5e5ce6;
+  --sys-purple: #bf5af2;
+  --sys-pink: #ff375f;
+  --sys-teal: #40c8e0;
+  --sys-brown: #ac8e68;
+  --sys-gray: #8e8e93;
 }
+
+/* Accent themes (user setting). Every theme sets light and dark so the
+   attribute wins regardless of rule order. Ids match lib/theme.ts. */
+[data-theme="mandarine"] { --primary: #ff6a00; --ring: #ff6a00; --sidebar-primary: #ff6a00; --sidebar-ring: #ff6a00; }
+.dark[data-theme="mandarine"] { --primary: #ff7d1f; --ring: #ff7d1f; --sidebar-primary: #ff7d1f; --sidebar-ring: #ff7d1f; }
+[data-theme="lagune"] { --primary: #008d94; --ring: #008d94; --sidebar-primary: #008d94; --sidebar-ring: #008d94; }
+.dark[data-theme="lagune"] { --primary: #3ebfc6; --ring: #3ebfc6; --sidebar-primary: #3ebfc6; --sidebar-ring: #3ebfc6; }
+[data-theme="ozean"] { --primary: #007aff; --ring: #007aff; --sidebar-primary: #007aff; --sidebar-ring: #007aff; }
+.dark[data-theme="ozean"] { --primary: #0a84ff; --ring: #0a84ff; --sidebar-primary: #0a84ff; --sidebar-ring: #0a84ff; }
+[data-theme="farn"] { --primary: #2a904b; --ring: #2a904b; --sidebar-primary: #2a904b; --sidebar-ring: #2a904b; }
+.dark[data-theme="farn"] { --primary: #5ac576; --ring: #5ac576; --sidebar-primary: #5ac576; --sidebar-ring: #5ac576; }
+[data-theme="heidelbeere"] { --primary: #5856d6; --ring: #5856d6; --sidebar-primary: #5856d6; --sidebar-ring: #5856d6; }
+.dark[data-theme="heidelbeere"] { --primary: #7d7aff; --ring: #7d7aff; --sidebar-primary: #7d7aff; --sidebar-ring: #7d7aff; }
+[data-theme="himbeere"] { --primary: #da3870; --ring: #da3870; --sidebar-primary: #da3870; --sidebar-ring: #da3870; }
+.dark[data-theme="himbeere"] { --primary: #fd6c95; --ring: #fd6c95; --sidebar-primary: #fd6c95; --sidebar-ring: #fd6c95; }
+[data-theme="graphit"] { --primary: #1d1d1f; --ring: #1d1d1f; --sidebar-primary: #1d1d1f; --sidebar-ring: #1d1d1f; }
+.dark[data-theme="graphit"] { --primary: #f5f5f7; --primary-foreground: #1d1d1f; --ring: #f5f5f7; --sidebar-primary: #f5f5f7; --sidebar-ring: #f5f5f7; }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply h-full font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-size: 13px;
+    line-height: 1.35;
+    font-feature-settings: "cv11", "ss01", "ss03", "tnum";
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/*
+  Component surfaces. Kept as CSS because the gradients, hairlines and inner
+  light edges are easier to read here than as twenty utility classes.
+*/
+@layer components {
+  /* Inset grouped container: opaque, 10px radius, hairline. No shadow on content. */
+  .surface-group {
+    background: var(--card);
+    border-radius: 10px;
+    box-shadow: 0 0 0 0.5px var(--hairline);
+  }
+
+  /* Rows inside a group are separated by 0.5px hairlines. */
+  .hairline-rows > * + * {
+    border-top: 0.5px solid var(--separator);
+  }
+
+  /* Glass: navigation layer only (sidebar, toolbar, tab bar, sheets). */
+  .glass {
+    background: var(--glass);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  /* macOS push button: hairline, subtle vertical gradient, inner light edge. */
+  .push {
+    color: var(--foreground);
+    background: linear-gradient(180deg, #ffffff 0%, #f6f6f8 100%);
+    box-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.2),
+      0 1px 1px rgb(0 0 0 / 0.08),
+      inset 0 1px 0 rgb(255 255 255 / 0.9);
+  }
+  .push:hover { background: linear-gradient(180deg, #ffffff 0%, #f0f0f3 100%); }
+  .push:active {
+    background: linear-gradient(180deg, #ececf0 0%, #e4e4e9 100%);
+    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25), inset 0 1px 2px rgb(0 0 0 / 0.08);
+  }
+  .dark .push {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.1) 100%);
+    box-shadow:
+      0 0 0 0.5px rgb(255 255 255 / 0.14),
+      0 1px 1px rgb(0 0 0 / 0.4),
+      inset 0 1px 0 rgb(255 255 255 / 0.1);
+  }
+  .dark .push:hover { background: linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.13) 100%); }
+  .dark .push:active { background: rgb(255 255 255 / 0.08); }
+
+  /* Default (tinted) push button. Slightly darkened bottom for contrast. */
+  .push-default {
+    color: var(--primary-foreground);
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--primary) 86%, white) 0%,
+      var(--primary) 55%,
+      color-mix(in oklab, var(--primary) 90%, black) 100%
+    );
+    box-shadow:
+      0 0 0 0.5px color-mix(in oklab, var(--primary) 70%, black),
+      0 1px 1px rgb(0 0 0 / 0.15),
+      inset 0 1px 0 rgb(255 255 255 / 0.3);
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.12);
+  }
+  .push-default:hover {
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--primary) 80%, white) 0%,
+      color-mix(in oklab, var(--primary) 96%, black) 55%,
+      color-mix(in oklab, var(--primary) 86%, black) 100%
+    );
+  }
+  .push-default:active { background: color-mix(in oklab, var(--primary) 84%, black); }
+  .dark[data-theme="graphit"] .push-default { text-shadow: none; }
+
+  /* Segmented control: recessed track, raised thumb. */
+  .seg {
+    background: var(--fill-3);
+    border-radius: 8px;
+    padding: 2px;
+  }
+  .seg-on {
+    background: var(--card);
+    border-radius: 6px;
+    font-weight: 600;
+    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.12);
+  }
+  .dark .seg-on {
+    background: #636366;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+
+  /* Settings-app style icon tile: solid system color, white glyph. */
+  .icon-tile {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.08);
+  }
+
+  /* Finite entrance for freshly mounted screens. */
+  .rise {
+    animation: rise 260ms ease-out both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rise { animation: none; }
   }
 }

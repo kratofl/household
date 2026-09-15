@@ -10,6 +10,7 @@ public sealed class User
     [JsonIgnore] public string PasswordHash { get; set; } = "";
     public string Role { get; set; } = Roles.User;
     public string Status { get; set; } = UserStatuses.Pending;
+    public string Theme { get; set; } = Themes.Default;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
@@ -51,6 +52,17 @@ public static class UserStatuses
     public const string Pending = "pending";
     public const string Active = "active";
     public const string Blocked = "blocked";
+}
+
+/// <summary>Accent themes the web client can render. Ids match clients/web/src/lib/theme.ts.</summary>
+public static class Themes
+{
+    public const string Default = "mandarine";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "mandarine", "lagune", "ozean", "farn", "heidelbeere", "himbeere", "graphit",
+    };
 }
 
 public sealed record CurrentUser(Guid Id, string Name, string Email, string Role, string Status);

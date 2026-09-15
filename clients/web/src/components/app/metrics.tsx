@@ -12,13 +12,13 @@ export function meterTone(usedFraction: number): MeterTone {
 
 const heroToneText: Record<MeterTone, string> = {
   positive: "text-foreground",
-  warning: "text-amber-600 dark:text-amber-400",
+  warning: "text-sys-orange",
   critical: "text-destructive",
 }
 
 const meterToneBar: Record<MeterTone, string> = {
   positive: "bg-primary",
-  warning: "bg-amber-500",
+  warning: "bg-sys-orange",
   critical: "bg-destructive",
 }
 
@@ -34,7 +34,7 @@ export function UsageMeter({
   const percent = Math.min(100, Math.max(0, fraction * 100))
 
   return (
-    <div className={cn("h-2 overflow-hidden rounded-full bg-muted", className)}>
+    <div className={cn("h-1.5 overflow-hidden rounded-full bg-fill-3", className)}>
       <div
         className={cn("h-full rounded-full transition-all", meterToneBar[tone])}
         style={{ width: `${percent}%` }}
@@ -55,16 +55,16 @@ export function HeroMetric(props: {
   const tone = props.tone ?? "positive"
 
   return (
-    <section className="rounded-lg border bg-card p-5 shadow-sm">
+    <section className="surface-group p-5">
       {props.eyebrow ? (
-        <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="mb-3 text-[11px] font-semibold text-muted-foreground">
           {props.eyebrow}
         </p>
       ) : null}
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div>
-          <p className="text-sm text-muted-foreground">{props.label}</p>
-          <p className={cn("mt-1 text-4xl font-semibold tracking-tight tabular-nums", heroToneText[tone])}>
+          <p className="font-medium text-muted-foreground">{props.label}</p>
+          <p className={cn("mt-1 text-[44px] font-semibold leading-none tracking-[-0.03em] tabular-nums lg:text-[52px]", heroToneText[tone])}>
             {props.value}
           </p>
         </div>
@@ -83,24 +83,24 @@ export function HeroMetric(props: {
 export function InlineStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-sm font-medium tabular-nums">{value}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-medium tabular-nums">{value}</p>
     </div>
   )
 }
 
 export function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+    <div className="surface-group p-4">
+      <p className="text-muted-foreground">{label}</p>
+      <p className="mt-2 text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{value}</p>
     </div>
   )
 }
 
 export function KeyValueRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-border/60 py-1.5 text-sm last:border-b-0">
+    <div className="flex items-baseline justify-between gap-4 border-b border-separator py-1.5 last:border-b-0">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-medium tabular-nums">{value}</span>
     </div>

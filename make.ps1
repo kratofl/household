@@ -32,48 +32,17 @@ function Invoke-Step {
     }
 }
 
-function Read-EnvFile {
-    $values = @{}
-    if (Test-Path $envFile) {
-        foreach ($line in Get-Content $envFile) {
-            if ($line -match '^\s*#' -or $line -notmatch '=') { continue }
-            $key, $value = $line -split '=', 2
-            $values[$key.Trim()] = $value.Trim()
-        }
-    }
-    return $values
+# Use the same POSIX script as Make. Git for Windows includes sh.exe.
+$devTargets = @("dev", "dev-info", "dev-project", "dev-down", "dev-logs", "db-up", "db-down", "db-logs", "reset-dev-db", "api-dev", "web-dev", "logs", "observability-up", "observability-down", "observability-logs")
+if ($Target -in $devTargets) {
+    $gitCommand = Get-Command git -ErrorAction Stop
+    $gitShell = Join-Path (Split-Path (Split-Path $gitCommand.Source)) "bin/sh.exe"
+    if (Test-Path $gitShell) { $shellPath = $gitShell }
+    else { $shellPath = (Get-Command sh -ErrorAction Stop).Source }
+    & $shellPath (Join-Path $root "scripts/dev.sh") $Target
+    exit $LASTEXITCODE
 }
 
-function Set-ApiDevEnvironment {
-    $values = Read-EnvFile
-    function Value([string] $key, [string] $fallback) {
-        if ($values.ContainsKey($key) -and $values[$key]) { return $values[$key] }
-        $current = [Environment]::GetEnvironmentVariable($key)
-        if ($current) { return $current }
-        return $fallback
-    }
-    $env:HOUSEHOLD_API_DB_HOST = "localhost"
-    $env:HOUSEHOLD_API_DB_PORT = Value "HOUSEHOLD_DB_PORT" "5432"
-    $env:HOUSEHOLD_API_DB_DATABASE = Value "HOUSEHOLD_DB_DATABASE" "household"
-    $env:HOUSEHOLD_API_DB_USER = Value "HOUSEHOLD_DB_USER" "household"
-    $env:HOUSEHOLD_API_DB_PASSWORD = Value "HOUSEHOLD_DB_PASSWORD" "household"
-    $env:HOUSEHOLD_API_SERVER_PORT = Value "HOUSEHOLD_API_SERVER_PORT" "8090"
-    $env:HOUSEHOLD_API_SERVER_TIMEOUT_READ = Value "HOUSEHOLD_API_SERVER_TIMEOUT_READ" "5s"
-    $env:HOUSEHOLD_API_SERVER_TIMEOUT_WRITE = Value "HOUSEHOLD_API_SERVER_TIMEOUT_WRITE" "10s"
-    $env:HOUSEHOLD_API_SERVER_TIMEOUT_IDLE = Value "HOUSEHOLD_API_SERVER_TIMEOUT_IDLE" "60s"
-    $env:HOUSEHOLD_LOG_LEVEL = Value "HOUSEHOLD_LOG_LEVEL" "debug"
-    $env:HOUSEHOLD_LOG_ENVIRONMENT = "dev"
-    $env:HOUSEHOLD_LOG_VERSION = "dev"
-    $env:HOUSEHOLD_UPDATES_GITHUB_REPOSITORY = Value "HOUSEHOLD_UPDATES_GITHUB_REPOSITORY" "kratofl/household"
-    $env:HOUSEHOLD_SEED_DEMO_USER = "true"
-    $env:HOUSEHOLD_SEED_DEMO_USER_NAME = Value "HOUSEHOLD_SEED_DEMO_USER_NAME" "admin"
-    $env:HOUSEHOLD_SEED_DEMO_USER_EMAIL = Value "HOUSEHOLD_SEED_DEMO_USER_EMAIL" "admin@household.local"
-    $env:HOUSEHOLD_SEED_DEMO_USER_PASSWORD = Value "HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD" "admin"
-}
-
-function Invoke-ComposeDev { param([string[]] $Arguments)
-    & docker compose --env-file $envFile -f $devComposeFile @Arguments
-}
 function Invoke-ComposeProd { param([string[]] $Arguments)
     & docker compose --env-file $envFile -f $prodComposeFile @Arguments
 }
@@ -107,7 +76,7 @@ switch ($Target) {
         Write-Host "Household targets (.\make.ps1 <target>)"
         Write-Host ""
         Write-Host "Setup:        setup-env, bootstrap, doctor"
-        Write-Host "Development:  dev, db-up, db-down, db-logs, api-dev, web-dev, reset-dev-db"
+        Write-Host "Development:  dev, dev-info, dev-down, dev-logs, db-up, db-logs, reset-dev-db"
         Write-Host "Quality:      check, backend-test, backend-build, web-lint, web-build, compose-config"
         Write-Host "Production:   prod-pull, prod-up, prod-build-up, prod-down, prod-logs, prod-backup,"
         Write-Host "              prod-restore -Backup <path>, prod-observability-up"
@@ -140,42 +109,6 @@ switch ($Target) {
         Write-Host "All required tools are available."
     }
 
-    "db-up" {
-        Invoke-SetupEnv
-        Invoke-Step "Starting local dev Postgres..." { Invoke-ComposeDev @("--profile", "db", "up", "-d", "household-db") }
-    }
-
-    "db-down" { Invoke-Step "" { Invoke-ComposeDev @("--profile", "db", "down", "--remove-orphans") } }
-
-    "db-logs" { Invoke-ComposeDev @("logs", "-f", "household-db") }
-
-    "reset-dev-db" {
-        Invoke-SetupEnv
-        Invoke-Step "" { Invoke-ComposeDev @("--profile", "db", "down", "-v", "--remove-orphans") }
-    }
-
-    "api-dev" {
-        Write-Host ">> Starting local API..."
-        Set-ApiDevEnvironment
-        Set-Location $backendDir
-        dotnet watch --project src/Household.Api/Household.Api.csproj run
-    }
-
-    "web-dev" {
-        Write-Host ">> Starting Next.js web dev server..."
-        Set-Location $webDir
-        npm run dev
-    }
-
-    "dev" {
-        & $PSCommandPath db-up
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        Write-Host ">> Starting the API in a new window; the web dev server runs here."
-        Write-Host ">> Stop with Ctrl+C here and by closing the API window (then .\make.ps1 db-down)."
-        Start-Process pwsh -ArgumentList "-NoExit", "-File", $PSCommandPath, "api-dev" -WorkingDirectory $root
-        & $PSCommandPath web-dev
-    }
-
     "check" {
         foreach ($step in "backend-test", "backend-build", "web-lint", "web-build", "compose-config") {
             & $PSCommandPath $step
@@ -204,7 +137,7 @@ switch ($Target) {
         Invoke-Step "Validating production source-build Compose" {
             docker compose --env-file $envExampleFile -f $prodComposeFile -f $prodBuildComposeFile config --quiet }
         Invoke-Step "Validating development Compose" {
-            docker compose --env-file $envExampleFile -f $devComposeFile config --quiet }
+            docker compose --env-file (Join-Path $deployments "dev.env") -f $devComposeFile config --quiet }
     }
 
     "prod-pull" { Assert-ProdEnv; Invoke-Step "" { Invoke-ComposeProd @("pull") } }
@@ -234,13 +167,6 @@ switch ($Target) {
         cmd /c "docker compose --env-file `"$envFile`" -f `"$prodComposeFile`" exec -T household-db sh -c `"pg_restore -U `$POSTGRES_USER -d `$POSTGRES_DB --clean --if-exists`" < `"$Backup`""
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
-
-    "observability-up" {
-        Invoke-SetupEnv
-        Invoke-Step "Starting observability stack..." { Invoke-ComposeDev @("--profile", "observability", "up", "-d") }
-    }
-    "observability-down" { Invoke-Step "" { Invoke-ComposeDev @("stop", "grafana", "alloy", "loki") } }
-    "observability-logs" { Invoke-ComposeDev @("logs", "-f", "grafana", "alloy", "loki") }
 
     "create-migration" {
         if (-not $Feature) { Write-Error "Please add -Feature (e.g. -Feature budget)"; exit 1 }

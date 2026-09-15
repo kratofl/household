@@ -17,6 +17,7 @@ public static class IdentityEndpoints
         users.MapGet("/", ListUsers);
         users.MapPut("/", CreateUser);
         users.MapGet("/me", Me);
+        users.MapPatch("/me", UpdateMe);
         users.MapPut("/me/password", ChangePassword);
 
         var modules = routes.MapGroup("/modules");
@@ -145,6 +146,24 @@ public static class IdentityEndpoints
         return Results.Ok(user);
     }
 
+    /// <summary>Updates profile preferences of the current user. Only the accent theme so far.</summary>
+    private static async Task<IResult> UpdateMe(
+        UpdateMeRequest request,
+        HttpContext context,
+        IIdentityAccess identity,
+        IdentityDbContext database,
+        CancellationToken cancellationToken)
+    {
+        CurrentUser? current = await identity.CurrentUserAsync(context, cancellationToken);
+        if (current is null) return Unauthorized();
+        if (request.Theme is null || !Themes.All.Contains(request.Theme))
+            return HttpResults.Problem(422, "Validation failed", "Unknown theme");
+        User user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
+        user.Theme = request.Theme;
+        await database.SaveChangesAsync(cancellationToken);
+        return Results.Ok(user);
+    }
+
     private static async Task<IResult> ChangePassword(
         ChangePasswordRequest request,
         HttpContext context,
@@ -202,5 +221,6 @@ public static class IdentityEndpoints
     private sealed record LogoutRequest(string? RefreshToken);
     private sealed record CreateUserRequest(string? Name, string? Email, string? Password);
     private sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+    private sealed record UpdateMeRequest(string? Theme);
     private sealed record SetActiveModulesRequest(IReadOnlyList<Guid>? ModuleIds);
 }

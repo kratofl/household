@@ -14,7 +14,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS dev
 WORKDIR /src
 COPY backend/ ./
 RUN dotnet restore src/Household.Api/Household.Api.csproj
-ENTRYPOINT ["dotnet", "watch", "--project", "src/Household.Api/Household.Api.csproj", "run", "--no-restore"]
+ENV DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true
+ENTRYPOINT ["dotnet", "watch", "--non-interactive", "--project", "src/Household.Api/Household.Api.csproj", "run", "--no-launch-profile"]
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS release
 WORKDIR /app

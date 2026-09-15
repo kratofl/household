@@ -1,35 +1,91 @@
 # Local development setup
 
-The primary workflow runs PostgreSQL in Docker and the .NET API and Next.js app directly on the host.
+The API, Next.js development server, and PostgreSQL run in Linux containers.
+Source edits synchronize through Compose Watch; build outputs and dependencies
+remain in the containers. No Windows source bind mounts or shared host caches
+are needed. Container recreation restores dependencies from the image; only
+database data needs a persistent volume.
 
 ## Prerequisites
 
-- .NET 10 SDK
-- Node.js 24.x and npm
-- Docker Engine with the Docker Compose plugin
+- Git, Docker Desktop on Windows/macOS or Docker Engine on Linux.
+- Docker Compose 2.32+ for `initial_sync` and Watch support.
+- Make and a POSIX shell on macOS/Linux. On Windows, PowerShell and Git for
+  Windows; the PowerShell launcher locates Git's bundled `sh.exe`.
+- AMD64 or ARM64. No forced x86 emulation on Apple Silicon.
 
-## Bootstrap and start
+## Start and stop
 
-```bash
-git clone https://github.com/kratofl/household.git
-cd household
-make setup-env
-make bootstrap
-make doctor
-make dev
-```
+From the checkout or worktree root:
 
-`make dev` starts PostgreSQL, `dotnet watch` for the API, and Next.js development mode. The default URLs are:
+| Action | macOS / Linux | Windows |
+| --- | --- | --- |
+| Start and watch | `make dev` | `.\make.ps1 dev` |
+| Show URL and status | `make dev-info` | `.\make.ps1 dev-info` |
+| Show Compose project name | `make dev-project` | `.\make.ps1 dev-project` |
+| Follow application logs | `make dev-logs` | `.\make.ps1 dev-logs` |
+| Stop this stack | `make dev-down` | `.\make.ps1 dev-down` |
+| Reset this stack's data | `make reset-dev-db` | `.\make.ps1 reset-dev-db` |
 
-| Service | URL |
-| --- | --- |
-| Web UI | `http://localhost:3000` |
-| API health | `http://localhost:8090/healthz` |
-| API base | `http://localhost:8090/api/v1` |
-| PostgreSQL | `localhost:5432` |
+The first start downloads and builds images, waits for PostgreSQL and API health,
+then prints the web URL. Sign in as `admin` / `admin`. Keep this terminal open
+for hot reload. Ctrl+C ends Watch, leaving services running; `dev-down` stops
+them without deleting data. Run `dev` again to rebuild as necessary and resume
+synchronization, including edits made while Watch was stopped.
 
-Local development seeds `admin` / `admin`. Override the password with `HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD` when starting `make api-dev`.
+Frontend package changes rebuild its image. Backend source/project changes are
+synced to `dotnet watch`, which restores packages and rebuilds as needed. Edits
+that cannot be hot-reloaded restart the API automatically. Dockerfile changes
+rebuild the relevant service. Run `dev` again after changing Compose or the
+root `.dockerignore`. Do not run two Watch sessions for the same worktree.
 
-Run services separately with `make db-up`, `make api-dev`, and `make web-dev`; stop PostgreSQL with `make db-down`. `make reset-dev-db` removes the local development database volume.
+## Worktree isolation
 
-The browser calls `/api/backend/*`. Next.js forwards those requests to `http://localhost:8090/api/v1` by default; set `HOUSEHOLD_API_URL` to override it.
+`scripts/dev.sh` is the common implementation behind Make and PowerShell. It
+uses the Git worktree root's folder name and a hash of its full path to derive
+`household-dev-<folder>-<hash>`, passed explicitly with Compose `--project-name`.
+Branch changes retain that identity. Moving a worktree changes it; stop the old
+stack before moving, and retain its old project name if its volume is needed.
+
+Each project has its own API, web, PostgreSQL, network, and database volume.
+New worktrees seed their own admin account. They never share migration history
+or automatically copy data from another worktree or machine. Image build cache
+may be reused by Docker, but running filesystems and database writes are separate.
+Stopping one stack does not stop another. Reset requires typing its exact project
+name and deletes all that development project's volumes, including optional
+observability data. Removing a Git worktree does not remove Docker resources.
+
+Only the web service publishes a port, bound to `127.0.0.1`. Docker allocates it
+without a separate find-free-port race. The URL may change on recreation; use
+`dev-info` again, including after a dependency-triggered rebuild. Browser storage
+is scoped to the URL, so a changed port may require signing in again.
+
+The browser calls `/api/backend/*`. Next.js forwards requests internally to
+`http://household-api:8090/api/v1`; the API connects to `household-db:5432`.
+Those internal ports can be identical in every worktree. For database inspection,
+use Docker Desktop's Exec terminal on that worktree's database container and run
+`psql -U household -d household`. No database host port is needed.
+
+Development loads only the tracked `deployments/dev.env` and fixed local service
+settings. It does not read `deployments/.env`, `PROJECT_NAME`, or production
+database settings. The former shared `household` development volume is not
+imported, changed, or deleted. Production commands retain their existing setup.
+
+`db-up` starts only this worktree's internal PostgreSQL. `db-down` aliases
+`dev-down` to stop dependent services safely. The former host `api-dev` and
+`web-dev` commands print a migration message; use `dev` instead.
+
+Optional `observability-up`, `observability-down`, and `observability-logs` also
+use the worktree project. Their published ports are dynamic; `dev-info` lists
+them. They are not needed for normal development.
+
+## Checks and migrations
+
+The existing `bootstrap`, `doctor`, `check`, individual checks, and
+`create-migration` commands still use host .NET 10 and Node.js 26/npm.
+Install those tools and run `make bootstrap` / `.\make.ps1 bootstrap` before
+checks. `doctor` checks those contributor tools, not just Docker runtime needs.
+Tests launch their own PostgreSQL containers and do not use the worktree database.
+Generated migration source is picked up by Watch like other source edits.
+
+See [Testing](testing.md) and [Migrations](../db/migrations.md).

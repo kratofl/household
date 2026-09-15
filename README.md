@@ -53,26 +53,46 @@ Full guide: [docs/install/home-server.md](docs/install/home-server.md)
 
 ## Develop locally
 
-Requirements: .NET 10 SDK, Node.js 24.x, npm, Docker Engine with the Compose plugin.
+Install Git and Docker Desktop with Linux containers on Windows/macOS, or Docker
+Engine on Linux. Docker Compose 2.32+ is required for source synchronization.
+On macOS/Linux use Make; on Windows use PowerShell and Git for Windows.
+The images support AMD64 and ARM64, including Apple Silicon.
 
-```bash
-git clone https://github.com/kratofl/household.git
-cd household
-make setup-env
-make bootstrap
-make doctor
-make dev
-```
+Clone the repository, then start from its root:
 
-Local development starts PostgreSQL in Docker and runs the .NET API and Next.js locally. The default local admin is `admin` / `admin`.
+| Action | macOS / Linux | Windows PowerShell |
+| --- | --- | --- |
+| Start and watch source changes | `make dev` | `.\make.ps1 dev` |
+| Show URL and status | `make dev-info` | `.\make.ps1 dev-info` |
+| Follow logs | `make dev-logs` | `.\make.ps1 dev-logs` |
+| Stop, retain data | `make dev-down` | `.\make.ps1 dev-down` |
+| Reset development data, with confirmation | `make reset-dev-db` | `.\make.ps1 reset-dev-db` |
 
-Run checks:
+API, Next.js, and PostgreSQL run in Docker. The first start builds the development
+images and seeds `admin` / `admin`. Open the localhost URL printed by the command.
+Keep the terminal open for automatic source synchronization and hot reload.
+Ctrl+C ends synchronization; services keep running until `dev-down`.
+Use `dev-logs` in another terminal to follow application logs.
 
-```bash
-make check
-```
+**Each worktree gets its own environment automatically.** Its directory path
+determines the Compose project name, isolating containers, networks, and database
+volumes. Docker allocates an available localhost web port. API and database ports
+stay internal. Data persists across stops and branch changes within that worktree;
+new worktrees start with independent development data. URLs may change after
+container recreation; `dev-info` prints the current one.
 
-Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+No local .NET/Node installation or env file is needed to run the app. Development
+does not read `deployments/.env` and does not reuse the previous shared development
+database. Existing volumes are left intact. Source stays in your editor; build
+outputs and dependencies stay inside each container.
+
+Quality checks and migration generation still use host tools. Install .NET 10
+SDK and Node.js 26 with npm, then run `make bootstrap` and `make check`, or their
+`.\make.ps1` equivalents. `bootstrap` also creates the existing production env
+template if absent; it is not needed for `dev`.
+
+More details: [Local setup](docs/development/local-setup.md),
+[Contributor guide](CONTRIBUTING.md).
 
 ## Production operations
 

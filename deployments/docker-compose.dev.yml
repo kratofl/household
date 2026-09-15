@@ -1,32 +1,99 @@
-name: ${PROJECT_NAME:-household}
-
 services:
+  household-web:
+    build:
+      context: ..
+      dockerfile: clients/web/Dockerfile
+      target: dev
+    init: true
+    environment:
+      HOUSEHOLD_API_URL: http://household-api:8090/api/v1
+    ports:
+      - target: 3000
+        host_ip: 127.0.0.1
+    depends_on:
+      household-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 10s
+      start_period: 60s
+    networks: [backend]
+    develop:
+      watch:
+        - action: sync
+          path: ../clients/web
+          target: /app
+          initial_sync: true
+          ignore: [node_modules/, .next/, .env*, package.json, package-lock.json, Dockerfile]
+        - action: rebuild
+          path: ../clients/web/package.json
+        - action: rebuild
+          path: ../clients/web/package-lock.json
+        - action: rebuild
+          path: ../clients/web/Dockerfile
+
+  household-api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: dev
+    init: true
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      HOUSEHOLD_API_SERVER_PORT: 8090
+      HOUSEHOLD_API_DB_HOST: household-db
+      HOUSEHOLD_API_DB_PORT: 5432
+      HOUSEHOLD_API_DB_DATABASE: household
+      HOUSEHOLD_API_DB_USER: household
+      HOUSEHOLD_API_DB_PASSWORD: household-dev
+      HOUSEHOLD_SEED_DEMO_USER: "true"
+      HOUSEHOLD_SEED_DEMO_USER_NAME: admin
+      HOUSEHOLD_SEED_DEMO_USER_EMAIL: admin@household.local
+      HOUSEHOLD_SEED_DEMO_USER_PASSWORD: admin
+    depends_on:
+      household-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/healthz"]
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+    networks: [backend]
+    develop:
+      watch:
+        - action: sync
+          path: ../backend
+          target: /src
+          initial_sync: true
+          ignore: ["**/bin/", "**/obj/", Dockerfile]
+        - action: rebuild
+          path: ../backend/Dockerfile
+
   household-db:
     image: postgres:18.4-alpine3.23
     environment:
-      POSTGRES_DB: ${HOUSEHOLD_DB_DATABASE:-household}
-      POSTGRES_USER: ${HOUSEHOLD_DB_USER:-household}
-      POSTGRES_PASSWORD: ${HOUSEHOLD_DB_PASSWORD:-household}
-    ports:
-      - "${HOUSEHOLD_DB_PORT:-5432}:5432"
+      POSTGRES_DB: household
+      POSTGRES_USER: household
+      POSTGRES_PASSWORD: household-dev
     volumes:
       # PostgreSQL 18+ images require the mount at /var/lib/postgresql and place
       # the cluster in a version-specific subdirectory.
       - household_db_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d \"$${POSTGRES_DB}\" -U \"$${POSTGRES_USER}\""]
-      interval: 30s
+      interval: 2s
       timeout: 10s
       retries: 5
     networks:
       - backend
-    profiles: ["db", "core"]
 
   loki:
     image: ${LOKI_IMAGE:-grafana/loki:3.5.12}
     command: ["-config.file=/etc/loki/loki.yml"]
     ports:
-      - "${LOKI_PORT:-3100}:3100"
+      - target: 3100
+        host_ip: 127.0.0.1
     volumes:
       - ./observability/loki/loki.yml:/etc/loki/loki.yml:ro
       - loki_data:/loki
@@ -43,7 +110,8 @@ services:
     depends_on:
       - loki
     ports:
-      - "${ALLOY_PORT:-12345}:12345"
+      - target: 12345
+        host_ip: 127.0.0.1
     volumes:
       - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -56,7 +124,8 @@ services:
     depends_on:
       - loki
     ports:
-      - "${GRAFANA_PORT:-3001}:3000"
+      - target: 3000
+        host_ip: 127.0.0.1
     volumes:
       - grafana_data:/var/lib/grafana
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro

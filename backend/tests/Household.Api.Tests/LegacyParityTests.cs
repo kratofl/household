@@ -157,6 +157,32 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
     }
 
     [Fact]
+    public async Task Profile_theme_is_stored_per_user_and_validated()
+    {
+        using HttpRequestMessage before = Authenticated(HttpMethod.Get, "/api/v1/users/me");
+        JsonElement initial = await (await fixture.Client.SendAsync(before)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("mandarine", initial.GetProperty("theme").GetString());
+
+        using HttpRequestMessage unknown = Authenticated(HttpMethod.Patch, "/api/v1/users/me");
+        unknown.Content = JsonContent.Create(new { theme = "neon" });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, (await fixture.Client.SendAsync(unknown)).StatusCode);
+
+        using HttpRequestMessage update = Authenticated(HttpMethod.Patch, "/api/v1/users/me");
+        update.Content = JsonContent.Create(new { theme = "lagune" });
+        HttpResponseMessage updated = await fixture.Client.SendAsync(update);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal("lagune", (await updated.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("theme").GetString());
+
+        using HttpRequestMessage after = Authenticated(HttpMethod.Get, "/api/v1/users/me");
+        JsonElement stored = await (await fixture.Client.SendAsync(after)).Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("lagune", stored.GetProperty("theme").GetString());
+
+        using HttpRequestMessage reset = Authenticated(HttpMethod.Patch, "/api/v1/users/me");
+        reset.Content = JsonContent.Create(new { theme = "mandarine" });
+        Assert.Equal(HttpStatusCode.OK, (await fixture.Client.SendAsync(reset)).StatusCode);
+    }
+
+    [Fact]
     public async Task Budget_write_contracts_and_planned_application_are_preserved_and_idempotent()
     {
         using var periodRequest = Authenticated(HttpMethod.Patch, "/api/v1/budget/periods/current");

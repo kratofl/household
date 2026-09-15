@@ -20,7 +20,7 @@ const de = {
   "language.en": "Englisch",
   "theme.light": "Hell",
   "theme.dark": "Dunkel",
-  "theme.system": "System",
+  "theme.system": "Automatisch",
   "auth.title": "Zugang",
   "auth.description": "Lokaler Login mit Admin-Freigabe.",
   "auth.loginTab": "Login",
@@ -43,8 +43,11 @@ const de = {
   "account.newPassword": "Neues Passwort",
   "account.changePassword": "Passwort ändern",
   "account.passwordChanged": "Passwort geändert.",
-  "account.preferencesTitle": "Darstellung",
+  "account.preferencesTitle": "Erscheinungsbild",
   "account.preferencesDescription": "Theme und Sprache für dieses Gerät.",
+  "account.appearance": "Darstellung",
+  "account.theme": "Theme",
+  "account.themeHint": "Das Theme färbt Buttons, Links und Markierungen. Beträge und Kategorien behalten ihre Farben.",
   "account.role": "Rolle",
   "account.status": "Status",
   "settings.title": "Admin Settings",
@@ -532,6 +535,9 @@ const en: Record<keyof typeof de, string> = {
   "account.passwordChanged": "Password changed.",
   "account.preferencesTitle": "Appearance",
   "account.preferencesDescription": "Theme and language for this device.",
+  "account.appearance": "Mode",
+  "account.theme": "Theme",
+  "account.themeHint": "The theme colours buttons, links and highlights. Amounts and categories keep their colours.",
   "account.role": "Role",
   "account.status": "Status",
   "settings.title": "Admin Settings",
@@ -994,3 +1000,9 @@ export function translate(
     return value === undefined ? match : String(value)
   })
 }
+
+/** Bound translate() for one locale, as passed to view components. */
+export type Translator = (
+  key: TranslationKey,
+  values?: Record<string, string | number>,
+) => string

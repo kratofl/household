@@ -21,6 +21,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash").HasMaxLength(255);
             entity.Property(x => x.Role).HasColumnName("role").HasMaxLength(32);
             entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(32);
+            entity.Property(x => x.Theme).HasColumnName("theme").HasMaxLength(32);
             entity.Property(x => x.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp without time zone").HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(x => x.Name).IsUnique();

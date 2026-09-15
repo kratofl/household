@@ -12,30 +12,17 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
-Prerequisites:
+Install Git, Docker Desktop (Linux containers), and Docker Compose 2.32+.
+Use Make on macOS/Linux, or PowerShell with Git for Windows on Windows.
 
-- .NET 10 SDK
-- Node.js 24.x and npm
-- Docker Engine with the Docker Compose plugin
-- .NET 10 SDK for backend development and hot reload
+Start the complete local stack with `make dev` or `.\make.ps1 dev`.
+The command prints an automatically assigned localhost URL. Sign in with
+`admin` / `admin`. Each worktree has an independent database and network.
+Keep the command running to synchronize source changes into the containers.
+Stop the stack with `make dev-down` or `.\make.ps1 dev-down`; data is retained.
 
-Bootstrap a clean clone:
-
-```bash
-git clone https://github.com/kratofl/household.git
-cd household
-make setup-env
-make bootstrap
-make doctor
-```
-
-Start the local development stack:
-
-```bash
-make dev
-```
-
-This starts PostgreSQL in Docker, then runs the .NET API and Next.js locally. Local development seeds an admin user with `admin` / `admin` unless `HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD` overrides the password.
+For host-side checks and migration generation, also install .NET 10 SDK and
+Node.js 26 with npm, then run `make bootstrap` or `.\make.ps1 bootstrap`.
 
 More details:
 
