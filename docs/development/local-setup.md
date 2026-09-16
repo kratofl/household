@@ -26,6 +26,7 @@ From the checkout or worktree root:
 | Follow application logs | `make dev-logs` | `.\make.ps1 dev-logs` |
 | Stop this stack | `make dev-down` | `.\make.ps1 dev-down` |
 | Reset this stack's data | `make reset-dev-db` | `.\make.ps1 reset-dev-db` |
+| Restore a dump into this stack | `make seed-dev BACKUP=path` | `.\make.ps1 seed-dev -Backup path` |
 
 The first start downloads and builds images, waits for PostgreSQL and API health,
 then prints the web URL. Sign in as `admin` / `admin`. Keep this terminal open
@@ -78,6 +79,19 @@ imported, changed, or deleted. Production commands retain their existing setup.
 Optional `observability-up`, `observability-down`, and `observability-logs` also
 use the worktree project. Their published ports are dynamic; `dev-info` lists
 them. They are not needed for normal development.
+
+## Realistic test data
+
+New worktrees start with only the seeded admin account. For UI or reporting work,
+restore a dump made by `make prod-backup` (or taken from another worktree's
+database) with `make seed-dev BACKUP=deployments/backups/<file>.dump`. The command
+stops this worktree's API and web containers, runs `pg_restore --clean` against its
+database, and starts the stack again so pending migrations apply on top of the
+restored data. Accounts and passwords are then the ones from the dump. Both stacks
+use the same PostgreSQL major version, so dumps restore without conversion.
+
+Data flows into a worktree only. Never restore a development dump into production,
+and keep dumps out of Git; `deployments/backups/` is ignored for that reason.
 
 ## Checks and migrations
 

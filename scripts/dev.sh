@@ -47,6 +47,20 @@ case "${1:-dev}" in
     api-dev|web-dev)
         printf 'Use dev for the complete Docker stack with hot reload.\n' >&2
         exit 1 ;;
+    seed-dev)
+        # Restore a pg_dump custom-format file into this worktree's database.
+        # API and web are stopped so pg_restore --clean is not blocked by open
+        # connections; starting web again brings the API back and applies any
+        # pending migrations on top of the restored data.
+        backup=${2:-}
+        [ -n "$backup" ] || { printf 'Usage: seed-dev <backup.dump>\n' >&2; exit 1; }
+        [ -f "$backup" ] || { printf 'Backup not found: %s\n' "$backup" >&2; exit 1; }
+        compose stop household-api household-web
+        compose up --detach --wait household-db
+        printf 'Restoring %s into %s\n' "$backup" "$project"
+        compose exec -T household-db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < "$backup"
+        compose up --detach --wait --wait-timeout 180 household-web
+        info ;;
     reset-dev-db)
         printf 'Delete development data for %s? Type the project name: ' "$project"
         read -r confirmation

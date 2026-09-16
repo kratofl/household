@@ -32,6 +32,7 @@ help:
 	@echo "  make api-dev                Deprecated: use make dev"
 	@echo "  make web-dev                Deprecated: use make dev"
 	@echo "  make reset-dev-db           Remove the dev Postgres volume"
+	@echo "  make seed-dev BACKUP=path   Restore a Postgres dump into this worktree database"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make check                  Run backend, web, and Compose checks"
@@ -142,6 +143,13 @@ compose-config:
 .PHONY: dev dev-info dev-project dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs core-up core-down
 dev dev-info dev-project dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs:
 	@sh scripts/dev.sh $@
+
+.PHONY: seed-dev
+seed-dev:
+	@if [ -z "$(BACKUP)" ]; then \
+		echo "Please add BACKUP=path (a dump from make prod-backup)"; exit 1; \
+	fi
+	@sh scripts/dev.sh seed-dev "$(BACKUP)"
 core-up: db-up
 core-down: dev-down
 

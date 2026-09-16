@@ -3,6 +3,7 @@
 #   .\make.ps1 dev
 #   .\make.ps1 create-migration -Feature budget -Name AddExample
 #   .\make.ps1 prod-restore -Backup deployments\backups\household-20260805.dump
+#   .\make.ps1 seed-dev -Backup deployments\backups\household-20260805.dump
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)] [string] $Target = "help",
@@ -34,12 +35,14 @@ function Invoke-Step {
 
 # Use the same POSIX script as Make. Git for Windows includes sh.exe.
 $devTargets = @("dev", "dev-info", "dev-project", "dev-down", "dev-logs", "db-up", "db-down", "db-logs", "reset-dev-db", "api-dev", "web-dev", "logs", "observability-up", "observability-down", "observability-logs")
-if ($Target -in $devTargets) {
+if ($Target -in $devTargets -or $Target -eq "seed-dev") {
+    if ($Target -eq "seed-dev" -and -not $Backup) { Write-Error "Please add -Backup <path> (a dump from prod-backup)"; exit 1 }
     $gitCommand = Get-Command git -ErrorAction Stop
     $gitShell = Join-Path (Split-Path (Split-Path $gitCommand.Source)) "bin/sh.exe"
     if (Test-Path $gitShell) { $shellPath = $gitShell }
     else { $shellPath = (Get-Command sh -ErrorAction Stop).Source }
-    & $shellPath (Join-Path $root "scripts/dev.sh") $Target
+    if ($Target -eq "seed-dev") { & $shellPath (Join-Path $root "scripts/dev.sh") $Target $Backup }
+    else { & $shellPath (Join-Path $root "scripts/dev.sh") $Target }
     exit $LASTEXITCODE
 }
 
@@ -76,7 +79,8 @@ switch ($Target) {
         Write-Host "Household targets (.\make.ps1 <target>)"
         Write-Host ""
         Write-Host "Setup:        setup-env, bootstrap, doctor"
-        Write-Host "Development:  dev, dev-info, dev-down, dev-logs, db-up, db-logs, reset-dev-db"
+        Write-Host "Development:  dev, dev-info, dev-down, dev-logs, db-up, db-logs, reset-dev-db,"
+        Write-Host "              seed-dev -Backup <path>"
         Write-Host "Quality:      check, backend-test, backend-build, web-lint, web-build, compose-config"
         Write-Host "Production:   prod-pull, prod-up, prod-build-up, prod-down, prod-logs, prod-backup,"
         Write-Host "              prod-restore -Backup <path>, prod-observability-up"
