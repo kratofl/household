@@ -8,8 +8,10 @@ services:
     environment:
       HOUSEHOLD_API_URL: http://household-api:8090/api/v1
     ports:
+      # No published port: Docker assigns a free host port so several worktrees
+      # can run at once. No host_ip: bind on all interfaces so the dev app is
+      # reachable from other machines on the LAN. Run `make dev-info` for the URL.
       - target: 3000
-        host_ip: 127.0.0.1
     depends_on:
       household-api:
         condition: service_healthy

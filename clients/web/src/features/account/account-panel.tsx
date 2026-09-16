@@ -1,20 +1,14 @@
 "use client"
 
+// Account: who is signed in and their password. Appearance and language live
+// on the Settings page.
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  SettingsBlock,
-  SettingsField,
-  SettingsRow,
-  SettingsSection,
-  SettingsSurface,
-} from "@/components/app/settings-surface"
-import { AppearanceControl, LanguageControl } from "@/components/app/switchers"
-import { ThemePicker } from "@/components/app/theme-picker"
-import type { Locale, Translator } from "@/lib/i18n"
+import { SettingsBlock, SettingsField, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
+import type { Translator } from "@/lib/i18n"
 import type { CurrentUser } from "@/lib/session"
-import type { ThemeId } from "@/lib/theme"
 
 export function AccountPanel(props: {
   currentUser: CurrentUser
@@ -23,26 +17,10 @@ export function AccountPanel(props: {
   setCurrentPassword: (value: string) => void
   setNewPassword: (value: string) => void
   changePassword: () => Promise<void>
-  saveTheme: (theme: ThemeId) => Promise<void>
-  locale: Locale
-  setLocale: (value: Locale) => void
   t: Translator
 }) {
   return (
     <SettingsSurface title={props.t("account.title")} description={props.t("account.description")}>
-      <SettingsSection title={props.t("account.preferencesTitle")} description={props.t("account.themeHint")}>
-        <SettingsRow title={props.t("account.appearance")}>
-          <AppearanceControl t={props.t} />
-        </SettingsRow>
-        <SettingsBlock>
-          <p className="mb-3">{props.t("account.theme")}</p>
-          <ThemePicker locale={props.locale} onChange={(theme) => void props.saveTheme(theme)} />
-        </SettingsBlock>
-        <SettingsRow title={props.t("nav.language")}>
-          <LanguageControl locale={props.locale} setLocale={props.setLocale} t={props.t} />
-        </SettingsRow>
-      </SettingsSection>
-
       <SettingsSection title={props.t("account.profileTitle")} description={props.t("account.profileDescription")}>
         <SettingsField label={props.t("auth.name")} value={props.currentUser.name} />
         <SettingsField label={props.t("auth.email")} value={props.currentUser.email} />

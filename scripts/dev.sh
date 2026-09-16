@@ -9,11 +9,27 @@ project="household-dev-${label}-${identity}"
 compose() {
     docker compose --project-name "$project" --env-file deployments/dev.env -f deployments/docker-compose.dev.yml "$@"
 }
+# Best-effort LAN address so the printed URL works from another machine.
+# Prints nothing when no method fits the host, which only drops the LAN line.
+lan_ip() {
+    for iface in en0 en1 eth0; do
+        address=$(ipconfig getifaddr "$iface" 2>/dev/null || true)
+        if [ -n "$address" ]; then printf '%s' "$address"; return 0; fi
+    done
+    hostname -I 2>/dev/null | awk 'NF { printf "%s", $1 }' || true
+}
 info() {
     printf 'Worktree: %s\nProject: %s\n' "$root" "$project"
     compose ps
-    address=$(compose port household-web 3000 2>/dev/null || true)
-    if [ -n "$address" ]; then printf '\nWeb: http://%s\nLogin: admin / admin\n' "$address"; fi
+    # Docker binds on all interfaces and picks a free host port per worktree,
+    # so take the port from its output and build the URLs ourselves.
+    port=$(compose port household-web 3000 2>/dev/null | sed 's/.*://' || true)
+    if [ -n "$port" ]; then
+        printf '\nWeb:   http://localhost:%s\n' "$port"
+        ip=$(lan_ip)
+        if [ -n "$ip" ]; then printf 'LAN:   http://%s:%s\n' "$ip" "$port"; fi
+        printf 'Login: admin / admin\n'
+    fi
 }
 case "${1:-dev}" in
     dev)

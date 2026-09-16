@@ -33,8 +33,8 @@ export function AdminSettingsPanel(props: {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{props.t("settings.forbiddenTitle")}</CardTitle>
-          <CardDescription>{props.t("settings.forbiddenDescription")}</CardDescription>
+          <CardTitle>{props.t("admin.forbiddenTitle")}</CardTitle>
+          <CardDescription>{props.t("admin.forbiddenDescription")}</CardDescription>
         </CardHeader>
       </Card>
     )
@@ -46,7 +46,7 @@ export function AdminSettingsPanel(props: {
   ]
 
   return (
-    <SettingsSurface title={props.t("settings.title")} description={props.t("settings.description")}>
+    <SettingsSurface title={props.t("admin.title")} description={props.t("admin.description")}>
       <SettingsSection title={props.t("services.title")} description={props.t("services.description")}>
         <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
           {props.t("services.catalogHint")}

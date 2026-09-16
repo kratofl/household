@@ -1,6 +1,6 @@
 "use client"
 
-import { IconChevronRight, IconHome, IconLogout, IconPigMoney, IconSettings, IconUserCircle } from "@tabler/icons-react"
+import { IconChevronRight, IconHome, IconLogout, IconPigMoney, IconSettings, IconShield, IconUserCircle } from "@tabler/icons-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -19,10 +19,11 @@ import {
 } from "@/lib/modules"
 import { type Locale, isLocale, translate } from "@/lib/i18n"
 
-import { BudgetSubnav, MobileTabBar, Sidebar, SidebarButton, SidebarLink, SidebarModuleItem, SidebarSectionLabel } from "@/components/app/sidebar"
+import { BudgetSubnav, MobileTabBar, Sidebar, SidebarButton, SidebarGroup, SidebarLink, SidebarModuleNav } from "@/components/app/sidebar"
 import { AppearanceToggle } from "@/components/app/switchers"
 import { AccountPanel } from "@/features/account/account-panel"
 import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
+import { SettingsPanel } from "@/features/settings/settings-panel"
 import type { AuditEvent, UpdateCandidate, UpdateStatus } from "@/features/admin/types"
 import { LoginScreen } from "@/features/auth/login-screen"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
@@ -72,30 +73,30 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
   const isHome = pathname === "/"
   const isAccount = selectedSection === "account"
   const isSettings = selectedSection === "settings"
+  const isAdminSettings = selectedSection === "admin"
   const selectedModuleKey =
-    isHome || isAccount || isSettings
+    isHome || isAccount || isSettings || isAdminSettings
       ? undefined
       : moduleKeyFromSection(selectedSection) ?? activeModules[0]?.key
   const selectedModule = selectedModuleKey
     ? activeModules.find((module) => module.key === selectedModuleKey)
     : undefined
-  const selectedTitle = isHome
-    ? t("dashboard.title")
-    : isAccount
-      ? t("account.title")
-      : isSettings
-        ? t("settings.title")
-        : selectedModule
-          ? selectedModule.key === "budget"
-            ? t(budgetViews[budgetViewFromPath(pathname)].labelKey)
-            : moduleName(selectedModule, locale)
-          : t("app.name")
+  const selectedTitle = selectedTitleFor({
+    isHome,
+    isAccount,
+    isSettings,
+    isAdminSettings,
+    budgetViewLabel: selectedModule?.key === "budget" ? t(budgetViews[budgetViewFromPath(pathname)].labelKey) : undefined,
+    moduleLabel: selectedModule ? moduleName(selectedModule, locale) : undefined,
+    t,
+  })
 
   const staticRoutes = useMemo(
     () => [
       ...Object.values(moduleCatalog).map((module) => module.route),
       "/account",
       "/settings",
+      "/admin/settings",
     ],
     [],
   )
@@ -221,7 +222,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
   }, [t, tokens])
 
   useEffect(() => {
-    if (!isSettings || currentUser?.role !== "admin" || !tokens) return
+    if (!isAdminSettings || currentUser?.role !== "admin" || !tokens) return
 
     const timer = window.setTimeout(() => {
       if (updateCandidates == null) {
@@ -233,7 +234,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [auditEvents.length, checkUpdates, currentUser?.role, isSettings, loadAuditEvents, tokens, updateCandidates])
+  }, [auditEvents.length, checkUpdates, currentUser?.role, isAdminSettings, loadAuditEvents, tokens, updateCandidates])
 
   async function login() {
     setError(null)
@@ -455,11 +456,9 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
             <SidebarLink href="/account" active={isAccount} icon={<IconUserCircle className="size-4" strokeWidth={1.8} />}>
               {t("nav.account")}
             </SidebarLink>
-            {isAdmin ? (
-              <SidebarLink href="/settings" active={isSettings} icon={<IconSettings className="size-4" strokeWidth={1.8} />}>
-                {t("nav.adminSettings")}
-              </SidebarLink>
-            ) : null}
+            <SidebarLink href="/settings" active={isSettings} icon={<IconSettings className="size-4" strokeWidth={1.8} />}>
+              {t("nav.settings")}
+            </SidebarLink>
             <SidebarButton icon={<IconLogout className="size-4" strokeWidth={1.8} />} onClick={logout}>
               {t("nav.logout")}
             </SidebarButton>
@@ -476,14 +475,20 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
             {t("dashboard.title")}
           </SidebarLink>
         </div>
-        <div>
-          <SidebarSectionLabel>{t("nav.modules")}</SidebarSectionLabel>
-          <div className="space-y-px">
-            {activeModules.map((module) => (
-              <SidebarModuleItem key={module.id} locale={locale} module={module} pathname={pathname} t={t} />
-            ))}
-          </div>
+        <div className="space-y-px">
+          {activeModules.map((module) => (
+            <SidebarModuleNav key={module.id} locale={locale} module={module} pathname={pathname} t={t} />
+          ))}
         </div>
+        {isAdmin ? (
+          <SidebarGroup icon={<IconShield className="size-4" strokeWidth={1.8} />} label={t("nav.admin")} containsActive={isAdminSettings}>
+            <li>
+              <SidebarLink href="/admin/settings" level={1} active={isAdminSettings}>
+                {t("nav.adminSettings")}
+              </SidebarLink>
+            </li>
+          </SidebarGroup>
+        ) : null}
       </Sidebar>
 
       <div className="min-w-0 flex-1">
@@ -544,12 +549,11 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
                   setCurrentPassword={setCurrentPassword}
                   setNewPassword={setNewPassword}
                   changePassword={changePassword}
-                  saveTheme={saveTheme}
-                  locale={locale}
-                  setLocale={setLocale}
                   t={t}
                 />
               ) : isSettings ? (
+                <SettingsPanel saveTheme={saveTheme} locale={locale} setLocale={setLocale} t={t} />
+              ) : isAdminSettings ? (
                 <AdminSettingsPanel
                   currentUser={currentUser}
                   modules={modules}
@@ -591,6 +595,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
         isHome={isHome}
         isAccount={isAccount}
         isSettings={isSettings}
+        isAdminSettings={isAdminSettings}
         isAdmin={isAdmin}
         t={t}
       />
@@ -600,4 +605,21 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
 
 function selectedSectionFromPath(pathname: string) {
   return pathname.split("/").filter(Boolean)[0] ?? ""
+}
+
+/** Toolbar and page title for the current route; one place instead of a ternary ladder. */
+function selectedTitleFor(input: {
+  isHome: boolean
+  isAccount: boolean
+  isSettings: boolean
+  isAdminSettings: boolean
+  budgetViewLabel: string | undefined
+  moduleLabel: string | undefined
+  t: (key: "dashboard.title" | "account.title" | "settings.title" | "admin.title" | "app.name") => string
+}) {
+  if (input.isHome) return input.t("dashboard.title")
+  if (input.isAccount) return input.t("account.title")
+  if (input.isSettings) return input.t("settings.title")
+  if (input.isAdminSettings) return input.t("admin.title")
+  return input.budgetViewLabel ?? input.moduleLabel ?? input.t("app.name")
 }
