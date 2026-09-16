@@ -9,15 +9,15 @@ public static class BudgetCsv
 {
     public static IReadOnlyList<IReadOnlyList<string>> Parse(string content)
     {
-        var text = content.Replace("\r\n", "\n").Replace('\r', '\n');
-        var delimiter = DetectDelimiter(text);
-        var rows = new List<IReadOnlyList<string>>();
-        var row = new List<string>();
-        var field = new StringBuilder();
-        var quoted = false;
-        for (var index = 0; index < text.Length; index++)
+        string text = content.Replace("\r\n", "\n").Replace('\r', '\n');
+        char delimiter = DetectDelimiter(text);
+        List<IReadOnlyList<string>> rows = new List<IReadOnlyList<string>>();
+        List<string> row = new List<string>();
+        StringBuilder field = new StringBuilder();
+        bool quoted = false;
+        for (int index = 0; index < text.Length; index++)
         {
-            var character = text[index];
+            char character = text[index];
             if (quoted)
             {
                 if (character == '"' && index + 1 < text.Length && text[index + 1] == '"')
@@ -66,10 +66,10 @@ public static class BudgetCsv
 
     public static string Write(IEnumerable<IReadOnlyList<string>> rows)
     {
-        var builder = new StringBuilder();
-        foreach (var row in rows)
+        StringBuilder builder = new StringBuilder();
+        foreach (IReadOnlyList<string> row in rows)
         {
-            for (var index = 0; index < row.Count; index++)
+            for (int index = 0; index < row.Count; index++)
             {
                 if (index > 0) builder.Append(',');
                 builder.Append(Escape(row[index]));
@@ -83,36 +83,36 @@ public static class BudgetCsv
     // explicit ("," or "."); the other separator is treated as a grouping character.
     public static long? ParseAmountCents(string value, string decimalSeparator)
     {
-        var trimmed = value.Trim().Replace(" ", "").Replace(" ", "");
+        string trimmed = value.Trim().Replace(" ", "").Replace(" ", "");
         if (trimmed.Length == 0) return null;
-        var groupSeparator = decimalSeparator == "," ? "." : ",";
+        string groupSeparator = decimalSeparator == "," ? "." : ",";
         trimmed = trimmed.Replace(groupSeparator, "");
         trimmed = trimmed.Replace(decimalSeparator, ".");
-        var parts = trimmed.Split('.');
+        string[] parts = trimmed.Split('.');
         if (parts.Length > 2) return null;
-        var negative = parts[0].StartsWith('-');
-        var wholePart = negative ? parts[0][1..] : parts[0];
+        bool negative = parts[0].StartsWith('-');
+        string wholePart = negative ? parts[0][1..] : parts[0];
         if (wholePart.Length == 0) wholePart = "0";
-        var fractionPart = parts.Length == 2 ? parts[1] : "";
+        string fractionPart = parts.Length == 2 ? parts[1] : "";
         if (fractionPart.Length > 2 || !wholePart.All(char.IsAsciiDigit) || !fractionPart.All(char.IsAsciiDigit))
             return null;
-        if (!long.TryParse(wholePart, NumberStyles.None, CultureInfo.InvariantCulture, out var whole)) return null;
-        var fraction = fractionPart.Length == 0 ? 0 : long.Parse(fractionPart.PadRight(2, '0'), CultureInfo.InvariantCulture);
-        var cents = checked(whole * 100 + fraction);
+        if (!long.TryParse(wholePart, NumberStyles.None, CultureInfo.InvariantCulture, out long whole)) return null;
+        long fraction = fractionPart.Length == 0 ? 0 : long.Parse(fractionPart.PadRight(2, '0'), CultureInfo.InvariantCulture);
+        long cents = checked(whole * 100 + fraction);
         return negative ? -cents : cents;
     }
 
     public static DateOnly? ParseDate(string value, string dateFormat) =>
-        DateOnly.TryParseExact(value.Trim(), dateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+        DateOnly.TryParseExact(value.Trim(), dateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly date)
             ? date
             : null;
 
     public static string DetectDecimalSeparator(IEnumerable<string> samples)
     {
-        foreach (var sample in samples)
+        foreach (string sample in samples)
         {
-            var lastComma = sample.LastIndexOf(',');
-            var lastDot = sample.LastIndexOf('.');
+            int lastComma = sample.LastIndexOf(',');
+            int lastDot = sample.LastIndexOf('.');
             if (lastComma < 0 && lastDot < 0) continue;
             return lastComma > lastDot ? "," : ".";
         }
@@ -124,12 +124,12 @@ public static class BudgetCsv
     public static string DetectDateFormat(IEnumerable<string> samples)
     {
         string[] formats = ["yyyy-MM-dd", "dd.MM.yyyy", "MM/dd/yyyy", "dd/MM/yyyy"];
-        var values = samples.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
-        var best = "yyyy-MM-dd";
-        var bestMatches = 0;
-        foreach (var format in formats)
+        List<string> values = samples.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        string best = "yyyy-MM-dd";
+        int bestMatches = 0;
+        foreach (string format in formats)
         {
-            var matches = values.Count(value => ParseDate(value, format) is not null);
+            int matches = values.Count(value => ParseDate(value, format) is not null);
             if (matches > bestMatches)
             {
                 best = format;
@@ -141,11 +141,11 @@ public static class BudgetCsv
 
     private static char DetectDelimiter(string text)
     {
-        var header = text.Split('\n', 2)[0];
-        var inQuotes = false;
-        var commas = 0;
-        var semicolons = 0;
-        foreach (var character in header)
+        string header = text.Split('\n', 2)[0];
+        bool inQuotes = false;
+        int commas = 0;
+        int semicolons = 0;
+        foreach (char character in header)
         {
             if (character == '"') inQuotes = !inQuotes;
             else if (!inQuotes && character == ',') commas++;

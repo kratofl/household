@@ -18,9 +18,9 @@ public static partial class MerchantPresentation
 
     public static MerchantInfo From(string? value)
     {
-        var raw = value?.Trim() ?? "";
-        var normalized = Whitespace().Replace(NonWord().Replace(raw.ToUpperInvariant(), " "), " ").Trim();
-        return KnownBrands.TryGetValue(normalized, out var brand)
+        string raw = value?.Trim() ?? "";
+        string normalized = Whitespace().Replace(NonWord().Replace(raw.ToUpperInvariant(), " "), " ").Trim();
+        return KnownBrands.TryGetValue(normalized, out (string BrandKey, string DisplayName) brand)
             ? new MerchantInfo(raw, brand.BrandKey == "disney-plus" ? "DISNEY PLUS" : normalized, brand.BrandKey, brand.DisplayName)
             : new MerchantInfo(raw, normalized, null, raw.Length == 0 ? "" : raw);
     }

@@ -25,6 +25,8 @@ dotnet build Household.slnx
 
 The integration suite launches an isolated PostgreSQL 18 container through the Docker CLI. It applies representative Go-era schema fixtures, starts the production API and EF Core migrations, and verifies public authenticated HTTP behavior and data preservation. Docker must therefore be running for backend tests.
 
+The backend build also enforces the code style rules in `backend/.editorconfig` (no `var`, `this.` qualification, `_camelCase` private fields) as errors. `dotnet format style Household.slnx` fixes most of them; rerun it until it reports no changes, since some fixes only become visible after earlier ones land.
+
 ## Web and Compose
 
 ```bash

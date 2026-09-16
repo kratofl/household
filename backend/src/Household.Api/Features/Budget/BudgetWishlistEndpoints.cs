@@ -19,7 +19,7 @@ public static class BudgetWishlistEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         return Results.Ok(await database.WishlistItems.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id)
@@ -34,11 +34,11 @@ public static class BudgetWishlistEndpoints
         WishlistItemRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var error = Validate(request.Name, request.EstimatedPriceCents, request.Priority, BudgetValues.Active);
+        string? error = Validate(request.Name, request.EstimatedPriceCents, request.Priority, BudgetValues.Active);
         if (error is not null) return Invalid(error);
-        var item = new BudgetWishlistItem
+        BudgetWishlistItem item = new BudgetWishlistItem
         {
             OwnerUserId = user.Id,
             Name = request.Name!.Trim(),
@@ -56,16 +56,16 @@ public static class BudgetWishlistEndpoints
         IIdentityAccess identity, BudgetDbContext database, TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var item = await database.WishlistItems.SingleOrDefaultAsync(
+        BudgetWishlistItem? item = await database.WishlistItems.SingleOrDefaultAsync(
             x => x.Id == itemId && x.OwnerUserId == user.Id, cancellationToken);
         if (item is null) return NotFound();
-        var name = request.Name?.Trim() ?? item.Name;
-        var price = request.EstimatedPriceCents ?? item.EstimatedPriceCents;
-        var priority = request.Priority ?? item.Priority;
-        var status = request.Status ?? item.Status;
-        var error = Validate(name, price, priority, status);
+        string name = request.Name?.Trim() ?? item.Name;
+        long? price = request.EstimatedPriceCents ?? item.EstimatedPriceCents;
+        string priority = request.Priority ?? item.Priority;
+        string status = request.Status ?? item.Status;
+        string? error = Validate(name, price, priority, status);
         if (error is not null) return Invalid(error);
         item.Name = name;
         item.EstimatedPriceCents = price;
@@ -82,9 +82,9 @@ public static class BudgetWishlistEndpoints
         IIdentityAccess identity, BudgetDbContext database, BudgetService budgetService,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var item = await database.WishlistItems.SingleOrDefaultAsync(
+        BudgetWishlistItem? item = await database.WishlistItems.SingleOrDefaultAsync(
             x => x.Id == itemId && x.OwnerUserId == user.Id, cancellationToken);
         if (item is null) return NotFound();
         if (item.SavingsGoalId.HasValue) return Results.Ok(item);
@@ -99,13 +99,13 @@ public static class BudgetWishlistEndpoints
         }
         else
         {
-            var target = request.TargetAmountCents ?? item.EstimatedPriceCents;
+            long? target = request.TargetAmountCents ?? item.EstimatedPriceCents;
             if (target is null or <= 0 ||
                 request.PlanningMode is not (BudgetValues.DateDriven or BudgetValues.RateDriven))
                 return Invalid("Promotion needs a target amount and date- or rate-driven plan");
-            var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+            DateOnly today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
             await budgetService.EnsureDefaultsAsync(user.Id, today, cancellationToken);
-            var preferredStartDay = await database.Settings.AsNoTracking()
+            int preferredStartDay = await database.Settings.AsNoTracking()
                 .Where(x => x.OwnerUserId == user.Id)
                 .Select(x => (int?)x.PreferredPeriodStartDay)
                 .SingleOrDefaultAsync(cancellationToken) ?? 1;
@@ -127,7 +127,7 @@ public static class BudgetWishlistEndpoints
                 targetDate = BudgetSavingsGoalPlanner.ForecastDate(
                     target.Value, 0, contribution, today, preferredStartDay);
             }
-            var goal = new BudgetSavingsPurpose
+            BudgetSavingsPurpose goal = new BudgetSavingsPurpose
             {
                 Id = Guid.CreateVersion7(),
                 OwnerUserId = user.Id,

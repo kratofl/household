@@ -1,6 +1,7 @@
 using Household.Api.Features.Identity;
 using Household.Api.Platform;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Household.Api.Features.Budget;
 
@@ -21,9 +22,9 @@ public static class BudgetSavingsEndpoints
         string? asOf, HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var selectedDate = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly selectedDate = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(asOf) && !TryDate(asOf, out selectedDate)) return InvalidDate();
         return Results.Ok(await new BudgetSavingsProjector(database).LoadAsync(user.Id, selectedDate, cancellationToken));
     }
@@ -33,16 +34,16 @@ public static class BudgetSavingsEndpoints
         BudgetDbContext database, BudgetService budgetService, TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var name = request.Name?.Trim() ?? "";
+        string name = request.Name?.Trim() ?? "";
         if (name.Length == 0 || request.TargetAmountCents <= 0)
             return Invalid("Savings goal needs a name and positive target amount");
         if (request.PlanningMode is not (BudgetValues.DateDriven or BudgetValues.RateDriven))
             return Invalid("Planning mode must be date or rate");
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
-        var (_, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, today, cancellationToken);
-        var preferredStartDay = await database.Settings.AsNoTracking()
+        DateOnly today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        (BudgetPeriod _, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(user.Id, today, cancellationToken);
+        int preferredStartDay = await database.Settings.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id)
             .Select(x => (int?)x.PreferredPeriodStartDay).SingleOrDefaultAsync(cancellationToken) ?? 1;
 
@@ -72,7 +73,7 @@ public static class BudgetSavingsEndpoints
             return Invalid(error.Message);
         }
 
-        var goal = new BudgetSavingsPurpose
+        BudgetSavingsPurpose goal = new BudgetSavingsPurpose
         {
             OwnerUserId = user.Id,
             Name = name,
@@ -98,11 +99,11 @@ public static class BudgetSavingsEndpoints
         SavingsPurposeRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var name = request.Name?.Trim() ?? "";
+        string name = request.Name?.Trim() ?? "";
         if (name.Length == 0) return Invalid("Savings purpose name is required");
-        var purpose = new BudgetSavingsPurpose { OwnerUserId = user.Id, Name = name };
+        BudgetSavingsPurpose purpose = new BudgetSavingsPurpose { OwnerUserId = user.Id, Name = name };
         database.SavingsPurposes.Add(purpose);
         try
         {
@@ -129,29 +130,29 @@ public static class BudgetSavingsEndpoints
         SavingsContributionRequest request, string kind, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, BudgetService budgetService, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var idempotencyKey = request.IdempotencyKey?.Trim();
+        string? idempotencyKey = request.IdempotencyKey?.Trim();
         if (kind == BudgetValues.Contribution && string.IsNullOrWhiteSpace(idempotencyKey))
             return Invalid("Contribution idempotency key is required");
         if (idempotencyKey?.Length > 128) return Invalid("Contribution idempotency key is too long");
         if (idempotencyKey is not null)
         {
-            var existing = await database.SavingsContributions.AsNoTracking().Include(x => x.Allocations)
+            BudgetSavingsContribution? existing = await database.SavingsContributions.AsNoTracking().Include(x => x.Allocations)
                 .SingleOrDefaultAsync(x => x.OwnerUserId == user.Id && x.IdempotencyKey == idempotencyKey, cancellationToken);
             if (existing is not null) return Results.Ok(existing);
         }
-        if (!TryDate(request.OccurredOn, out var occurredOn)) return InvalidDate();
+        if (!TryDate(request.OccurredOn, out DateOnly occurredOn)) return InvalidDate();
         if (request.AmountCents <= 0 || string.IsNullOrWhiteSpace(request.Description))
             return Invalid("Savings funding needs a description and positive amount");
-        var allocations = request.Allocations ?? [];
+        IReadOnlyList<SavingsAllocationRequest> allocations = request.Allocations ?? [];
         if (allocations.Select(x => x.PurposeId).Distinct().Count() != allocations.Count)
             return Invalid("Each savings purpose can be allocated only once per contribution");
         if (allocations.Any(x => x.Mode is not ("fixed" or "percentage") || x.Value < 0 ||
                                  x.Mode == "percentage" && x.Value > 10_000))
             return Invalid("Savings allocation is invalid");
-        var purposeIds = allocations.Select(x => x.PurposeId).ToHashSet();
-        var foundPurposes = await database.SavingsPurposes.Where(
+        HashSet<Guid> purposeIds = allocations.Select(x => x.PurposeId).ToHashSet();
+        List<BudgetSavingsPurpose> foundPurposes = await database.SavingsPurposes.Where(
                 x => x.OwnerUserId == user.Id && purposeIds.Contains(x.Id) &&
                      x.ArchivedAt == null && x.CompletedAt == null)
             .ToListAsync(cancellationToken);
@@ -164,28 +165,28 @@ public static class BudgetSavingsEndpoints
                 ? x.Value
                 : checked((long)Math.Floor((decimal)request.AmountCents * x.Value / 10_000m)),
         }).ToList();
-        var allocatedTotal = calculated.Sum(x => x.Amount);
+        long allocatedTotal = calculated.Sum(x => x.Amount);
         if (allocatedTotal > request.AmountCents)
             return Invalid("Savings allocations cannot exceed funded value");
-        var (period, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
+        (BudgetPeriod? period, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
         if (kind == BudgetValues.Contribution)
         {
-            var summary = await budgetService.SummaryAsync(user.Id, occurredOn, cancellationToken);
+            BudgetSummary summary = await budgetService.SummaryAsync(user.Id, occurredOn, cancellationToken);
             if (request.AmountCents > Math.Max(0, summary.OrdinaryAvailableCents))
                 return Invalid("Savings contribution cannot exceed funded ordinary availability");
         }
-        var currentProjection = await new BudgetSavingsProjector(database).LoadAsync(
+        SavingsProjection currentProjection = await new BudgetSavingsProjector(database).LoadAsync(
             user.Id, occurredOn, cancellationToken);
         foreach (var allocation in calculated)
         {
-            var purpose = foundPurposes.Single(x => x.Id == allocation.Request.PurposeId);
-            var currentBalance = currentProjection.Purposes.Single(x => x.Id == purpose.Id).AllocatedCents;
+            BudgetSavingsPurpose purpose = foundPurposes.Single(x => x.Id == allocation.Request.PurposeId);
+            long currentBalance = currentProjection.Purposes.Single(x => x.Id == purpose.Id).AllocatedCents;
             if (purpose.TargetAmountCents.HasValue &&
                 checked(currentBalance + allocation.Amount) >= purpose.TargetAmountCents.Value)
                 purpose.ContributionsPaused = true;
         }
 
-        var contribution = new BudgetSavingsContribution
+        BudgetSavingsContribution contribution = new BudgetSavingsContribution
         {
             OwnerUserId = user.Id,
             PeriodId = period.Id,
@@ -213,7 +214,7 @@ public static class BudgetSavingsEndpoints
         catch (DbUpdateException) when (idempotencyKey is not null)
         {
             database.ChangeTracker.Clear();
-            var winner = await database.SavingsContributions.AsNoTracking().Include(x => x.Allocations)
+            BudgetSavingsContribution? winner = await database.SavingsContributions.AsNoTracking().Include(x => x.Allocations)
                 .SingleOrDefaultAsync(x => x.OwnerUserId == user.Id && x.IdempotencyKey == idempotencyKey, cancellationToken);
             if (winner is not null) return Results.Ok(winner);
             throw;
@@ -225,17 +226,17 @@ public static class BudgetSavingsEndpoints
         BudgetDbContext database, BudgetService budgetService, TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var key = request.IdempotencyKey?.Trim() ?? "";
+        string key = request.IdempotencyKey?.Trim() ?? "";
         if (key.Length is 0 or > 128) return Invalid("Purchase idempotency key is required and must be at most 128 characters");
-        var existing = await database.SavingsPurchases.AsNoTracking().Include(x => x.Funding)
+        BudgetSavingsPurchase? existing = await database.SavingsPurchases.AsNoTracking().Include(x => x.Funding)
             .SingleOrDefaultAsync(x => x.OwnerUserId == user.Id && x.IdempotencyKey == key, cancellationToken);
         if (existing is not null) return Results.Ok(existing);
-        if (!TryDate(request.OccurredOn, out var occurredOn)) return InvalidDate();
+        if (!TryDate(request.OccurredOn, out DateOnly occurredOn)) return InvalidDate();
         if (request.AmountCents <= 0 || string.IsNullOrWhiteSpace(request.Description))
             return Invalid("Purchase needs a description and positive amount");
-        var funding = request.Funding ?? [];
+        IReadOnlyList<SavingsPurchaseFundingRequest> funding = request.Funding ?? [];
         if (funding.Count == 0 || funding.Any(x => x.AmountCents <= 0) ||
             funding.Sum(x => x.AmountCents) != request.AmountCents)
             return Invalid("Explicit funding portions must cover the purchase exactly");
@@ -244,28 +245,28 @@ public static class BudgetSavingsEndpoints
             funding.Any(x => x.Source == BudgetValues.Goal && !x.PurposeId.HasValue ||
                              x.Source == BudgetValues.Ordinary && x.PurposeId.HasValue))
             return Invalid("Purchase funding source is invalid");
-        var goalIds = funding.Where(x => x.Source == BudgetValues.Goal)
+        List<Guid> goalIds = funding.Where(x => x.Source == BudgetValues.Goal)
             .Select(x => x.PurposeId!.Value).ToList();
         if (goalIds.Distinct().Count() != goalIds.Count)
             return Invalid("Each goal can fund a purchase only once");
 
-        var projection = await new BudgetSavingsProjector(database).LoadAsync(user.Id, occurredOn, cancellationToken);
-        var goalBalances = projection.Purposes.Where(x => goalIds.Contains(x.Id) && x.Status != "completed")
+        SavingsProjection projection = await new BudgetSavingsProjector(database).LoadAsync(user.Id, occurredOn, cancellationToken);
+        Dictionary<Guid, long> goalBalances = projection.Purposes.Where(x => goalIds.Contains(x.Id) && x.Status != "completed")
             .ToDictionary(x => x.Id, x => x.AllocatedCents);
         if (goalBalances.Count != goalIds.Count ||
             funding.Where(x => x.Source == BudgetValues.Goal)
                 .Any(x => x.AmountCents > goalBalances.GetValueOrDefault(x.PurposeId!.Value)))
             return Invalid("A savings goal cannot fund more than its available allocation");
-        var ordinaryFunding = funding.Where(x => x.Source == BudgetValues.Ordinary).Sum(x => x.AmountCents);
+        long ordinaryFunding = funding.Where(x => x.Source == BudgetValues.Ordinary).Sum(x => x.AmountCents);
         if (ordinaryFunding > 0)
         {
-            var summary = await budgetService.SummaryAsync(user.Id, occurredOn, cancellationToken);
+            BudgetSummary summary = await budgetService.SummaryAsync(user.Id, occurredOn, cancellationToken);
             if (ordinaryFunding > Math.Max(0, summary.OrdinaryAvailableCents))
                 return Invalid("Ordinary purchase funding exceeds available value");
         }
 
-        var (period, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
-        var ledger = new BudgetLedgerEntry
+        (BudgetPeriod? period, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
+        BudgetLedgerEntry ledger = new BudgetLedgerEntry
         {
             OwnerUserId = user.Id,
             PeriodId = period.Id,
@@ -276,7 +277,7 @@ public static class BudgetSavingsEndpoints
             OrdinaryImpactCents = -ordinaryFunding,
             Source = "goal_purchase",
         };
-        var purchase = new BudgetSavingsPurchase
+        BudgetSavingsPurchase purchase = new BudgetSavingsPurchase
         {
             OwnerUserId = user.Id,
             PeriodId = period.Id,
@@ -294,7 +295,7 @@ public static class BudgetSavingsEndpoints
             AmountCents = x.AmountCents,
         }));
 
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         database.LedgerEntries.Add(ledger);
         await database.SaveChangesAsync(cancellationToken);
         database.LedgerSplits.Add(new BudgetLedgerSplit
@@ -309,12 +310,12 @@ public static class BudgetSavingsEndpoints
         });
         purchase.LedgerEntryId = ledger.Id;
         database.SavingsPurchases.Add(purchase);
-        var goals = await database.SavingsPurposes.Where(x =>
+        List<BudgetSavingsPurpose> goals = await database.SavingsPurposes.Where(x =>
             x.OwnerUserId == user.Id && goalIds.Contains(x.Id) && x.TargetAmountCents.HasValue)
             .ToListAsync(cancellationToken);
-        foreach (var goal in goals)
+        foreach (BudgetSavingsPurpose? goal in goals)
         {
-            var used = funding.Single(x => x.PurposeId == goal.Id).AmountCents;
+            long used = funding.Single(x => x.PurposeId == goal.Id).AmountCents;
             if (goalBalances[goal.Id] - used == 0)
             {
                 goal.CompletedAt = DateTime.SpecifyKind(
@@ -331,7 +332,7 @@ public static class BudgetSavingsEndpoints
         {
             await transaction.RollbackAsync(cancellationToken);
             database.ChangeTracker.Clear();
-            var winner = await database.SavingsPurchases.AsNoTracking().Include(x => x.Funding)
+            BudgetSavingsPurchase? winner = await database.SavingsPurchases.AsNoTracking().Include(x => x.Funding)
                 .SingleOrDefaultAsync(x => x.OwnerUserId == user.Id && x.IdempotencyKey == key, cancellationToken);
             if (winner is not null) return Results.Ok(winner);
             throw;

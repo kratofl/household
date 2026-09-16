@@ -7,7 +7,7 @@ public sealed class BudgetReportMathTests
     [Fact]
     public void Positive_shares_sum_to_exactly_ten_thousand_basis_points()
     {
-        var shares = BudgetReportMath.ShareBasisPoints([1, 1, 1]);
+        IReadOnlyList<long> shares = BudgetReportMath.ShareBasisPoints([1, 1, 1]);
 
         Assert.Equal(10_000, shares.Sum());
         Assert.Equal([3_333, 3_333, 3_334], shares);
@@ -31,7 +31,7 @@ public sealed class BudgetReportMathTests
     [Fact]
     public void Negative_and_zero_parts_get_no_share_and_do_not_change_the_denominator()
     {
-        var shares = BudgetReportMath.ShareBasisPoints([-500, 0, 2_500, 7_500]);
+        IReadOnlyList<long> shares = BudgetReportMath.ShareBasisPoints([-500, 0, 2_500, 7_500]);
 
         Assert.Equal([0, 0, 2_500, 7_500], shares);
     }
@@ -79,7 +79,7 @@ public sealed class BudgetReportMathTests
     [Fact]
     public void Large_values_near_the_long_range_do_not_overflow()
     {
-        var large = long.MaxValue / 20_000;
+        long large = long.MaxValue / 20_000;
 
         Assert.Equal(10_000, BudgetReportMath.ShareBasisPoints([large, large]).Sum());
         Assert.Equal(10_000, BudgetReportMath.ChangeBasisPoints(large, checked(large * 2)));

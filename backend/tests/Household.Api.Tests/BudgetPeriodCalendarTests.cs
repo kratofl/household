@@ -16,7 +16,7 @@ public sealed class BudgetPeriodCalendarTests
         string expectedStart,
         string expectedEnd)
     {
-        var period = BudgetPeriodCalendar.ForDate(DateOnly.Parse(selectedDate), preferredStartDay);
+        BudgetPeriodRange period = BudgetPeriodCalendar.ForDate(DateOnly.Parse(selectedDate), preferredStartDay);
 
         Assert.Equal(DateOnly.Parse(expectedStart), period.Start);
         Assert.Equal(DateOnly.Parse(expectedEnd), period.End);

@@ -22,33 +22,33 @@ public static class BudgetPeriodCloseEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return HttpResults.Problem(401, "Unauthorized", "Invalid bearer token");
-        var existing = await database.PeriodCloses.AsNoTracking().SingleOrDefaultAsync(
+        BudgetPeriodClose? existing = await database.PeriodCloses.AsNoTracking().SingleOrDefaultAsync(
             x => x.OwnerUserId == user.Id && x.PeriodId == periodId, cancellationToken);
         if (existing is not null) return Results.Ok(existing);
-        var period = await database.Periods.AsNoTracking().SingleOrDefaultAsync(
+        BudgetPeriod? period = await database.Periods.AsNoTracking().SingleOrDefaultAsync(
             x => x.OwnerUserId == user.Id && x.Id == periodId, cancellationToken);
         if (period is null) return HttpResults.Problem(404, "Not found", "Budget period was not found");
         if (request.CoverDeficitCents < 0)
             return HttpResults.Problem(422, "Validation failed", "Deficit coverage must not be negative");
-        var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(
+        BudgetSettings? settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(
             x => x.OwnerUserId == user.Id, cancellationToken);
-        var disposition = request.Disposition ?? settings?.DefaultBufferDisposition ?? BudgetValues.Retain;
+        string disposition = request.Disposition ?? settings?.DefaultBufferDisposition ?? BudgetValues.Retain;
         if (disposition is not ("retain" or "ordinary" or "savings" or "investment"))
             return HttpResults.Problem(422, "Validation failed", "Buffer disposition is invalid");
 
-        var summary = await budgetService.SummaryAsync(user.Id, period.StartDate, cancellationToken);
-        var deficit = Math.Max(0, -summary.OrdinaryAvailableCents);
-        var maximumCoverage = Math.Min(deficit, summary.ProtectedBufferCents);
+        BudgetSummary summary = await budgetService.SummaryAsync(user.Id, period.StartDate, cancellationToken);
+        long deficit = Math.Max(0, -summary.OrdinaryAvailableCents);
+        long maximumCoverage = Math.Min(deficit, summary.ProtectedBufferCents);
         if (request.CoverDeficitCents > maximumCoverage)
             return HttpResults.Problem(
                 422,
                 "Validation failed",
                 $"Deficit coverage cannot exceed {maximumCoverage} cents");
-        var remainingBuffer = summary.ProtectedBufferCents - request.CoverDeficitCents;
-        var dispositionAmount = disposition == BudgetValues.Retain ? 0 : remainingBuffer;
-        var close = new BudgetPeriodClose
+        long remainingBuffer = summary.ProtectedBufferCents - request.CoverDeficitCents;
+        long dispositionAmount = disposition == BudgetValues.Retain ? 0 : remainingBuffer;
+        BudgetPeriodClose close = new BudgetPeriodClose
         {
             OwnerUserId = user.Id,
             PeriodId = period.Id,
@@ -73,7 +73,7 @@ public static class BudgetPeriodCloseEndpoints
         catch (DbUpdateException)
         {
             database.ChangeTracker.Clear();
-            var winner = await database.PeriodCloses.AsNoTracking().SingleOrDefaultAsync(
+            BudgetPeriodClose? winner = await database.PeriodCloses.AsNoTracking().SingleOrDefaultAsync(
                 x => x.OwnerUserId == user.Id && x.PeriodId == periodId, cancellationToken);
             if (winner is not null) return Results.Ok(winner);
             throw;

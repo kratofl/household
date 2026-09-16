@@ -4,7 +4,7 @@ namespace Household.Api.Features.Audit;
 
 public sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) : DbContext(options)
 {
-    public DbSet<AuditEvent> Events => Set<AuditEvent>();
+    public DbSet<AuditEvent> Events => this.Set<AuditEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -7,13 +7,13 @@ public static class BudgetReportMath
     // positive shares always sum to exactly 10_000.
     public static IReadOnlyList<long> ShareBasisPoints(IReadOnlyList<long> parts)
     {
-        var shares = new long[parts.Count];
-        var total = 0L;
-        foreach (var part in parts) if (part > 0) total = checked(total + part);
+        long[] shares = new long[parts.Count];
+        long total = 0L;
+        foreach (long part in parts) if (part > 0) total = checked(total + part);
         if (total <= 0) return shares;
-        var assigned = 0L;
-        var lastPositive = -1;
-        for (var index = 0; index < parts.Count; index++)
+        long assigned = 0L;
+        int lastPositive = -1;
+        for (int index = 0; index < parts.Count; index++)
         {
             if (parts[index] <= 0) continue;
             shares[index] = checked((long)(parts[index] * 10_000m / total));

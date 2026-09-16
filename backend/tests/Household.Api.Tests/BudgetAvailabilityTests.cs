@@ -18,7 +18,7 @@ public sealed class BudgetAvailabilityTests
         long expectedBufferCents,
         long expectedAvailableCents)
     {
-        var result = BudgetAvailability.Calculate(
+        BudgetAvailabilityResult result = BudgetAvailability.Calculate(
             actualIncomeCents,
             ordinaryImpactCents,
             bufferRule,
@@ -33,7 +33,7 @@ public sealed class BudgetAvailabilityTests
     [Fact]
     public void Explicit_variance_allocations_remain_protected_from_ordinary_spending()
     {
-        var result = BudgetAvailability.Calculate(
+        BudgetAvailabilityResult result = BudgetAvailability.Calculate(
             120_000, 0, BudgetValues.FixedBuffer, 10_000, 0,
             explicitBufferCents: 5_000, savingsCents: 3_000, investmentCents: 2_000);
 
@@ -45,7 +45,7 @@ public sealed class BudgetAvailabilityTests
     [Fact]
     public void Reservations_are_protected_before_the_buffer_and_ordinary_spending()
     {
-        var result = BudgetAvailability.Calculate(
+        BudgetAvailabilityResult result = BudgetAvailability.Calculate(
             100_000, 0, BudgetValues.FixedBuffer, 30_000, 0,
             reservationCents: 80_000);
 
@@ -57,7 +57,7 @@ public sealed class BudgetAvailabilityTests
     [Fact]
     public void Underfunded_buffer_target_exposes_shortfall_without_debt()
     {
-        var result = BudgetAvailability.Calculate(
+        BudgetAvailabilityResult result = BudgetAvailability.Calculate(
             10_000, 0, BudgetValues.FixedBuffer, 25_000, 0);
 
         Assert.Equal(25_000, result.TargetBufferCents);

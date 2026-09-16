@@ -13,10 +13,10 @@ public sealed class IdentityAccess(IdentityDbContext database, TimeProvider time
 {
     public async Task<CurrentUser?> CurrentUserAsync(HttpContext context, CancellationToken cancellationToken = default)
     {
-        var authorization = context.Request.Headers.Authorization.ToString();
+        string authorization = context.Request.Headers.Authorization.ToString();
         if (!authorization.StartsWith("Bearer ", StringComparison.Ordinal) || authorization.Length == 7) return null;
-        var hash = TokenFactory.Hash(authorization[7..]);
-        var session = await database.Sessions.AsNoTracking().Include(x => x.User)
+        string hash = TokenFactory.Hash(authorization[7..]);
+        Session? session = await database.Sessions.AsNoTracking().Include(x => x.User)
             .SingleOrDefaultAsync(x => x.AccessTokenHash == hash && x.RevokedAt == null, cancellationToken);
         if (session is null || session.User.Status != UserStatuses.Active ||
             AsUtc(session.AccessExpiresAt) <= timeProvider.GetUtcNow().UtcDateTime)

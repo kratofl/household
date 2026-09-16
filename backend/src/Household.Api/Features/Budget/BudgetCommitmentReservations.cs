@@ -10,32 +10,32 @@ public static class BudgetCommitmentReservations
         if (version.BudgetingMode != BudgetValues.GradualReservation)
             return new CommitmentReservationSchedule(0, 0, version.AmountCents, []);
 
-        var periodCount = CyclePeriodCount(version.IntervalUnit, version.IntervalCount);
-        var duePeriod = BudgetPeriodCalendar.ForDate(scheduledOn, preferredPeriodStartDay);
-        var periods = new List<BudgetPeriodRange>(periodCount);
-        var cursor = BudgetPeriodCalendar.ForDate(duePeriod.Start.AddDays(-1), preferredPeriodStartDay);
-        for (var index = 0; index < periodCount; index++)
+        int periodCount = CyclePeriodCount(version.IntervalUnit, version.IntervalCount);
+        BudgetPeriodRange duePeriod = BudgetPeriodCalendar.ForDate(scheduledOn, preferredPeriodStartDay);
+        List<BudgetPeriodRange> periods = new List<BudgetPeriodRange>(periodCount);
+        BudgetPeriodRange cursor = BudgetPeriodCalendar.ForDate(duePeriod.Start.AddDays(-1), preferredPeriodStartDay);
+        for (int index = 0; index < periodCount; index++)
         {
             periods.Add(cursor);
             cursor = BudgetPeriodCalendar.ForDate(cursor.Start.AddDays(-1), preferredPeriodStartDay);
         }
         periods.Reverse();
 
-        var createdOn = version.CreatedAt == default
+        DateOnly createdOn = version.CreatedAt == default
             ? version.EffectiveFrom
             : DateOnly.FromDateTime(version.CreatedAt);
-        var reservationBeginsOn = string.IsNullOrEmpty(version.ChangeReason)
+        DateOnly reservationBeginsOn = string.IsNullOrEmpty(version.ChangeReason)
             ? createdOn
             : new[] { createdOn, version.EffectiveFrom }.Max();
-        var baseAmount = version.AmountCents / periodCount;
-        var remainder = version.AmountCents % periodCount;
-        var entries = periods.Select((period, index) => new CommitmentReservationPeriod(
+        long baseAmount = version.AmountCents / periodCount;
+        long remainder = version.AmountCents % periodCount;
+        List<CommitmentReservationPeriod> entries = periods.Select((period, index) => new CommitmentReservationPeriod(
                 period.Start,
                 period.End,
                 baseAmount + (index < remainder ? 1 : 0),
                 period.End >= reservationBeginsOn))
             .ToList();
-        var coverage = entries.Where(x => x.Eligible).Sum(x => x.AmountCents);
+        long coverage = entries.Where(x => x.Eligible).Sum(x => x.AmountCents);
         return new CommitmentReservationSchedule(
             baseAmount,
             coverage,

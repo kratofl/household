@@ -12,15 +12,15 @@ public partial class Program
 {
     public static void Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
-        var port = Environment.GetEnvironmentVariable("HOUSEHOLD_API_SERVER_PORT") ?? "8090";
+        WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+        string port = Environment.GetEnvironmentVariable("HOUSEHOLD_API_SERVER_PORT") ?? "8090";
         builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         });
 
-        var connectionString = HouseholdConfiguration.ConnectionString(builder.Configuration);
+        string connectionString = HouseholdConfiguration.ConnectionString(builder.Configuration);
         builder.Services.AddDbContext<IdentityDbContext>(options => ConfigurePostgres(options, connectionString, "identity"));
         builder.Services.AddDbContext<AuditDbContext>(options => ConfigurePostgres(options, connectionString, "audit"));
         builder.Services.AddDbContext<BudgetDbContext>(options => ConfigurePostgres(options, connectionString, "budget"));
@@ -30,7 +30,7 @@ public partial class Program
         builder.Services.AddScoped<BudgetService>();
         builder.Services.AddHttpClient<UpdatesClient>(client => client.Timeout = HouseholdConfiguration.UpdatesTimeout());
 
-        var app = builder.Build();
+        WebApplication app = builder.Build();
         app.Use(async (context, next) =>
         {
             context.Response.Headers.ContentType = "application/json;charset=utf8";
@@ -38,13 +38,13 @@ public partial class Program
         });
 
         app.MapGet("/healthz", () => Results.NoContent());
-        var api = app.MapGroup("/api/v1");
+        RouteGroupBuilder api = app.MapGroup("/api/v1");
         api.MapIdentityEndpoints();
         api.MapAuditEndpoints();
         api.MapBudgetEndpoints();
         api.MapUpdateEndpoints();
 
-        using (var scope = app.Services.CreateScope())
+        using (IServiceScope scope = app.Services.CreateScope())
         {
             DatabaseMigration.ApplyAsync(scope.ServiceProvider).GetAwaiter().GetResult();
             IdentitySeed.ApplyAsync(scope.ServiceProvider).GetAwaiter().GetResult();

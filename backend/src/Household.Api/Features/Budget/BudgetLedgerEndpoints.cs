@@ -1,6 +1,7 @@
 using Household.Api.Features.Identity;
 using Household.Api.Platform;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Household.Api.Features.Budget;
 
@@ -26,7 +27,7 @@ public static class BudgetLedgerEndpoints
         BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         return Results.Ok(await database.LedgerEntries.AsNoTracking()
             .Include(x => x.Splits)
@@ -44,13 +45,13 @@ public static class BudgetLedgerEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (request.Kind is not (BudgetValues.Income or BudgetValues.Expense))
             return Invalid("Kind must be income or expense");
         if (request.AmountCents <= 0 || string.IsNullOrWhiteSpace(request.Description))
             return Invalid("Description and a positive exact-money amount are required");
-        var occurredOn = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly occurredOn = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(request.OccurredOn) && !DateOnly.TryParseExact(
                 request.OccurredOn, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out occurredOn))
             return HttpResults.Problem(400, "Invalid date", "Occurred date must use YYYY-MM-DD");
@@ -58,7 +59,7 @@ public static class BudgetLedgerEndpoints
                 x => x.Id == request.CategoryId && x.OwnerUserId == user.Id && x.ArchivedAt == null, cancellationToken))
             return HttpResults.Problem(404, "Not found", "Category was not found");
 
-        var splitRequests = request.Splits ?? [];
+        IReadOnlyList<LedgerSplitRequest> splitRequests = request.Splits ?? [];
         if (request.Kind == BudgetValues.Income && splitRequests.Count > 0)
             return Invalid("Income entries cannot have expense category splits");
         if (splitRequests.Select(x => x.CategoryId).Distinct().Count() != splitRequests.Count)
@@ -78,22 +79,22 @@ public static class BudgetLedgerEndpoints
             return Invalid(error.Message);
         }
 
-        var categoryIds = (splitRequests.Count > 0
+        HashSet<Guid> categoryIds = (splitRequests.Count > 0
                 ? splitRequests.Select(x => x.CategoryId)
                 : request.CategoryId.HasValue ? [request.CategoryId.Value] : [])
             .ToHashSet();
-        var categories = await database.Categories.Where(x =>
+        Dictionary<Guid, BudgetCategory> categories = await database.Categories.Where(x =>
                 categoryIds.Contains(x.Id) && x.OwnerUserId == user.Id && x.ArchivedAt == null)
             .ToDictionaryAsync(x => x.Id, cancellationToken);
         if (categories.Count != categoryIds.Count) return HttpResults.Problem(404, "Not found", "A split category was not found or is archived");
-        var versions = await database.CategoryVersions.Where(x => categoryIds.Contains(x.CategoryId) && x.OwnerUserId == user.Id)
+        List<BudgetCategoryVersion> versions = await database.CategoryVersions.Where(x => categoryIds.Contains(x.CategoryId) && x.OwnerUserId == user.Id)
             .OrderByDescending(x => x.EffectiveFrom).ToListAsync(cancellationToken);
-        var latestVersions = versions.GroupBy(x => x.CategoryId).ToDictionary(x => x.Key, x => x.First());
+        Dictionary<Guid, BudgetCategoryVersion> latestVersions = versions.GroupBy(x => x.CategoryId).ToDictionary(x => x.Key, x => x.First());
 
-        var (period, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
-        var merchant = MerchantPresentation.From(request.Merchant);
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-        var entry = new BudgetLedgerEntry
+        (BudgetPeriod? period, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
+        MerchantInfo merchant = MerchantPresentation.From(request.Merchant);
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        BudgetLedgerEntry entry = new BudgetLedgerEntry
         {
             OwnerUserId = user.Id,
             PeriodId = period.Id,
@@ -112,13 +113,13 @@ public static class BudgetLedgerEndpoints
         await database.SaveChangesAsync(cancellationToken);
         if (request.Kind == BudgetValues.Expense)
         {
-            for (var index = 0; index < allocations.Count; index++)
+            for (int index = 0; index < allocations.Count; index++)
             {
-                var splitRequest = splitRequests.Count > 0 ? splitRequests[index] : null;
-                var categoryId = splitRequest?.CategoryId ?? request.CategoryId;
-                var category = categoryId.HasValue ? categories.GetValueOrDefault(categoryId.Value) : null;
-                var version = categoryId.HasValue ? latestVersions.GetValueOrDefault(categoryId.Value) : null;
-                var allocation = allocations[index];
+                LedgerSplitRequest? splitRequest = splitRequests.Count > 0 ? splitRequests[index] : null;
+                Guid? categoryId = splitRequest?.CategoryId ?? request.CategoryId;
+                BudgetCategory? category = categoryId.HasValue ? categories.GetValueOrDefault(categoryId.Value) : null;
+                BudgetCategoryVersion? version = categoryId.HasValue ? latestVersions.GetValueOrDefault(categoryId.Value) : null;
+                SplitAllocation allocation = allocations[index];
                 database.LedgerSplits.Add(new BudgetLedgerSplit
                 {
                     OwnerUserId = user.Id,
@@ -146,9 +147,9 @@ public static class BudgetLedgerEndpoints
         BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var normalizedQuery = MerchantPresentation.From(query).Normalized;
+        string normalizedQuery = MerchantPresentation.From(query).Normalized;
         var history = await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.MerchantNormalized != "" &&
                 (normalizedQuery == "" || x.MerchantNormalized.Contains(normalizedQuery)))
@@ -159,7 +160,7 @@ public static class BudgetLedgerEndpoints
             .Select(x => new { normalized = x.Normalized, displayName = x.DisplayName, brandKey = x.BrandKey, count = 0 })
             .Concat(history.Select(x => new { x.normalized, displayName = x.normalized, x.brandKey, x.count }))
             .GroupBy(x => x.normalized).Select(x => x.OrderByDescending(item => item.count).First()).Take(10).ToList();
-        var matched = merchants.Select(x => x.normalized).ToHashSet();
+        HashSet<string> matched = merchants.Select(x => x.normalized).ToHashSet();
         var categorySuggestions = await database.LedgerSplits.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.CategoryId != null &&
                 database.LedgerEntries.Any(entry => entry.Id == x.LedgerEntryId && matched.Contains(entry.MerchantNormalized)))
@@ -183,35 +184,35 @@ public static class BudgetLedgerEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var entries = await database.LedgerEntries.AsNoTracking().Include(x => x.Splits)
+        List<BudgetLedgerEntry> entries = await database.LedgerEntries.AsNoTracking().Include(x => x.Splits)
             .Where(x => x.OwnerUserId == user.Id && (!periodId.HasValue || x.PeriodId == periodId))
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt).Take(500).ToListAsync(cancellationToken);
-        var actions = await database.LedgerActions.AsNoTracking().Where(x => x.OwnerUserId == user.Id)
+        List<BudgetLedgerAction> actions = await database.LedgerActions.AsNoTracking().Where(x => x.OwnerUserId == user.Id)
             .OrderBy(x => x.CreatedAt).ToListAsync(cancellationToken);
-        var voided = actions.Where(x => x.Kind == BudgetValues.Void).Select(x => x.LedgerEntryId).ToHashSet();
-        var superseded = (await database.LedgerEntries.AsNoTracking()
+        HashSet<Guid> voided = actions.Where(x => x.Kind == BudgetValues.Void).Select(x => x.LedgerEntryId).ToHashSet();
+        HashSet<Guid> superseded = (await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.CorrectsEntryId.HasValue)
             .Select(x => x.CorrectsEntryId!.Value).ToListAsync(cancellationToken)).ToHashSet();
-        var actual = entries.Select(entry => new BudgetTimelineItem(
+        List<BudgetTimelineItem> actual = entries.Select(entry => new BudgetTimelineItem(
             entry.Id.ToString(), "actual", entry.Kind, voided.Contains(entry.Id) ? "voided" : superseded.Contains(entry.Id) ? "corrected" : "actual",
             entry.OccurredOn, entry.Description, entry.AmountCents, entry.OrdinaryImpactCents, entry.CategoryId,
             entry.MerchantNormalized, entry.MerchantBrandKey, entry.Source, entry.Splits)).ToList();
-        var savingsFundingRows = await database.SavingsContributions.AsNoTracking()
+        List<BudgetSavingsContribution> savingsFundingRows = await database.SavingsContributions.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && (!periodId.HasValue || x.PeriodId == periodId))
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt).Take(500)
             .ToListAsync(cancellationToken);
-        var savingsFunding = savingsFundingRows.Select(x => new BudgetTimelineItem(
+        List<BudgetTimelineItem> savingsFunding = savingsFundingRows.Select(x => new BudgetTimelineItem(
                 x.Id.ToString(), "actual", BudgetValues.Savings, "actual", x.OccurredOn,
                 x.Description, x.AmountCents, x.Kind == BudgetValues.Contribution ? -x.AmountCents : 0,
                 null, "", null, x.Kind == BudgetValues.Contribution ? "savings_contribution" : "savings_opening", []))
             .ToList();
-        var investmentRows = await database.InvestmentEvents.AsNoTracking()
+        List<BudgetInvestmentEvent> investmentRows = await database.InvestmentEvents.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && (!periodId.HasValue || x.PeriodId == periodId))
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt).Take(500)
             .ToListAsync(cancellationToken);
-        var investmentEvents = investmentRows.Select(x => new BudgetTimelineItem(
+        List<BudgetTimelineItem> investmentEvents = investmentRows.Select(x => new BudgetTimelineItem(
                 x.Id.ToString(), "actual", BudgetValues.Investment, "actual", x.OccurredOn,
                 x.Description, x.AmountCents,
                 x.Kind == BudgetValues.Contribution ? -x.AmountCents :
@@ -219,18 +220,18 @@ public static class BudgetLedgerEndpoints
                 null, "", null, $"investment_{x.Kind}", []))
             .ToList();
 
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
-        var (currentPeriod, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, today, cancellationToken);
-        var projectedPeriod = !periodId.HasValue || periodId == currentPeriod.Id
+        DateOnly today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        (BudgetPeriod? currentPeriod, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(user.Id, today, cancellationToken);
+        BudgetPeriod? projectedPeriod = !periodId.HasValue || periodId == currentPeriod.Id
             ? currentPeriod
             : await database.Periods.AsNoTracking().SingleOrDefaultAsync(
                 x => x.OwnerUserId == user.Id && x.Id == periodId, cancellationToken);
-        var applied = (await database.PlannedExpenseApplications.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.PeriodId == currentPeriod.Id)
+        HashSet<Guid> applied = (await database.PlannedExpenseApplications.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.PeriodId == currentPeriod.Id)
             .Select(x => x.PlannedExpenseId).ToListAsync(cancellationToken)).ToHashSet();
-        var plans = await database.PlannedExpenses.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.Active).ToListAsync(cancellationToken);
-        var migratedCommitmentIds = (await database.CommitmentPlans.AsNoTracking().Where(x => x.OwnerUserId == user.Id)
+        List<PlannedExpense> plans = await database.PlannedExpenses.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.Active).ToListAsync(cancellationToken);
+        HashSet<Guid> migratedCommitmentIds = (await database.CommitmentPlans.AsNoTracking().Where(x => x.OwnerUserId == user.Id)
             .Select(x => x.SeriesId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
-        var expectedExpenses = periodId.HasValue && periodId != currentPeriod.Id
+        List<BudgetTimelineItem> expectedExpenses = periodId.HasValue && periodId != currentPeriod.Id
             ? []
             : plans.Where(x => !applied.Contains(x.Id) && !migratedCommitmentIds.Contains(x.Id)).Select(plan => (Plan: plan, Date: BudgetService.OccurrenceDate(currentPeriod, plan)))
                 .Where(x => x.Date.HasValue)
@@ -238,21 +239,21 @@ public static class BudgetLedgerEndpoints
                     $"expected:{x.Plan.Id}:{currentPeriod.Id}", "expected", BudgetValues.Expense, "expected", x.Date!.Value,
                     x.Plan.Name, x.Plan.AmountCents, x.Plan.IncludeInLimit ? -x.Plan.AmountCents : 0, x.Plan.CategoryId,
                 "", null, "planned_expense", [])).ToList();
-        var expectedIncome = projectedPeriod is null
+        List<BudgetTimelineItem> expectedIncome = projectedPeriod is null
             ? []
             : (await new BudgetIncomePlanProjector(database).LoadAsync(
                     user.Id, projectedPeriod.StartDate, projectedPeriod.EndDate, cancellationToken))
                 .Occurrences.Select(x => new BudgetTimelineItem(
                     x.Id, "expected", BudgetValues.Income, x.Status, x.OccurredOn,
                     x.Name, x.AmountCents, x.AmountCents, null, "", null, "income_plan", [])).ToList();
-        var expectedCommitments = projectedPeriod is null
+        List<BudgetTimelineItem> expectedCommitments = projectedPeriod is null
             ? []
             : (await new BudgetCommitmentProjector(database).LoadAsync(
                     user.Id, projectedPeriod.StartDate, projectedPeriod.EndDate, cancellationToken))
                 .Occurrences.Select(x => new BudgetTimelineItem(
                     x.Id, "expected", BudgetValues.Expense, x.Status, x.OccurredOn,
                     x.Name, x.AmountCents, -x.AmountCents, x.CategoryId, "", null, "commitment_plan", [])).ToList();
-        var result = actual.Concat(savingsFunding).Concat(investmentEvents).Concat(expectedExpenses).Concat(expectedIncome).Concat(expectedCommitments).Where(item =>
+        List<BudgetTimelineItem> result = actual.Concat(savingsFunding).Concat(investmentEvents).Concat(expectedExpenses).Concat(expectedIncome).Concat(expectedCommitments).Where(item =>
                 (string.IsNullOrWhiteSpace(query) || item.Description.Contains(query, StringComparison.OrdinalIgnoreCase) || item.Merchant.Contains(query, StringComparison.OrdinalIgnoreCase)) &&
                 (string.IsNullOrWhiteSpace(status) || item.Status == status) &&
                 (string.IsNullOrWhiteSpace(kind) || item.Kind == kind) &&
@@ -270,12 +271,12 @@ public static class BudgetLedgerEndpoints
         BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var entry = await database.LedgerEntries.AsNoTracking().Include(x => x.Splits)
+        BudgetLedgerEntry? entry = await database.LedgerEntries.AsNoTracking().Include(x => x.Splits)
             .SingleOrDefaultAsync(x => x.Id == entryId && x.OwnerUserId == user.Id, cancellationToken);
         if (entry is null) return HttpResults.Problem(404, "Not found", "Ledger entry was not found");
-        var actions = await database.LedgerActions.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.LedgerEntryId == entryId)
+        List<BudgetLedgerAction> actions = await database.LedgerActions.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.LedgerEntryId == entryId)
             .OrderBy(x => x.CreatedAt).ToListAsync(cancellationToken);
         var corrections = await database.LedgerEntries.AsNoTracking().Where(x => x.OwnerUserId == user.Id && x.CorrectsEntryId == entryId)
             .Select(x => new { x.Id, x.ChangeReason, x.CreatedAt }).ToListAsync(cancellationToken);
@@ -292,22 +293,22 @@ public static class BudgetLedgerEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (string.IsNullOrWhiteSpace(request.Reason)) return Invalid("A correction reason is required");
-        var original = await EffectiveExpenseOrIncome(entryId, user.Id, database, cancellationToken);
+        (BudgetLedgerEntry? Entry, IResult? Error) original = await EffectiveExpenseOrIncome(entryId, user.Id, database, cancellationToken);
         if (original.Error is not null) return original.Error;
         if (request.AmountCents <= 0 || string.IsNullOrWhiteSpace(request.Description)) return Invalid("Description and positive amount are required");
-        if (!DateOnly.TryParseExact(request.OccurredOn, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var occurredOn))
+        if (!DateOnly.TryParseExact(request.OccurredOn, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateOnly occurredOn))
             return HttpResults.Problem(400, "Invalid date", "Occurred date must use YYYY-MM-DD");
         if (original.Entry!.Kind == BudgetValues.Expense && request.CategoryId.HasValue &&
             !await database.Categories.AnyAsync(
                 x => x.Id == request.CategoryId && x.OwnerUserId == user.Id && x.ArchivedAt == null,
                 cancellationToken))
             return HttpResults.Problem(404, "Not found", "Category was not found or is archived");
-        var (period, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
-        var merchant = MerchantPresentation.From(request.Merchant);
-        var corrected = new BudgetLedgerEntry
+        (BudgetPeriod? period, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
+        MerchantInfo merchant = MerchantPresentation.From(request.Merchant);
+        BudgetLedgerEntry corrected = new BudgetLedgerEntry
         {
             OwnerUserId = user.Id, PeriodId = period.Id, CategoryId = request.CategoryId,
             Kind = original.Entry.Kind, OccurredOn = occurredOn, Description = request.Description.Trim(), AmountCents = request.AmountCents,
@@ -315,7 +316,7 @@ public static class BudgetLedgerEndpoints
             Source = "correction", CorrectsEntryId = original.Entry.Id, ChangeReason = request.Reason.Trim(),
             MerchantRaw = merchant.Raw, MerchantNormalized = merchant.Normalized, MerchantBrandKey = merchant.BrandKey,
         };
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         database.LedgerEntries.Add(corrected);
         await database.SaveChangesAsync(cancellationToken);
         if (corrected.Kind == BudgetValues.Expense)
@@ -333,10 +334,10 @@ public static class BudgetLedgerEndpoints
         BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (string.IsNullOrWhiteSpace(request.Reason)) return Invalid("A void reason is required");
-        var original = await EffectiveExpenseOrIncome(entryId, user.Id, database, cancellationToken);
+        (BudgetLedgerEntry? Entry, IResult? Error) original = await EffectiveExpenseOrIncome(entryId, user.Id, database, cancellationToken);
         if (original.Error is not null) return original.Error;
         if (await database.LedgerEntries.AnyAsync(
                 x => x.OwnerUserId == user.Id && x.Kind == BudgetValues.Refund && x.RelatedEntryId == entryId,
@@ -360,20 +361,20 @@ public static class BudgetLedgerEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var originalResult = await EffectiveExpenseOrIncome(entryId, user.Id, database, cancellationToken);
+        (BudgetLedgerEntry? Entry, IResult? Error) originalResult = await EffectiveExpenseOrIncome(entryId, user.Id, database, cancellationToken);
         if (originalResult.Error is not null) return originalResult.Error;
-        var original = originalResult.Entry!;
+        BudgetLedgerEntry original = originalResult.Entry!;
         if (original.Kind != BudgetValues.Expense) return Invalid("Only an expense can be refunded");
-        var alreadyRefunded = await database.LedgerEntries.Where(x => x.OwnerUserId == user.Id && x.Kind == BudgetValues.Refund && x.RelatedEntryId == entryId)
+        long alreadyRefunded = await database.LedgerEntries.Where(x => x.OwnerUserId == user.Id && x.Kind == BudgetValues.Refund && x.RelatedEntryId == entryId)
             .SumAsync(x => (long?)x.AmountCents, cancellationToken) ?? 0;
         if (request.AmountCents <= 0 || checked(alreadyRefunded + request.AmountCents) > original.AmountCents)
             return Invalid("Refund amount exceeds the remaining original expense");
-        if (!DateOnly.TryParseExact(request.OccurredOn, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var occurredOn))
+        if (!DateOnly.TryParseExact(request.OccurredOn, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out DateOnly occurredOn))
             return HttpResults.Problem(400, "Invalid date", "Occurred date must use YYYY-MM-DD");
-        var (period, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
-        var refund = new BudgetLedgerEntry
+        (BudgetPeriod? period, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
+        BudgetLedgerEntry refund = new BudgetLedgerEntry
         {
             OwnerUserId = user.Id, PeriodId = period.Id, Kind = BudgetValues.Refund, OccurredOn = occurredOn,
             Description = string.IsNullOrWhiteSpace(request.Description) ? $"Refund: {original.Description}" : request.Description.Trim(),
@@ -382,14 +383,14 @@ public static class BudgetLedgerEndpoints
             Source = "refund", RelatedEntryId = original.Id, MerchantRaw = original.MerchantRaw,
             MerchantNormalized = original.MerchantNormalized, MerchantBrandKey = original.MerchantBrandKey,
         };
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         database.LedgerEntries.Add(refund);
         await database.SaveChangesAsync(cancellationToken);
-        var allocated = 0L;
-        for (var index = 0; index < original.Splits.Count; index++)
+        long allocated = 0L;
+        for (int index = 0; index < original.Splits.Count; index++)
         {
-            var source = original.Splits[index];
-            var amount = index == original.Splits.Count - 1
+            BudgetLedgerSplit source = original.Splits[index];
+            long amount = index == original.Splits.Count - 1
                 ? request.AmountCents - allocated
                 : checked(source.AmountCents * request.AmountCents / original.AmountCents);
             if (amount <= 0) continue;
@@ -411,7 +412,7 @@ public static class BudgetLedgerEndpoints
     private static async Task<(BudgetLedgerEntry? Entry, IResult? Error)> EffectiveExpenseOrIncome(
         Guid id, Guid ownerId, BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var entry = await database.LedgerEntries.Include(x => x.Splits)
+        BudgetLedgerEntry? entry = await database.LedgerEntries.Include(x => x.Splits)
             .SingleOrDefaultAsync(x => x.Id == id && x.OwnerUserId == ownerId, cancellationToken);
         if (entry is null) return (null, HttpResults.Problem(404, "Not found", "Ledger entry was not found"));
         if (entry.Kind == BudgetValues.Refund) return (null, HttpResults.Problem(409, "Invalid state", "Refunds cannot be corrected, voided, or refunded here"));
@@ -424,10 +425,10 @@ public static class BudgetLedgerEndpoints
     private static async Task AddSingleSplit(
         BudgetLedgerEntry entry, Guid? categoryId, bool affectsOrdinary, Guid ownerId, BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var category = categoryId.HasValue ? await database.Categories.SingleOrDefaultAsync(
+        BudgetCategory? category = categoryId.HasValue ? await database.Categories.SingleOrDefaultAsync(
             x => x.Id == categoryId && x.OwnerUserId == ownerId && x.ArchivedAt == null, cancellationToken) : null;
         if (categoryId.HasValue && category is null) throw new InvalidOperationException("Category was not found or is archived");
-        var version = categoryId.HasValue ? await database.CategoryVersions.Where(x => x.OwnerUserId == ownerId && x.CategoryId == categoryId)
+        BudgetCategoryVersion? version = categoryId.HasValue ? await database.CategoryVersions.Where(x => x.OwnerUserId == ownerId && x.CategoryId == categoryId)
             .OrderByDescending(x => x.EffectiveFrom).FirstOrDefaultAsync(cancellationToken) : null;
         database.LedgerSplits.Add(new BudgetLedgerSplit
         {
@@ -446,7 +447,7 @@ public static class BudgetLedgerEndpoints
         BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         return Results.Ok(await database.MigrationIssues.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id)

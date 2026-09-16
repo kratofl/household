@@ -8,19 +8,19 @@ public static class IdentityEndpoints
 {
     public static IEndpointRouteBuilder MapIdentityEndpoints(this IEndpointRouteBuilder routes)
     {
-        var auth = routes.MapGroup("/auth");
+        RouteGroupBuilder auth = routes.MapGroup("/auth");
         auth.MapPost("/authorize", Authorize);
         auth.MapPost("/refresh", Refresh);
         auth.MapPost("/logout", Logout);
 
-        var users = routes.MapGroup("/users");
+        RouteGroupBuilder users = routes.MapGroup("/users");
         users.MapGet("/", ListUsers);
         users.MapPut("/", CreateUser);
         users.MapGet("/me", Me);
         users.MapPatch("/me", UpdateMe);
         users.MapPut("/me/password", ChangePassword);
 
-        var modules = routes.MapGroup("/modules");
+        RouteGroupBuilder modules = routes.MapGroup("/modules");
         modules.MapGet("/", ListModules);
         modules.MapPatch("/active", SetActiveModules);
         routes.MapGet("/identity/healthz", () => Results.NoContent());
@@ -33,14 +33,14 @@ public static class IdentityEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var username = request.Username?.Trim().ToLowerInvariant() ?? "";
-        var user = await database.Users.SingleOrDefaultAsync(x => x.Name == username, cancellationToken);
+        string username = request.Username?.Trim().ToLowerInvariant() ?? "";
+        User? user = await database.Users.SingleOrDefaultAsync(x => x.Name == username, cancellationToken);
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password ?? "", user.PasswordHash))
             return HttpResults.Problem(401, "Invalid login", "Username or password incorrect");
         if (user.Status != UserStatuses.Active)
             return HttpResults.Problem(403, "User inactive", "User is not active");
 
-        var pair = TokenFactory.Create(timeProvider.GetUtcNow().UtcDateTime);
+        TokenPair pair = TokenFactory.Create(timeProvider.GetUtcNow().UtcDateTime);
         database.Sessions.Add(new Session
         {
             UserId = user.Id,
@@ -59,14 +59,14 @@ public static class IdentityEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var hash = TokenFactory.Hash(request.RefreshToken ?? "");
-        var session = await database.Sessions.Include(x => x.User)
+        string hash = TokenFactory.Hash(request.RefreshToken ?? "");
+        Session? session = await database.Sessions.Include(x => x.User)
             .SingleOrDefaultAsync(x => x.RefreshTokenHash == hash && x.RevokedAt == null, cancellationToken);
-        var now = timeProvider.GetUtcNow().UtcDateTime;
+        DateTime now = timeProvider.GetUtcNow().UtcDateTime;
         if (session is null || session.User.Status != UserStatuses.Active || AsUtc(session.RefreshExpiresAt) <= now)
             return HttpResults.Problem(401, "Unauthorized", "Invalid refresh token");
 
-        var pair = TokenFactory.Create(now);
+        TokenPair pair = TokenFactory.Create(now);
         session.AccessTokenHash = TokenFactory.Hash(pair.AccessToken);
         session.RefreshTokenHash = TokenFactory.Hash(pair.RefreshToken);
         session.AccessExpiresAt = DateTime.SpecifyKind(pair.AccessExpiresAt, DateTimeKind.Unspecified);
@@ -82,8 +82,8 @@ public static class IdentityEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var hash = TokenFactory.Hash(request.RefreshToken ?? "");
-        var session = await database.Sessions.SingleOrDefaultAsync(
+        string hash = TokenFactory.Hash(request.RefreshToken ?? "");
+        Session? session = await database.Sessions.SingleOrDefaultAsync(
             x => x.RefreshTokenHash == hash && x.RevokedAt == null, cancellationToken);
         if (session is not null)
         {
@@ -100,7 +100,7 @@ public static class IdentityEndpoints
         IdentityDbContext database,
         CancellationToken cancellationToken)
     {
-        var admin = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? admin = await identity.CurrentUserAsync(context, cancellationToken);
         if (admin is null) return Unauthorized();
         if (admin.Role != Roles.Admin) return Forbidden();
         return Results.Ok(await database.Users.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken));
@@ -111,8 +111,8 @@ public static class IdentityEndpoints
         IdentityDbContext database,
         CancellationToken cancellationToken)
     {
-        var name = request.Name?.Trim().ToLowerInvariant() ?? "";
-        var email = request.Email?.Trim().ToLowerInvariant() ?? "";
+        string name = request.Name?.Trim().ToLowerInvariant() ?? "";
+        string email = request.Email?.Trim().ToLowerInvariant() ?? "";
         if (name.Length == 0 || email.Length == 0 || string.IsNullOrEmpty(request.Password))
             return HttpResults.Problem(422, "Validation failed", "Name, email and password are required");
         database.Users.Add(new User
@@ -140,9 +140,9 @@ public static class IdentityEndpoints
         IdentityDbContext database,
         CancellationToken cancellationToken)
     {
-        var current = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? current = await identity.CurrentUserAsync(context, cancellationToken);
         if (current is null) return Unauthorized();
-        var user = await database.Users.AsNoTracking().SingleAsync(x => x.Id == current.Id, cancellationToken);
+        User user = await database.Users.AsNoTracking().SingleAsync(x => x.Id == current.Id, cancellationToken);
         return Results.Ok(user);
     }
 
@@ -171,11 +171,11 @@ public static class IdentityEndpoints
         IdentityDbContext database,
         CancellationToken cancellationToken)
     {
-        var current = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? current = await identity.CurrentUserAsync(context, cancellationToken);
         if (current is null) return Unauthorized();
         if (string.IsNullOrEmpty(request.NewPassword))
             return HttpResults.Problem(422, "Validation failed", "New password is required");
-        var user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
+        User user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
         if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword ?? "", user.PasswordHash))
             return HttpResults.Problem(403, "Invalid password", "Current password is incorrect");
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, 14);
@@ -194,15 +194,15 @@ public static class IdentityEndpoints
         AuditWriter audit,
         CancellationToken cancellationToken)
     {
-        var admin = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? admin = await identity.CurrentUserAsync(context, cancellationToken);
         if (admin is null) return Unauthorized();
         if (admin.Role != Roles.Admin) return Forbidden();
         if (request.ModuleIds is null)
             return HttpResults.Problem(400, "Invalid module id", "A module id could not be parsed");
 
-        var modules = await database.Modules.Where(x => x.Enabled).ToListAsync(cancellationToken);
-        var selected = request.ModuleIds.ToHashSet();
-        foreach (var module in modules) module.Active = selected.Contains(module.Id);
+        List<AppModule> modules = await database.Modules.Where(x => x.Enabled).ToListAsync(cancellationToken);
+        HashSet<Guid> selected = request.ModuleIds.ToHashSet();
+        foreach (AppModule? module in modules) module.Active = selected.Contains(module.Id);
         await database.SaveChangesAsync(cancellationToken);
         await audit.RecordAsync(context, admin, "set_active_modules", "identity", "module", "success", new
         {

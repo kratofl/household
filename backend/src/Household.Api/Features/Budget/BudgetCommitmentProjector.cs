@@ -9,31 +9,31 @@ public sealed class BudgetCommitmentProjector(BudgetDbContext database)
     {
         if (through < from || through.DayNumber - from.DayNumber > 366 * 5)
             throw new ArgumentOutOfRangeException(nameof(through), "Commitment forecast range must be between zero and five years");
-        var versions = await database.CommitmentPlans.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        List<BudgetCommitmentPlan> versions = await database.CommitmentPlans.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.SeriesId).ThenBy(x => x.EffectiveFrom).ThenBy(x => x.CreatedAt).ToListAsync(cancellationToken);
-        var pauses = await database.CommitmentPauses.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        List<BudgetCommitmentPause> pauses = await database.CommitmentPauses.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.From).ToListAsync(cancellationToken);
-        var stops = await database.CommitmentStops.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        List<BudgetCommitmentStop> stops = await database.CommitmentStops.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.EffectiveOn).ToListAsync(cancellationToken);
-        var overrides = await database.CommitmentOccurrenceOverrides.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        List<BudgetCommitmentOccurrenceOverride> overrides = await database.CommitmentOccurrenceOverrides.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToListAsync(cancellationToken);
-        var postings = await database.CommitmentPostings.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        List<BudgetCommitmentPosting> postings = await database.CommitmentPostings.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .ToListAsync(cancellationToken);
-        var preferredPeriodStartDay = await database.Settings.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        int preferredPeriodStartDay = await database.Settings.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .Select(x => (int?)x.PreferredPeriodStartDay).SingleOrDefaultAsync(cancellationToken) ?? 1;
-        var stopBySeries = stops.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.Min(y => y.EffectiveOn));
-        var pausesBySeries = pauses.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.ToList());
-        var overridesByOccurrence = overrides.GroupBy(x => (x.SeriesId, x.ScheduledOn)).ToDictionary(x => x.Key, x => x.Last());
-        var postingsByOccurrence = postings.ToDictionary(x => (x.SeriesId, x.ScheduledOn));
-        var plans = new List<CommitmentSummary>();
-        var occurrences = new List<ExpectedCommitmentOccurrence>();
+        Dictionary<Guid, DateOnly> stopBySeries = stops.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.Min(y => y.EffectiveOn));
+        Dictionary<Guid, List<BudgetCommitmentPause>> pausesBySeries = pauses.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.ToList());
+        Dictionary<(Guid SeriesId, DateOnly ScheduledOn), BudgetCommitmentOccurrenceOverride> overridesByOccurrence = overrides.GroupBy(x => (x.SeriesId, x.ScheduledOn)).ToDictionary(x => x.Key, x => x.Last());
+        Dictionary<(Guid SeriesId, DateOnly ScheduledOn), BudgetCommitmentPosting> postingsByOccurrence = postings.ToDictionary(x => (x.SeriesId, x.ScheduledOn));
+        List<CommitmentSummary> plans = new List<CommitmentSummary>();
+        List<ExpectedCommitmentOccurrence> occurrences = new List<ExpectedCommitmentOccurrence>();
 
-        foreach (var series in versions.GroupBy(x => x.SeriesId))
+        foreach (IGrouping<Guid, BudgetCommitmentPlan> series in versions.GroupBy(x => x.SeriesId))
         {
-            var ordered = series.OrderBy(x => x.EffectiveFrom).ThenBy(x => x.CreatedAt).ToList();
-            var current = ordered.LastOrDefault(x => x.Active && x.EffectiveTo == null) ?? ordered.Last();
-            stopBySeries.TryGetValue(series.Key, out var stoppedOn);
-            var seriesPauses = pausesBySeries.GetValueOrDefault(series.Key) ?? [];
+            List<BudgetCommitmentPlan> ordered = series.OrderBy(x => x.EffectiveFrom).ThenBy(x => x.CreatedAt).ToList();
+            BudgetCommitmentPlan current = ordered.LastOrDefault(x => x.Active && x.EffectiveTo == null) ?? ordered.Last();
+            stopBySeries.TryGetValue(series.Key, out DateOnly stoppedOn);
+            List<BudgetCommitmentPause> seriesPauses = pausesBySeries.GetValueOrDefault(series.Key) ?? [];
             plans.Add(new CommitmentSummary(
                 series.Key, current.CategoryId, current.Kind, current.Name, current.AmountCents, current.Cadence,
                 current.IntervalUnit, current.IntervalCount,
@@ -48,26 +48,26 @@ public sealed class BudgetCommitmentProjector(BudgetDbContext database)
                     x.BudgetingMode, x.ChargeFirstShortfall, x.AutomaticPosting, x.ChangeReason, x.Active,
                     x.CreatedAt)).ToList()));
 
-            foreach (var version in ordered.Where(x => x.Active))
+            foreach (BudgetCommitmentPlan? version in ordered.Where(x => x.Active))
             {
-                var effectiveFrom = new[] { from, version.StartDate, version.EffectiveFrom }.Max();
-                var effectiveThrough = new[]
+                DateOnly effectiveFrom = new[] { from, version.StartDate, version.EffectiveFrom }.Max();
+                DateOnly effectiveThrough = new[]
                 {
                     through, version.EffectiveTo ?? through,
                     stoppedOn == default ? through : stoppedOn.AddDays(-1),
                 }.Min();
                 if (effectiveThrough < effectiveFrom) continue;
-                var schedule = new RecurrenceSchedule(
+                RecurrenceSchedule schedule = new RecurrenceSchedule(
                     version.StartDate, BudgetIncomePlanProjector.ParseUnit(version.IntervalUnit), version.IntervalCount,
                     BudgetIncomePlanProjector.ParseWeekdays(version.Weekdays));
-                foreach (var scheduledOn in BudgetRecurrence.Between(schedule, effectiveFrom, effectiveThrough))
+                foreach (DateOnly scheduledOn in BudgetRecurrence.Between(schedule, effectiveFrom, effectiveThrough))
                 {
                     if (seriesPauses.Any(x => scheduledOn >= x.From && scheduledOn <= x.Through)) continue;
-                    overridesByOccurrence.TryGetValue((series.Key, scheduledOn), out var occurrenceOverride);
-                    postingsByOccurrence.TryGetValue((series.Key, scheduledOn), out var posting);
-                    var reservation = BudgetCommitmentReservations.Build(version, scheduledOn, preferredPeriodStartDay);
-                    var occurrenceAmount = occurrenceOverride?.AmountCents ?? version.AmountCents;
-                    var reservationCoverage = Math.Min(occurrenceAmount, reservation.CoverageCents);
+                    overridesByOccurrence.TryGetValue((series.Key, scheduledOn), out BudgetCommitmentOccurrenceOverride? occurrenceOverride);
+                    postingsByOccurrence.TryGetValue((series.Key, scheduledOn), out BudgetCommitmentPosting? posting);
+                    CommitmentReservationSchedule reservation = BudgetCommitmentReservations.Build(version, scheduledOn, preferredPeriodStartDay);
+                    long occurrenceAmount = occurrenceOverride?.AmountCents ?? version.AmountCents;
+                    long reservationCoverage = Math.Min(occurrenceAmount, reservation.CoverageCents);
                     occurrences.Add(new ExpectedCommitmentOccurrence(
                         $"commitment:{series.Key}:{scheduledOn:yyyy-MM-dd}", series.Key, version.Id,
                         version.CategoryId, version.Kind, scheduledOn, occurrenceOverride?.OccurredOn ?? scheduledOn,

@@ -10,33 +10,33 @@ public sealed class BudgetIncomePlanProjector(BudgetDbContext database)
         if (through < from || through.DayNumber - from.DayNumber > 366 * 5)
             throw new ArgumentOutOfRangeException(nameof(through), "Income forecast range must be between zero and five years");
 
-        var versions = await database.IncomePlans.AsNoTracking()
+        List<BudgetIncomePlan> versions = await database.IncomePlans.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.SeriesId).ThenBy(x => x.EffectiveFrom).ThenBy(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
-        var pauses = await database.IncomePlanPauses.AsNoTracking()
+        List<BudgetIncomePlanPause> pauses = await database.IncomePlanPauses.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId).OrderBy(x => x.From).ToListAsync(cancellationToken);
-        var stops = await database.IncomePlanStops.AsNoTracking()
+        List<BudgetIncomePlanStop> stops = await database.IncomePlanStops.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId).OrderBy(x => x.EffectiveOn).ToListAsync(cancellationToken);
-        var overrides = await database.IncomeOccurrenceOverrides.AsNoTracking()
+        List<BudgetIncomeOccurrenceOverride> overrides = await database.IncomeOccurrenceOverrides.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId).OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToListAsync(cancellationToken);
-        var postings = await database.IncomePostings.AsNoTracking().Include(x => x.Allocations)
+        List<BudgetIncomePosting> postings = await database.IncomePostings.AsNoTracking().Include(x => x.Allocations)
             .Where(x => x.OwnerUserId == ownerId).ToListAsync(cancellationToken);
 
-        var stopBySeries = stops.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.Min(y => y.EffectiveOn));
-        var pausesBySeries = pauses.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.ToList());
-        var overrideByOccurrence = overrides.GroupBy(x => (x.SeriesId, x.ScheduledOn))
+        Dictionary<Guid, DateOnly> stopBySeries = stops.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.Min(y => y.EffectiveOn));
+        Dictionary<Guid, List<BudgetIncomePlanPause>> pausesBySeries = pauses.GroupBy(x => x.SeriesId).ToDictionary(x => x.Key, x => x.ToList());
+        Dictionary<(Guid SeriesId, DateOnly ScheduledOn), BudgetIncomeOccurrenceOverride> overrideByOccurrence = overrides.GroupBy(x => (x.SeriesId, x.ScheduledOn))
             .ToDictionary(x => x.Key, x => x.Last());
-        var postingByOccurrence = postings.ToDictionary(x => (x.SeriesId, x.ScheduledOn));
-        var projectedPlans = new List<IncomePlanSummary>();
-        var occurrences = new List<ExpectedIncomeOccurrence>();
+        Dictionary<(Guid SeriesId, DateOnly ScheduledOn), BudgetIncomePosting> postingByOccurrence = postings.ToDictionary(x => (x.SeriesId, x.ScheduledOn));
+        List<IncomePlanSummary> projectedPlans = new List<IncomePlanSummary>();
+        List<ExpectedIncomeOccurrence> occurrences = new List<ExpectedIncomeOccurrence>();
 
-        foreach (var series in versions.GroupBy(x => x.SeriesId))
+        foreach (IGrouping<Guid, BudgetIncomePlan> series in versions.GroupBy(x => x.SeriesId))
         {
-            var ordered = series.OrderBy(x => x.EffectiveFrom).ThenBy(x => x.CreatedAt).ToList();
-            var current = ordered.LastOrDefault(x => x.Active && x.EffectiveTo == null) ?? ordered.Last();
-            stopBySeries.TryGetValue(series.Key, out var stoppedOn);
-            var seriesPauses = pausesBySeries.GetValueOrDefault(series.Key) ?? [];
+            List<BudgetIncomePlan> ordered = series.OrderBy(x => x.EffectiveFrom).ThenBy(x => x.CreatedAt).ToList();
+            BudgetIncomePlan current = ordered.LastOrDefault(x => x.Active && x.EffectiveTo == null) ?? ordered.Last();
+            stopBySeries.TryGetValue(series.Key, out DateOnly stoppedOn);
+            List<BudgetIncomePlanPause> seriesPauses = pausesBySeries.GetValueOrDefault(series.Key) ?? [];
             projectedPlans.Add(new IncomePlanSummary(
                 series.Key, current.Name, current.AmountCents, current.Cadence, current.IntervalUnit,
                 current.IntervalCount, ParseWeekdays(current.Weekdays).Select(x => (int)x).Order().ToArray(),
@@ -47,19 +47,19 @@ public sealed class BudgetIncomePlanProjector(BudgetDbContext database)
                     x.IntervalUnit, x.IntervalCount, ParseWeekdays(x.Weekdays).Select(y => (int)y).Order().ToArray(),
                     x.AutomaticPosting, x.ChangeReason, x.Active)).ToList()));
 
-            foreach (var version in ordered.Where(x => x.Active))
+            foreach (BudgetIncomePlan? version in ordered.Where(x => x.Active))
             {
-                var effectiveFrom = Max(from, version.StartDate, version.EffectiveFrom);
-                var effectiveThrough = Min(through, version.EffectiveTo ?? through,
+                DateOnly effectiveFrom = Max(from, version.StartDate, version.EffectiveFrom);
+                DateOnly effectiveThrough = Min(through, version.EffectiveTo ?? through,
                     stoppedOn == default ? through : stoppedOn.AddDays(-1));
                 if (effectiveThrough < effectiveFrom) continue;
-                var schedule = new RecurrenceSchedule(
+                RecurrenceSchedule schedule = new RecurrenceSchedule(
                     version.StartDate, ParseUnit(version.IntervalUnit), version.IntervalCount, ParseWeekdays(version.Weekdays));
-                foreach (var scheduledOn in BudgetRecurrence.Between(schedule, effectiveFrom, effectiveThrough))
+                foreach (DateOnly scheduledOn in BudgetRecurrence.Between(schedule, effectiveFrom, effectiveThrough))
                 {
                     if (seriesPauses.Any(x => scheduledOn >= x.From && scheduledOn <= x.Through)) continue;
-                    overrideByOccurrence.TryGetValue((series.Key, scheduledOn), out var occurrenceOverride);
-                    postingByOccurrence.TryGetValue((series.Key, scheduledOn), out var posting);
+                    overrideByOccurrence.TryGetValue((series.Key, scheduledOn), out BudgetIncomeOccurrenceOverride? occurrenceOverride);
+                    postingByOccurrence.TryGetValue((series.Key, scheduledOn), out BudgetIncomePosting? posting);
                     occurrences.Add(new ExpectedIncomeOccurrence(
                         $"income:{series.Key}:{scheduledOn:yyyy-MM-dd}", series.Key, version.Id, scheduledOn,
                         occurrenceOverride?.OccurredOn ?? scheduledOn,

@@ -8,7 +8,7 @@ public static class UpdateEndpoints
 {
     public static IEndpointRouteBuilder MapUpdateEndpoints(this IEndpointRouteBuilder routes)
     {
-        var updates = routes.MapGroup("/updates");
+        RouteGroupBuilder updates = routes.MapGroup("/updates");
         updates.MapGet("/candidates", Candidates);
         updates.MapGet("/status", Status);
         updates.MapPost("/jobs", StartJob);
@@ -22,13 +22,13 @@ public static class UpdateEndpoints
         AuditWriter audit,
         CancellationToken cancellationToken)
     {
-        var admin = await Admin(context, identity, cancellationToken);
+        (CurrentUser? User, IResult? Error) admin = await Admin(context, identity, cancellationToken);
         if (admin.Error is not null) return admin.Error;
         try
         {
-            var releases = await client.ReleasesAsync(cancellationToken);
-            var stable = releases.FirstOrDefault(x => !x.Draft && !x.Prerelease);
-            var unstable = releases.FirstOrDefault(x => !x.Draft && x.Prerelease);
+            IReadOnlyList<GitHubRelease> releases = await client.ReleasesAsync(cancellationToken);
+            GitHubRelease? stable = releases.FirstOrDefault(x => !x.Draft && !x.Prerelease);
+            GitHubRelease? unstable = releases.FirstOrDefault(x => !x.Draft && x.Prerelease);
             await audit.RecordAsync(context, admin.User, "release_check", "updates", "release", "success", null, cancellationToken);
             return Results.Ok(new { stable = ToCandidate(stable, "stable"), unstable = ToCandidate(unstable, "unstable") });
         }
@@ -45,13 +45,13 @@ public static class UpdateEndpoints
         UpdatesClient client,
         CancellationToken cancellationToken)
     {
-        var admin = await Admin(context, identity, cancellationToken);
+        (CurrentUser? User, IResult? Error) admin = await Admin(context, identity, cancellationToken);
         if (admin.Error is not null) return admin.Error;
         if (HouseholdConfiguration.String("HOUSEHOLD_UPDATES_UPDATER_URL").Length == 0)
             return Results.Ok(new { state = "disabled" });
         try
         {
-            using var response = await client.UpdaterAsync(HttpMethod.Get, "/status", null, cancellationToken);
+            using HttpResponseMessage response = await client.UpdaterAsync(HttpMethod.Get, "/status", null, cancellationToken);
             return Results.Content(await response.Content.ReadAsStringAsync(cancellationToken), "application/json", statusCode: (int)response.StatusCode);
         }
         catch (HttpRequestException error)
@@ -68,7 +68,7 @@ public static class UpdateEndpoints
         AuditWriter audit,
         CancellationToken cancellationToken)
     {
-        var admin = await Admin(context, identity, cancellationToken);
+        (CurrentUser? User, IResult? Error) admin = await Admin(context, identity, cancellationToken);
         if (admin.Error is not null) return admin.Error;
         if (HouseholdConfiguration.String("HOUSEHOLD_UPDATES_UPDATER_URL").Length == 0)
             return HttpResults.Problem(503, "Updater disabled", "HOUSEHOLD_UPDATES_UPDATER_URL is not configured");
@@ -76,8 +76,8 @@ public static class UpdateEndpoints
             return HttpResults.Problem(422, "Validation failed", "Version is required");
         try
         {
-            using var response = await client.UpdaterAsync(HttpMethod.Post, "/update", request, cancellationToken);
-            var outcome = response.IsSuccessStatusCode ? "success" : "failure";
+            using HttpResponseMessage response = await client.UpdaterAsync(HttpMethod.Post, "/update", request, cancellationToken);
+            string outcome = response.IsSuccessStatusCode ? "success" : "failure";
             await audit.RecordAsync(context, admin.User, "update_start", "updates", "release", outcome,
                 new { request.Version, request.Channel }, cancellationToken,
                 response.IsSuccessStatusCode ? "" : $"updater HTTP {(int)response.StatusCode}");
@@ -102,7 +102,7 @@ public static class UpdateEndpoints
     private static async Task<(CurrentUser? User, IResult? Error)> Admin(
         HttpContext context, IIdentityAccess identity, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return (null, HttpResults.Problem(401, "Unauthorized", "Invalid bearer token"));
         if (user.Role != Roles.Admin) return (null, HttpResults.Problem(403, "Forbidden", "Admin role required"));
         return (user, null);

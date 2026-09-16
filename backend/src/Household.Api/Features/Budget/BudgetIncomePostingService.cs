@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Household.Api.Features.Budget;
 
@@ -15,7 +16,7 @@ public sealed class BudgetIncomePostingService(
         IncomeVarianceRuleInput? routingOverride,
         CancellationToken cancellationToken)
     {
-        var existing = await database.IncomePostings.AsNoTracking().Include(x => x.Allocations)
+        BudgetIncomePosting? existing = await database.IncomePostings.AsNoTracking().Include(x => x.Allocations)
             .SingleOrDefaultAsync(x => x.OwnerUserId == ownerId && x.SeriesId == occurrence.SeriesId &&
                                        x.ScheduledOn == occurrence.ScheduledOn, cancellationToken);
         if (existing is not null) return (existing, true);
@@ -23,15 +24,15 @@ public sealed class BudgetIncomePostingService(
         if (postingMode is not (BudgetValues.Manual or BudgetValues.Automatic))
             throw new ArgumentException("Posting mode is invalid", nameof(postingMode));
 
-        var positiveVariance = Math.Max(0, actualAmountCents - occurrence.AmountCents);
-        var rule = routingOverride ?? await EffectiveRuleAsync(ownerId, occurrence.SeriesId, cancellationToken);
-        var routed = BudgetIncomeVarianceRouter.Route(positiveVariance, rule.Mode, rule.Routes);
-        var protectedVariance = routed.Where(x => x.Destination != BudgetValues.Ordinary).Sum(x => x.AmountCents);
-        var ordinaryIncome = checked(actualAmountCents - protectedVariance);
-        var (period, _, _) = await budgetService.EnsureDefaultsAsync(ownerId, actualOn, cancellationToken);
-        var postingId = Guid.NewGuid();
-        var ledgerEntryId = Guid.NewGuid();
-        var ledgerEntry = new BudgetLedgerEntry
+        long positiveVariance = Math.Max(0, actualAmountCents - occurrence.AmountCents);
+        IncomeVarianceRuleInput rule = routingOverride ?? await this.EffectiveRuleAsync(ownerId, occurrence.SeriesId, cancellationToken);
+        IReadOnlyList<IncomeVarianceAllocationResult> routed = BudgetIncomeVarianceRouter.Route(positiveVariance, rule.Mode, rule.Routes);
+        long protectedVariance = routed.Where(x => x.Destination != BudgetValues.Ordinary).Sum(x => x.AmountCents);
+        long ordinaryIncome = checked(actualAmountCents - protectedVariance);
+        (BudgetPeriod? period, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(ownerId, actualOn, cancellationToken);
+        Guid postingId = Guid.NewGuid();
+        Guid ledgerEntryId = Guid.NewGuid();
+        BudgetLedgerEntry ledgerEntry = new BudgetLedgerEntry
         {
             Id = ledgerEntryId, OwnerUserId = ownerId, PeriodId = period.Id, Kind = BudgetValues.Income,
             OccurredOn = actualOn, Description = occurrence.Name, AmountCents = actualAmountCents,
@@ -39,7 +40,7 @@ public sealed class BudgetIncomePostingService(
             Source = postingMode == BudgetValues.Automatic ? "income_automatic" : "income_confirmation",
             SourceRecordId = postingId,
         };
-        var posting = new BudgetIncomePosting
+        BudgetIncomePosting posting = new BudgetIncomePosting
         {
             Id = postingId, OwnerUserId = ownerId, SeriesId = occurrence.SeriesId, VersionId = occurrence.VersionId,
             ScheduledOn = occurrence.ScheduledOn, ExpectedOn = occurrence.OccurredOn, ActualOn = actualOn,
@@ -47,14 +48,14 @@ public sealed class BudgetIncomePostingService(
             VarianceCents = checked(actualAmountCents - occurrence.AmountCents), PostingMode = postingMode,
             LedgerEntryId = ledgerEntryId,
         };
-        foreach (var allocation in routed)
+        foreach (IncomeVarianceAllocationResult allocation in routed)
             posting.Allocations.Add(new BudgetIncomeVarianceAllocation
             {
                 OwnerUserId = ownerId, PostingId = postingId, Destination = allocation.Destination,
                 TargetId = allocation.TargetId, AmountCents = allocation.AmountCents,
             });
 
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             database.LedgerEntries.Add(ledgerEntry);
@@ -68,7 +69,7 @@ public sealed class BudgetIncomePostingService(
         {
             await transaction.RollbackAsync(cancellationToken);
             database.ChangeTracker.Clear();
-            var winner = await database.IncomePostings.AsNoTracking().Include(x => x.Allocations)
+            BudgetIncomePosting? winner = await database.IncomePostings.AsNoTracking().Include(x => x.Allocations)
                 .SingleOrDefaultAsync(x => x.OwnerUserId == ownerId && x.SeriesId == occurrence.SeriesId &&
                                            x.ScheduledOn == occurrence.ScheduledOn, cancellationToken);
             if (winner is not null) return (winner, true);
@@ -79,7 +80,7 @@ public sealed class BudgetIncomePostingService(
     private async Task<IncomeVarianceRuleInput> EffectiveRuleAsync(
         Guid ownerId, Guid seriesId, CancellationToken cancellationToken)
     {
-        var rule = await database.IncomeVarianceRules.AsNoTracking().Include(x => x.Routes)
+        BudgetIncomeVarianceRule? rule = await database.IncomeVarianceRules.AsNoTracking().Include(x => x.Routes)
             .Where(x => x.OwnerUserId == ownerId && x.SeriesId == seriesId)
             .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken)

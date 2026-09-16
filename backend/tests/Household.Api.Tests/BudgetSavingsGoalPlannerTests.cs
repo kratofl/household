@@ -7,10 +7,10 @@ public sealed class BudgetSavingsGoalPlannerTests
     [Fact]
     public void Date_driven_goal_rounds_up_and_replans_after_a_shortfall()
     {
-        var initial = BudgetSavingsGoalPlanner.DateDriven(
+        SavingsGoalPlan initial = BudgetSavingsGoalPlanner.DateDriven(
             100_00, 0, 0, new DateOnly(2026, 7, 23), new DateOnly(2026, 10, 31),
             new DateOnly(2026, 7, 23), 1);
-        var behind = BudgetSavingsGoalPlanner.DateDriven(
+        SavingsGoalPlan behind = BudgetSavingsGoalPlanner.DateDriven(
             100_00, 0, 10_00, new DateOnly(2026, 7, 23), new DateOnly(2026, 10, 31),
             new DateOnly(2026, 8, 23), 1);
 
@@ -24,9 +24,9 @@ public sealed class BudgetSavingsGoalPlannerTests
     [Fact]
     public void Rate_driven_goal_moves_forecast_when_progress_is_missed()
     {
-        var initial = BudgetSavingsGoalPlanner.RateDriven(
+        SavingsGoalPlan initial = BudgetSavingsGoalPlanner.RateDriven(
             100_00, 0, 25_00, new DateOnly(2026, 7, 23), new DateOnly(2026, 7, 23), 1);
-        var behind = BudgetSavingsGoalPlanner.RateDriven(
+        SavingsGoalPlan behind = BudgetSavingsGoalPlanner.RateDriven(
             100_00, 10_00, 25_00, new DateOnly(2026, 7, 23), new DateOnly(2026, 8, 23), 1,
             initial.PlannedFundingDate);
 
@@ -38,7 +38,7 @@ public sealed class BudgetSavingsGoalPlannerTests
     [Fact]
     public void Fully_funded_goal_pauses_the_recurring_plan_without_completing_it()
     {
-        var result = BudgetSavingsGoalPlanner.RateDriven(
+        SavingsGoalPlan result = BudgetSavingsGoalPlanner.RateDriven(
             100_00, 100_00, 25_00, new DateOnly(2026, 7, 23), new DateOnly(2026, 8, 23), 1,
             new DateOnly(2026, 10, 31));
 

@@ -9,20 +9,20 @@ public sealed class BudgetSavingsProjector(BudgetDbContext database)
         DateOnly asOf,
         CancellationToken cancellationToken)
     {
-        var purposes = await database.SavingsPurposes.AsNoTracking()
+        List<BudgetSavingsPurpose> purposes = await database.SavingsPurposes.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.ArchivedAt != null).ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
-        var contributions = await database.SavingsContributions.AsNoTracking().Include(x => x.Allocations)
+        List<BudgetSavingsContribution> contributions = await database.SavingsContributions.AsNoTracking().Include(x => x.Allocations)
             .Where(x => x.OwnerUserId == ownerId && x.OccurredOn <= asOf)
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
-        var purchases = await database.SavingsPurchases.AsNoTracking().Include(x => x.Funding)
+        List<BudgetSavingsPurchase> purchases = await database.SavingsPurchases.AsNoTracking().Include(x => x.Funding)
             .Where(x => x.OwnerUserId == ownerId && x.OccurredOn <= asOf)
             .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
-        var purchaseLedgerIds = purchases.Select(x => x.LedgerEntryId).ToHashSet();
-        var ineffectiveLedgerIds = (await database.LedgerActions.AsNoTracking()
+        HashSet<Guid> purchaseLedgerIds = purchases.Select(x => x.LedgerEntryId).ToHashSet();
+        HashSet<Guid> ineffectiveLedgerIds = (await database.LedgerActions.AsNoTracking()
                 .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Void &&
                             purchaseLedgerIds.Contains(x.LedgerEntryId))
                 .Select(x => x.LedgerEntryId).ToListAsync(cancellationToken))
@@ -31,7 +31,7 @@ public sealed class BudgetSavingsProjector(BudgetDbContext database)
                             purchaseLedgerIds.Contains(x.CorrectsEntryId.Value))
                 .Select(x => x.CorrectsEntryId!.Value).ToListAsync(cancellationToken))
             .ToHashSet();
-        var refundedByLedgerId = await database.LedgerEntries.AsNoTracking()
+        Dictionary<Guid, long> refundedByLedgerId = await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Refund &&
                         x.RelatedEntryId.HasValue && purchaseLedgerIds.Contains(x.RelatedEntryId.Value) &&
                         x.OccurredOn <= asOf)
@@ -39,46 +39,46 @@ public sealed class BudgetSavingsProjector(BudgetDbContext database)
             .Select(x => new { LedgerId = x.Key, Amount = x.Sum(y => y.AmountCents) })
             .ToDictionaryAsync(x => x.LedgerId, x => x.Amount, cancellationToken);
 
-        var consumedFunding = purchases.SelectMany(purchase =>
+        List<EffectivePurchaseFunding> consumedFunding = purchases.SelectMany(purchase =>
             EffectiveFunding(purchase, ineffectiveLedgerIds.Contains(purchase.LedgerEntryId)
                 ? 0
                 : Math.Max(0, purchase.AmountCents - refundedByLedgerId.GetValueOrDefault(purchase.LedgerEntryId))))
             .ToList();
-        var incomingAllocated = contributions.SelectMany(x => x.Allocations)
+        Dictionary<Guid, long> incomingAllocated = contributions.SelectMany(x => x.Allocations)
             .GroupBy(x => x.PurposeId).ToDictionary(x => x.Key, x => x.Sum(y => y.AmountCents));
-        var investmentWithdrawals = await database.InvestmentEvents.AsNoTracking()
+        Dictionary<Guid, long> investmentWithdrawals = await database.InvestmentEvents.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Withdrawal &&
                         x.Destination == BudgetValues.Savings && x.TargetPurposeId.HasValue &&
                         x.OccurredOn <= asOf)
             .GroupBy(x => x.TargetPurposeId!.Value)
             .Select(x => new { PurposeId = x.Key, Amount = x.Sum(y => y.AmountCents) })
             .ToDictionaryAsync(x => x.PurposeId, x => x.Amount, cancellationToken);
-        var consumedByPurpose = consumedFunding.Where(x => x.Source == BudgetValues.Goal && x.PurposeId.HasValue)
+        Dictionary<Guid, long> consumedByPurpose = consumedFunding.Where(x => x.Source == BudgetValues.Goal && x.PurposeId.HasValue)
             .GroupBy(x => x.PurposeId!.Value).ToDictionary(x => x.Key, x => x.Sum(y => y.AmountCents));
-        var balances = purposes.ToDictionary(
+        Dictionary<Guid, long> balances = purposes.ToDictionary(
             x => x.Id,
             x => checked(incomingAllocated.GetValueOrDefault(x.Id) +
                          investmentWithdrawals.GetValueOrDefault(x.Id) -
                          consumedByPurpose.GetValueOrDefault(x.Id)));
 
-        var opening = await database.OpeningAllocations.AsNoTracking()
+        long opening = await database.OpeningAllocations.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Savings && x.OccurredOn <= asOf)
             .SumAsync(x => x.AmountCents, cancellationToken);
-        var routedIncome = await database.IncomeVarianceAllocations.AsNoTracking()
+        long routedIncome = await database.IncomeVarianceAllocations.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.Destination == BudgetValues.Savings)
             .SumAsync(x => x.AmountCents, cancellationToken);
-        var closeDispositions = await (
+        long closeDispositions = await (
                 from close in database.PeriodCloses.AsNoTracking()
                 join period in database.Periods.AsNoTracking() on close.PeriodId equals period.Id
                 where close.OwnerUserId == ownerId && close.Disposition == BudgetValues.Savings &&
                       period.EndDate <= asOf
                 select close.DispositionAmountCents)
             .SumAsync(cancellationToken);
-        var externalUnallocated = checked(opening + routedIncome + closeDispositions);
-        var consumedSavings = consumedFunding.Where(x => x.Source == BudgetValues.Goal).Sum(x => x.AmountCents);
-        var total = checked(contributions.Sum(x => x.AmountCents) + externalUnallocated +
+        long externalUnallocated = checked(opening + routedIncome + closeDispositions);
+        long consumedSavings = consumedFunding.Where(x => x.Source == BudgetValues.Goal).Sum(x => x.AmountCents);
+        long total = checked(contributions.Sum(x => x.AmountCents) + externalUnallocated +
                             investmentWithdrawals.Values.Sum() - consumedSavings);
-        var preferredStartDay = await database.Settings.AsNoTracking()
+        int preferredStartDay = await database.Settings.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId)
             .Select(x => (int?)x.PreferredPeriodStartDay)
             .SingleOrDefaultAsync(cancellationToken) ?? 1;
@@ -123,7 +123,7 @@ public sealed class BudgetSavingsProjector(BudgetDbContext database)
                     purpose.PlanStartedOn.Value, asOf, preferredStartDay, purpose.TargetDate.Value),
             _ => null,
         };
-        var status = purpose.CompletedAt.HasValue ? "completed" :
+        string status = purpose.CompletedAt.HasValue ? "completed" :
             plan?.FullyFunded == true ? "fully_funded" :
             plan?.BehindPlan == true ? "behind" : "active";
         return new SavingsPurposeSummary(
@@ -139,13 +139,13 @@ public sealed class BudgetSavingsProjector(BudgetDbContext database)
         long effectivePurchaseAmount)
     {
         if (effectivePurchaseAmount <= 0) return [];
-        var funding = purchase.Funding.OrderBy(x => x.Sequence).ToList();
-        var result = new List<EffectivePurchaseFunding>(funding.Count);
-        var allocated = 0L;
-        for (var index = 0; index < funding.Count; index++)
+        List<BudgetSavingsPurchaseFunding> funding = purchase.Funding.OrderBy(x => x.Sequence).ToList();
+        List<EffectivePurchaseFunding> result = new List<EffectivePurchaseFunding>(funding.Count);
+        long allocated = 0L;
+        for (int index = 0; index < funding.Count; index++)
         {
-            var source = funding[index];
-            var amount = index == funding.Count - 1
+            BudgetSavingsPurchaseFunding source = funding[index];
+            long amount = index == funding.Count - 1
                 ? effectivePurchaseAmount - allocated
                 : checked(source.AmountCents * effectivePurchaseAmount / purchase.AmountCents);
             allocated += amount;

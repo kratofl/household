@@ -24,9 +24,9 @@ public static class BudgetRecurrence
             throw new ArgumentException("Weekdays are only valid for weekly recurrences", nameof(schedule));
         if (through < from) return [];
 
-        var first = from > schedule.AnchorDate ? from : schedule.AnchorDate;
-        var result = new List<DateOnly>();
-        for (var date = first; date <= through; date = date.AddDays(1))
+        DateOnly first = from > schedule.AnchorDate ? from : schedule.AnchorDate;
+        List<DateOnly> result = new List<DateOnly>();
+        for (DateOnly date = first; date <= through; date = date.AddDays(1))
         {
             if (OccursOn(schedule, date)) result.Add(date);
         }
@@ -45,8 +45,8 @@ public static class BudgetRecurrence
 
     private static bool IsWeeklyOccurrence(RecurrenceSchedule schedule, DateOnly date)
     {
-        var activeWeek = (date.DayNumber - schedule.AnchorDate.DayNumber) / 7;
-        var selectedDay = schedule.Weekdays.Count == 0
+        int activeWeek = (date.DayNumber - schedule.AnchorDate.DayNumber) / 7;
+        bool selectedDay = schedule.Weekdays.Count == 0
             ? date.DayOfWeek == schedule.AnchorDate.DayOfWeek
             : schedule.Weekdays.Contains(date.DayOfWeek);
         return activeWeek % schedule.Interval == 0 && selectedDay;
@@ -54,14 +54,14 @@ public static class BudgetRecurrence
 
     private static bool IsMonthlyOccurrence(RecurrenceSchedule schedule, DateOnly date, int intervalMonths)
     {
-        var monthDifference = checked((date.Year - schedule.AnchorDate.Year) * 12 + date.Month - schedule.AnchorDate.Month);
+        int monthDifference = checked((date.Year - schedule.AnchorDate.Year) * 12 + date.Month - schedule.AnchorDate.Month);
         return monthDifference >= 0 && monthDifference % intervalMonths == 0 &&
                date.Day == Math.Min(schedule.AnchorDate.Day, DateTime.DaysInMonth(date.Year, date.Month));
     }
 
     private static bool IsYearlyOccurrence(RecurrenceSchedule schedule, DateOnly date)
     {
-        var yearDifference = date.Year - schedule.AnchorDate.Year;
+        int yearDifference = date.Year - schedule.AnchorDate.Year;
         return yearDifference >= 0 && yearDifference % schedule.Interval == 0 &&
                date.Month == schedule.AnchorDate.Month &&
                date.Day == Math.Min(schedule.AnchorDate.Day, DateTime.DaysInMonth(date.Year, date.Month));

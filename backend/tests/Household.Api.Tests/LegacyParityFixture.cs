@@ -46,26 +46,26 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public static readonly Guid PlannedExpenseId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b46");
     public static readonly Guid FreshUserId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b47");
 
-    private readonly string containerName = $"household-api-tests-{Guid.NewGuid():N}";
-    private string connectionString = "";
-    private WebApplicationFactory<Program>? factory;
+    private readonly string _containerName = $"household-api-tests-{Guid.NewGuid():N}";
+    private string _connectionString = "";
+    private WebApplicationFactory<Program>? _factory;
 
-    public HttpClient Client => (factory ?? throw new InvalidOperationException("Fixture has not started."))
+    public HttpClient Client => (this._factory ?? throw new InvalidOperationException("Fixture has not started."))
         .CreateClient();
 
     public async Task InitializeAsync()
     {
-        await StartDatabase();
-        await SeedLegacyDatabase();
-        factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        await this.StartDatabase();
+        await this.SeedLegacyDatabase();
+        this._factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
-            builder.UseSetting("ConnectionStrings:Household", connectionString);
+            builder.UseSetting("ConnectionStrings:Household", this._connectionString);
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:Household"] = connectionString,
+                    ["ConnectionStrings:Household"] = this._connectionString,
                     ["Seed:DemoUser"] = "false",
                     ["Updates:GitHubRepository"] = "kratofl/household",
                 });
@@ -77,24 +77,24 @@ public sealed class LegacyParityFixture : IAsyncLifetime
                     new FixedTimeProvider(new DateTimeOffset(2026, 7, 23, 12, 0, 0, TimeSpan.Zero)));
             });
         });
-        _ = Client;
+        _ = this.Client;
     }
 
     public async Task DisposeAsync()
     {
-        if (factory is not null)
+        if (this._factory is not null)
         {
-            await factory.DisposeAsync();
+            await this._factory.DisposeAsync();
         }
 
-        await RunDocker("rm", "-f", containerName);
+        await RunDocker("rm", "-f", this._containerName);
     }
 
     private async Task SeedLegacyDatabase()
     {
-        await using var connection = new NpgsqlConnection(connectionString);
+        await using NpgsqlConnection connection = new NpgsqlConnection(this._connectionString);
         await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
+        await using NpgsqlCommand command = connection.CreateCommand();
         command.CommandText = LegacySchemaSql;
         command.Parameters.AddWithValue("passwordHash", BCrypt.Net.BCrypt.HashPassword("admin", 4));
         command.Parameters.AddWithValue("accessHash", HashToken(AccessToken));
@@ -136,19 +136,19 @@ public sealed class LegacyParityFixture : IAsyncLifetime
 
     private async Task StartDatabase()
     {
-        await RunDocker("run", "--detach", "--rm", "--name", containerName,
+        await RunDocker("run", "--detach", "--rm", "--name", this._containerName,
             "--env", "POSTGRES_DB=household", "--env", "POSTGRES_USER=household",
             "--env", "POSTGRES_PASSWORD=household", "--publish", "127.0.0.1::5432",
             "postgres:18.4-alpine3.23");
-        var portOutput = await RunDocker("port", containerName, "5432/tcp");
-        var port = int.Parse(portOutput.Trim().Split(':')[^1]);
-        connectionString = $"Host=127.0.0.1;Port={port};Database=household;Username=household;Password=household";
-        var deadline = DateTime.UtcNow.AddSeconds(60);
+        string portOutput = await RunDocker("port", this._containerName, "5432/tcp");
+        int port = int.Parse(portOutput.Trim().Split(':')[^1]);
+        this._connectionString = $"Host=127.0.0.1;Port={port};Database=household;Username=household;Password=household";
+        DateTime deadline = DateTime.UtcNow.AddSeconds(60);
         while (DateTime.UtcNow < deadline)
         {
             try
             {
-                await using var connection = new NpgsqlConnection(connectionString);
+                await using NpgsqlConnection connection = new NpgsqlConnection(this._connectionString);
                 await connection.OpenAsync();
                 return;
             }
@@ -162,16 +162,16 @@ public sealed class LegacyParityFixture : IAsyncLifetime
 
     private static async Task<string> RunDocker(params string[] arguments)
     {
-        var startInfo = new ProcessStartInfo("docker")
+        ProcessStartInfo startInfo = new ProcessStartInfo("docker")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
-        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start Docker CLI.");
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
+        foreach (string argument in arguments) startInfo.ArgumentList.Add(argument);
+        using Process process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start Docker CLI.");
+        string output = await process.StandardOutput.ReadToEndAsync();
+        string error = await process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
         if (process.ExitCode != 0) throw new InvalidOperationException($"docker {string.Join(' ', arguments)} failed: {error}");
         return output;

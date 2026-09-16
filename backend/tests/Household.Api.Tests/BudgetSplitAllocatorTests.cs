@@ -7,7 +7,7 @@ public sealed class BudgetSplitAllocatorTests
     [Fact]
     public void Final_split_can_take_the_exact_remaining_minor_units()
     {
-        var result = BudgetSplitAllocator.Allocate(10_001,
+        IReadOnlyList<SplitAllocation> result = BudgetSplitAllocator.Allocate(10_001,
         [
             new SplitAllocationInput(3_333, false, true),
             new SplitAllocationInput(null, true, false),

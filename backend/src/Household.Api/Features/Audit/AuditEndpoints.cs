@@ -20,12 +20,12 @@ public static class AuditEndpoints
         AuditDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return HttpResults.Problem(401, "Unauthorized", "Invalid bearer token");
         if (user.Role != Roles.Admin) return HttpResults.Problem(403, "Forbidden", "Admin role required");
-        var take = limit ?? 100;
+        int take = limit ?? 100;
         if (take is < 1 or > 500) return HttpResults.Problem(400, "Invalid limit", "Limit must be between 1 and 500");
-        var events = await database.Events.AsNoTracking().OrderByDescending(x => x.OccurredAt).Take(take).ToListAsync(cancellationToken);
+        List<AuditEvent> events = await database.Events.AsNoTracking().OrderByDescending(x => x.OccurredAt).Take(take).ToListAsync(cancellationToken);
         return Results.Ok(events.Select(ToResponse));
     }
 

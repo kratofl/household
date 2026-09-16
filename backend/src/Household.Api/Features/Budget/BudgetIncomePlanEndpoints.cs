@@ -20,11 +20,11 @@ public static class BudgetIncomePlanEndpoints
         string? from, string? through, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var start = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly start = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(from) && !TryDate(from, out start)) return InvalidDate("from");
-        var end = start.AddYears(1);
+        DateOnly end = start.AddYears(1);
         if (!string.IsNullOrWhiteSpace(through) && !TryDate(through, out end)) return InvalidDate("through");
         try
         {
@@ -40,13 +40,13 @@ public static class BudgetIncomePlanEndpoints
         IncomePlanRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var parsed = ParseDefinition(request);
+        (IncomePlanDefinition? Value, IResult? Error) parsed = ParseDefinition(request);
         if (parsed.Error is not null) return parsed.Error;
-        var definition = parsed.Value!;
-        var seriesId = Guid.NewGuid();
-        var plan = new BudgetIncomePlan
+        IncomePlanDefinition definition = parsed.Value!;
+        Guid seriesId = Guid.NewGuid();
+        BudgetIncomePlan plan = new BudgetIncomePlan
         {
             Id = seriesId, SeriesId = seriesId, OwnerUserId = user.Id, Name = definition.Name,
             AmountCents = definition.AmountCents, Cadence = definition.Cadence,
@@ -69,34 +69,34 @@ public static class BudgetIncomePlanEndpoints
         Guid seriesId, IncomePlanEditRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (string.IsNullOrWhiteSpace(request.Reason)) return Invalid("An edit reason is required");
         if (request.Scope == "occurrence")
             return await EditOccurrence(seriesId, request, user.Id, database, cancellationToken);
         if (request.Scope is not ("future" or "effective_date"))
             return Invalid("Edit scope must be occurrence, future, or effective_date");
-        if (!TryDate(request.EffectiveOn, out var effectiveOn)) return InvalidDate("effectiveOn");
+        if (!TryDate(request.EffectiveOn, out DateOnly effectiveOn)) return InvalidDate("effectiveOn");
         if (await database.IncomePlanStops.AnyAsync(
                 x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken))
             return HttpResults.Problem(409, "Stopped plan", "A stopped income plan cannot receive future edits");
 
-        var source = await database.IncomePlans.SingleOrDefaultAsync(x =>
+        BudgetIncomePlan? source = await database.IncomePlans.SingleOrDefaultAsync(x =>
             x.OwnerUserId == user.Id && x.SeriesId == seriesId && x.Active &&
             x.EffectiveFrom <= effectiveOn && (x.EffectiveTo == null || x.EffectiveTo >= effectiveOn), cancellationToken);
         if (source is null) return NotFound();
-        var parsed = ParseDefinition(new IncomePlanRequest(
+        (IncomePlanDefinition? Value, IResult? Error) parsed = ParseDefinition(new IncomePlanRequest(
             request.Name ?? source.Name, request.AmountCents ?? source.AmountCents,
             request.Cadence ?? source.Cadence, request.IntervalUnit ?? source.IntervalUnit,
             request.IntervalCount ?? source.IntervalCount, request.Weekdays ?? ParseWeekdays(source.Weekdays),
             request.AutomaticPosting ?? source.AutomaticPosting, source.StartDate.ToString("yyyy-MM-dd"), null));
         if (parsed.Error is not null) return parsed.Error;
-        var definition = parsed.Value!;
+        IncomePlanDefinition definition = parsed.Value!;
 
-        var previousEnd = source.EffectiveTo;
+        DateOnly? previousEnd = source.EffectiveTo;
         if (effectiveOn == source.EffectiveFrom) source.Active = false;
         else source.EffectiveTo = effectiveOn.AddDays(-1);
-        var version = new BudgetIncomePlan
+        BudgetIncomePlan version = new BudgetIncomePlan
         {
             SeriesId = seriesId, OwnerUserId = user.Id, Name = definition.Name, AmountCents = definition.AmountCents,
             Cadence = definition.Cadence, IntervalUnit = definition.IntervalUnit, IntervalCount = definition.IntervalCount,
@@ -112,18 +112,18 @@ public static class BudgetIncomePlanEndpoints
         Guid seriesId, IncomePlanEditRequest request, Guid ownerId,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        if (!TryDate(request.ScheduledOn, out var scheduledOn)) return InvalidDate("scheduledOn");
-        var projection = await new BudgetIncomePlanProjector(database)
+        if (!TryDate(request.ScheduledOn, out DateOnly scheduledOn)) return InvalidDate("scheduledOn");
+        IncomePlanProjection projection = await new BudgetIncomePlanProjector(database)
             .LoadAsync(ownerId, scheduledOn, scheduledOn, cancellationToken);
-        var occurrence = projection.Occurrences.SingleOrDefault(x => x.SeriesId == seriesId && x.ScheduledOn == scheduledOn);
+        ExpectedIncomeOccurrence? occurrence = projection.Occurrences.SingleOrDefault(x => x.SeriesId == seriesId && x.ScheduledOn == scheduledOn);
         if (occurrence is null) return NotFound("Expected income occurrence was not found");
-        var occurredOn = scheduledOn;
+        DateOnly occurredOn = scheduledOn;
         if (!string.IsNullOrWhiteSpace(request.OccurredOn) && !TryDate(request.OccurredOn, out occurredOn))
             return InvalidDate("occurredOn");
-        var name = string.IsNullOrWhiteSpace(request.Name) ? occurrence.Name : request.Name.Trim();
-        var amount = request.AmountCents ?? occurrence.AmountCents;
+        string name = string.IsNullOrWhiteSpace(request.Name) ? occurrence.Name : request.Name.Trim();
+        long amount = request.AmountCents ?? occurrence.AmountCents;
         if (amount <= 0) return Invalid("Income amount must be positive");
-        var occurrenceOverride = new BudgetIncomeOccurrenceOverride
+        BudgetIncomeOccurrenceOverride occurrenceOverride = new BudgetIncomeOccurrenceOverride
         {
             OwnerUserId = ownerId, SeriesId = seriesId, ScheduledOn = scheduledOn, OccurredOn = occurredOn,
             Name = name, AmountCents = amount, Reason = request.Reason!.Trim(),
@@ -137,14 +137,14 @@ public static class BudgetIncomePlanEndpoints
         Guid seriesId, PauseIncomePlanRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (!await database.IncomePlans.AnyAsync(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken))
             return NotFound();
-        if (!TryDate(request.From, out var from) || !TryDate(request.Through, out var through))
+        if (!TryDate(request.From, out DateOnly from) || !TryDate(request.Through, out DateOnly through))
             return InvalidDate("pause range");
         if (through < from) return Invalid("Pause end must not be before its start");
-        var pause = new BudgetIncomePlanPause
+        BudgetIncomePlanPause pause = new BudgetIncomePlanPause
         {
             OwnerUserId = user.Id, SeriesId = seriesId, From = from, Through = through,
             Reason = request.Reason?.Trim() ?? "",
@@ -158,17 +158,17 @@ public static class BudgetIncomePlanEndpoints
         Guid seriesId, StopIncomePlanRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var startDate = await database.IncomePlans.Where(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId)
+        DateOnly? startDate = await database.IncomePlans.Where(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId)
             .Select(x => (DateOnly?)x.StartDate).MinAsync(cancellationToken);
         if (!startDate.HasValue)
             return NotFound();
-        if (!TryDate(request.EffectiveOn, out var effectiveOn)) return InvalidDate("effectiveOn");
+        if (!TryDate(request.EffectiveOn, out DateOnly effectiveOn)) return InvalidDate("effectiveOn");
         if (effectiveOn < startDate.Value) return Invalid("Stop date must not be before the plan start date");
         if (await database.IncomePlanStops.AnyAsync(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken))
             return HttpResults.Problem(409, "Already stopped", "Income plan is already stopped");
-        var stop = new BudgetIncomePlanStop
+        BudgetIncomePlanStop stop = new BudgetIncomePlanStop
         {
             OwnerUserId = user.Id, SeriesId = seriesId, EffectiveOn = effectiveOn,
             Reason = request.Reason?.Trim() ?? "",
@@ -180,18 +180,18 @@ public static class BudgetIncomePlanEndpoints
 
     private static (IncomePlanDefinition? Value, IResult? Error) ParseDefinition(IncomePlanRequest request)
     {
-        var name = request.Name?.Trim() ?? "";
+        string name = request.Name?.Trim() ?? "";
         if (name.Length == 0 || request.AmountCents <= 0) return (null, Invalid("Income plans require a name and positive amount"));
-        if (!TryDate(request.StartDate, out var startDate)) return (null, InvalidDate("startDate"));
+        if (!TryDate(request.StartDate, out DateOnly startDate)) return (null, InvalidDate("startDate"));
         DateOnly? stopDate = null;
         if (!string.IsNullOrWhiteSpace(request.StopDate))
         {
-            if (!TryDate(request.StopDate, out var parsedStop)) return (null, InvalidDate("stopDate"));
+            if (!TryDate(request.StopDate, out DateOnly parsedStop)) return (null, InvalidDate("stopDate"));
             if (parsedStop < startDate) return (null, Invalid("Stop date must not be before the start date"));
             stopDate = parsedStop;
         }
-        var cadence = request.Cadence?.Trim().ToLowerInvariant() ?? "";
-        var intervalUnit = cadence switch
+        string cadence = request.Cadence?.Trim().ToLowerInvariant() ?? "";
+        string intervalUnit = cadence switch
         {
             BudgetValues.Daily => BudgetValues.Day,
             BudgetValues.Weekly => BudgetValues.Week,
@@ -203,9 +203,9 @@ public static class BudgetIncomePlanEndpoints
         };
         if (intervalUnit is not (BudgetValues.Day or BudgetValues.Week or BudgetValues.Month or BudgetValues.Quarter or BudgetValues.Year))
             return (null, Invalid("Recurrence must be daily, weekly, monthly, quarterly, yearly, or a supported custom unit"));
-        var intervalCount = cadence == BudgetValues.Custom ? request.IntervalCount : 1;
+        int intervalCount = cadence == BudgetValues.Custom ? request.IntervalCount : 1;
         if (intervalCount <= 0) return (null, Invalid("Custom recurrence interval must be positive"));
-        var weekdays = (request.Weekdays ?? []).Distinct().Order().ToArray();
+        int[] weekdays = (request.Weekdays ?? []).Distinct().Order().ToArray();
         if (weekdays.Any(x => x is < 0 or > 6)) return (null, Invalid("Weekdays must be between Sunday (0) and Saturday (6)"));
         if (intervalUnit != BudgetValues.Week && weekdays.Length > 0)
             return (null, Invalid("Weekdays are only supported for weekly recurrence"));

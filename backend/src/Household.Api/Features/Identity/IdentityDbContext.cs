@@ -4,9 +4,9 @@ namespace Household.Api.Features.Identity;
 
 public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> options) : DbContext(options)
 {
-    public DbSet<User> Users => Set<User>();
-    public DbSet<AppModule> Modules => Set<AppModule>();
-    public DbSet<Session> Sessions => Set<Session>();
+    public DbSet<User> Users => this.Set<User>();
+    public DbSet<AppModule> Modules => this.Set<AppModule>();
+    public DbSet<Session> Sessions => this.Set<Session>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -24,14 +24,14 @@ public static class BudgetIncomeVarianceRouter
             throw new ArgumentException("Percentage routes cannot exceed 100 percent", nameof(routes));
         if (positiveVarianceCents == 0) return [];
 
-        var remaining = positiveVarianceCents;
-        var allocations = new List<IncomeVarianceAllocationResult>();
-        foreach (var route in routes)
+        long remaining = positiveVarianceCents;
+        List<IncomeVarianceAllocationResult> allocations = new List<IncomeVarianceAllocationResult>();
+        foreach (IncomeVarianceRouteInput route in routes)
         {
-            var requested = mode == BudgetValues.Percentage
+            long requested = mode == BudgetValues.Percentage
                 ? checked(positiveVarianceCents * route.Value / 10_000)
                 : route.Value;
-            var amount = Math.Min(remaining, requested);
+            long amount = Math.Min(remaining, requested);
             if (amount <= 0) continue;
             allocations.Add(new IncomeVarianceAllocationResult(route.Destination, route.TargetId, amount));
             remaining -= amount;

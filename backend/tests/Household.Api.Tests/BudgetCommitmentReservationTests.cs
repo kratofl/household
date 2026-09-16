@@ -7,9 +7,9 @@ public sealed class BudgetCommitmentReservationTests
     [Fact]
     public void Reservation_allocation_is_exact_and_does_not_drift()
     {
-        var plan = Plan(100, BudgetValues.Quarter, 1, new DateOnly(2026, 1, 1));
+        BudgetCommitmentPlan plan = Plan(100, BudgetValues.Quarter, 1, new DateOnly(2026, 1, 1));
 
-        var schedule = BudgetCommitmentReservations.Build(plan, new DateOnly(2026, 4, 15), 1);
+        CommitmentReservationSchedule schedule = BudgetCommitmentReservations.Build(plan, new DateOnly(2026, 4, 15), 1);
 
         Assert.Equal([34, 33, 33], schedule.Periods.Select(x => x.AmountCents));
         Assert.Equal(100, schedule.Periods.Sum(x => x.AmountCents));
@@ -20,9 +20,9 @@ public sealed class BudgetCommitmentReservationTests
     [Fact]
     public void Late_first_cycle_keeps_the_normal_rate_and_exposes_the_shortfall()
     {
-        var plan = Plan(120_000, BudgetValues.Year, 1, new DateOnly(2026, 7, 23));
+        BudgetCommitmentPlan plan = Plan(120_000, BudgetValues.Year, 1, new DateOnly(2026, 7, 23));
 
-        var schedule = BudgetCommitmentReservations.Build(plan, new DateOnly(2026, 8, 23), 1);
+        CommitmentReservationSchedule schedule = BudgetCommitmentReservations.Build(plan, new DateOnly(2026, 8, 23), 1);
 
         Assert.Equal(10_000, schedule.RateCents);
         Assert.Equal(10_000, schedule.CoverageCents);

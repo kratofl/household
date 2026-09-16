@@ -7,9 +7,9 @@ public sealed class BudgetRecurrenceTests
     [Fact]
     public void Monthly_occurrences_clamp_short_months_without_drifting_the_anchor_day()
     {
-        var schedule = new RecurrenceSchedule(new DateOnly(2026, 1, 31), RecurrenceUnit.Month, 1, []);
+        RecurrenceSchedule schedule = new RecurrenceSchedule(new DateOnly(2026, 1, 31), RecurrenceUnit.Month, 1, []);
 
-        var occurrences = BudgetRecurrence.Between(schedule, new DateOnly(2026, 1, 1), new DateOnly(2026, 4, 30));
+        IReadOnlyList<DateOnly> occurrences = BudgetRecurrence.Between(schedule, new DateOnly(2026, 1, 1), new DateOnly(2026, 4, 30));
 
         Assert.Equal(
             [new DateOnly(2026, 1, 31), new DateOnly(2026, 2, 28), new DateOnly(2026, 3, 31), new DateOnly(2026, 4, 30)],
@@ -19,10 +19,10 @@ public sealed class BudgetRecurrenceTests
     [Fact]
     public void Every_n_weeks_supports_multiple_weekdays_in_anchored_weeks()
     {
-        var schedule = new RecurrenceSchedule(
+        RecurrenceSchedule schedule = new RecurrenceSchedule(
             new DateOnly(2026, 7, 6), RecurrenceUnit.Week, 2, [DayOfWeek.Monday, DayOfWeek.Thursday]);
 
-        var occurrences = BudgetRecurrence.Between(schedule, new DateOnly(2026, 7, 1), new DateOnly(2026, 8, 3));
+        IReadOnlyList<DateOnly> occurrences = BudgetRecurrence.Between(schedule, new DateOnly(2026, 7, 1), new DateOnly(2026, 8, 3));
 
         Assert.Equal(
             [
@@ -40,9 +40,9 @@ public sealed class BudgetRecurrenceTests
     public void Every_n_calendar_units_remain_anchored(
         RecurrenceUnit unit, int interval, string start, string end, string expected)
     {
-        var schedule = new RecurrenceSchedule(DateOnly.Parse(start), unit, interval, []);
+        RecurrenceSchedule schedule = new RecurrenceSchedule(DateOnly.Parse(start), unit, interval, []);
 
-        var occurrences = BudgetRecurrence.Between(schedule, DateOnly.Parse(start), DateOnly.Parse(end));
+        IReadOnlyList<DateOnly> occurrences = BudgetRecurrence.Between(schedule, DateOnly.Parse(start), DateOnly.Parse(end));
 
         Assert.Equal(expected.Split(',').Select(DateOnly.Parse), occurrences);
     }

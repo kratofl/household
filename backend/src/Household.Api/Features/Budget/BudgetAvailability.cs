@@ -20,15 +20,15 @@ public static class BudgetAvailability
         long investmentCents = 0,
         long reservationCents = 0)
     {
-        var target = bufferRule == BudgetValues.PercentageBuffer
+        long target = bufferRule == BudgetValues.PercentageBuffer
             ? checked(actualIncomeCents * bufferPercentageBasisPoints / 10_000)
             : bufferAmountCents;
-        var longTermAllocations = Math.Max(0, checked(savingsCents + investmentCents));
-        var protectedReservations = Math.Max(0, reservationCents);
-        var bufferCapacity = Math.Max(0, actualIncomeCents - longTermAllocations - protectedReservations);
-        var fundedBuffer = Math.Min(bufferCapacity, Math.Max(0, checked(target + explicitBufferCents)));
-        var maximumOrdinary = Math.Max(0, actualIncomeCents - fundedBuffer - longTermAllocations - protectedReservations);
-        var protectedTarget = Math.Max(0, checked(target + explicitBufferCents));
+        long longTermAllocations = Math.Max(0, checked(savingsCents + investmentCents));
+        long protectedReservations = Math.Max(0, reservationCents);
+        long bufferCapacity = Math.Max(0, actualIncomeCents - longTermAllocations - protectedReservations);
+        long fundedBuffer = Math.Min(bufferCapacity, Math.Max(0, checked(target + explicitBufferCents)));
+        long maximumOrdinary = Math.Max(0, actualIncomeCents - fundedBuffer - longTermAllocations - protectedReservations);
+        long protectedTarget = Math.Max(0, checked(target + explicitBufferCents));
         return new BudgetAvailabilityResult(
             protectedTarget,
             fundedBuffer,

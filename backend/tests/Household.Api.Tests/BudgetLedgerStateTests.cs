@@ -7,12 +7,12 @@ public sealed class BudgetLedgerStateTests
     [Fact]
     public void Only_the_latest_non_voided_correction_affects_financial_projections()
     {
-        var original = Guid.NewGuid();
-        var correction = Guid.NewGuid();
-        var latest = Guid.NewGuid();
-        var voided = Guid.NewGuid();
+        Guid original = Guid.NewGuid();
+        Guid correction = Guid.NewGuid();
+        Guid latest = Guid.NewGuid();
+        Guid voided = Guid.NewGuid();
 
-        var effective = BudgetLedgerState.EffectiveIds(
+        IReadOnlyList<Guid> effective = BudgetLedgerState.EffectiveIds(
         [
             new LedgerStateEntry(original, null),
             new LedgerStateEntry(correction, original),

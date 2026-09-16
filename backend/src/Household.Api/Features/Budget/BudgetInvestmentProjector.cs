@@ -9,18 +9,18 @@ public sealed class BudgetInvestmentProjector(BudgetDbContext database)
         DateOnly asOf,
         CancellationToken cancellationToken)
     {
-        var events = await database.InvestmentEvents.AsNoTracking()
+        List<BudgetInvestmentEvent> events = await database.InvestmentEvents.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.OccurredOn <= asOf)
             .OrderBy(x => x.OccurredOn).ThenBy(x => x.CreatedAt)
             .ToListAsync(cancellationToken);
-        var legacyOpening = await database.OpeningAllocations.AsNoTracking()
+        long legacyOpening = await database.OpeningAllocations.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Investment && x.OccurredOn <= asOf)
             .SumAsync(x => x.AmountCents, cancellationToken);
-        var contributedCapital = legacyOpening;
-        var currentValue = legacyOpening;
-        var withdrawals = 0L;
+        long contributedCapital = legacyOpening;
+        long currentValue = legacyOpening;
+        long withdrawals = 0L;
         DateOnly? latestValuationDate = null;
-        foreach (var item in events)
+        foreach (BudgetInvestmentEvent? item in events)
         {
             switch (item.Kind)
             {
@@ -39,8 +39,8 @@ public sealed class BudgetInvestmentProjector(BudgetDbContext database)
                     break;
             }
         }
-        var gain = checked(currentValue + withdrawals - contributedCapital);
-        var gainBasisPoints = contributedCapital == 0
+        long gain = checked(currentValue + withdrawals - contributedCapital);
+        long gainBasisPoints = contributedCapital == 0
             ? 0
             : checked((long)Math.Truncate((decimal)gain * 10_000m / contributedCapital));
         return new InvestmentProjection(

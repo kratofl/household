@@ -18,7 +18,7 @@ public static class BudgetReminderEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         return Results.Ok(await database.ReminderSettings.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id)
@@ -31,9 +31,9 @@ public static class BudgetReminderEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var exists = planKind switch
+        bool exists = planKind switch
         {
             BudgetValues.Income => await database.IncomePlans.AnyAsync(
                 x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken),
@@ -42,7 +42,7 @@ public static class BudgetReminderEndpoints
             _ => false,
         };
         if (!exists) return HttpResults.Problem(404, "Not found", "Recurring plan was not found");
-        var setting = await database.ReminderSettings.SingleOrDefaultAsync(x =>
+        BudgetReminderSetting? setting = await database.ReminderSettings.SingleOrDefaultAsync(x =>
             x.OwnerUserId == user.Id && x.PlanKind == planKind && x.SeriesId == seriesId, cancellationToken);
         if (setting is null)
         {
@@ -64,7 +64,7 @@ public static class BudgetReminderEndpoints
         catch (DbUpdateException)
         {
             database.ChangeTracker.Clear();
-            var winner = await database.ReminderSettings.SingleAsync(x =>
+            BudgetReminderSetting winner = await database.ReminderSettings.SingleAsync(x =>
                 x.OwnerUserId == user.Id && x.PlanKind == planKind && x.SeriesId == seriesId, cancellationToken);
             winner.DueEnabled = request.DueEnabled;
             winner.OverdueEnabled = request.OverdueEnabled;
@@ -79,25 +79,25 @@ public static class BudgetReminderEndpoints
         string? asOf, HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(asOf) && !DateOnly.TryParseExact(
                 asOf, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out today))
             return HttpResults.Problem(400, "Invalid date", "asOf must use YYYY-MM-DD");
-        var settings = await database.ReminderSettings.AsNoTracking()
+        List<BudgetReminderSetting> settings = await database.ReminderSettings.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && (x.DueEnabled || x.OverdueEnabled))
             .ToListAsync(cancellationToken);
         if (settings.Count == 0) return Results.Ok(Array.Empty<BudgetReminder>());
 
-        var reminders = new List<BudgetReminder>();
-        var incomeSettings = settings.Where(x => x.PlanKind == BudgetValues.Income)
+        List<BudgetReminder> reminders = new List<BudgetReminder>();
+        Dictionary<Guid, BudgetReminderSetting> incomeSettings = settings.Where(x => x.PlanKind == BudgetValues.Income)
             .ToDictionary(x => x.SeriesId);
         if (incomeSettings.Count > 0)
         {
-            var projection = await new BudgetIncomePlanProjector(database).LoadAsync(
+            IncomePlanProjection projection = await new BudgetIncomePlanProjector(database).LoadAsync(
                 user.Id, today.AddYears(-1), today, cancellationToken);
-            var automaticVersions = projection.Plans.SelectMany(x => x.Versions)
+            HashSet<Guid> automaticVersions = projection.Plans.SelectMany(x => x.Versions)
                 .Where(x => x.AutomaticPosting).Select(x => x.Id).ToHashSet();
             reminders.AddRange(projection.Occurrences.Where(x =>
                     x.Status == "expected" && !automaticVersions.Contains(x.VersionId) &&
@@ -106,13 +106,13 @@ public static class BudgetReminderEndpoints
                     x.Name, x.AmountCents, incomeSettings[x.SeriesId], today))
                 .Where(x => x is not null)!);
         }
-        var commitmentSettings = settings.Where(x => x.PlanKind == "commitment")
+        Dictionary<Guid, BudgetReminderSetting> commitmentSettings = settings.Where(x => x.PlanKind == "commitment")
             .ToDictionary(x => x.SeriesId);
         if (commitmentSettings.Count > 0)
         {
-            var projection = await new BudgetCommitmentProjector(database).LoadAsync(
+            CommitmentProjection projection = await new BudgetCommitmentProjector(database).LoadAsync(
                 user.Id, today.AddYears(-1), today, cancellationToken);
-            var automaticVersions = projection.Plans.SelectMany(x => x.Versions)
+            HashSet<Guid> automaticVersions = projection.Plans.SelectMany(x => x.Versions)
                 .Where(x => x.AutomaticPosting).Select(x => x.Id).ToHashSet();
             reminders.AddRange(projection.Occurrences.Where(x =>
                     x.Status == "expected" && !automaticVersions.Contains(x.VersionId) &&
@@ -129,7 +129,7 @@ public static class BudgetReminderEndpoints
         string planKind, string occurrenceId, Guid seriesId, DateOnly dueOn,
         string name, long amountCents, BudgetReminderSetting setting, DateOnly today)
     {
-        var kind = dueOn < today && setting.OverdueEnabled ? "overdue" :
+        string? kind = dueOn < today && setting.OverdueEnabled ? "overdue" :
             dueOn == today && setting.DueEnabled ? "due" : null;
         return kind is null ? null : new BudgetReminder(
             $"{planKind}:{occurrenceId}:{kind}", planKind, seriesId, occurrenceId,

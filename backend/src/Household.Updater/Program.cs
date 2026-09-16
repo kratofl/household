@@ -7,13 +7,13 @@ public partial class Program
 {
     public static void Main(string[] args)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
         builder.WebHost.UseUrls(Environment.GetEnvironmentVariable("HOUSEHOLD_UPDATER_LISTEN_ADDR") is { Length: > 0 } address
             ? NormalizeAddress(address)
             : "http://0.0.0.0:8091");
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<UpdateCoordinator>();
-        var app = builder.Build();
+        WebApplication app = builder.Build();
         app.MapGet("/healthz", () => Results.NoContent());
         app.MapGet("/status", (HttpContext context, UpdateCoordinator coordinator) =>
             Authorized(context) is { } error ? error : Results.Ok(coordinator.Status));
@@ -30,7 +30,7 @@ public partial class Program
 
     private static IResult? Authorized(HttpContext context)
     {
-        var expected = Environment.GetEnvironmentVariable("HOUSEHOLD_UPDATER_TOKEN") ?? "";
+        string expected = Environment.GetEnvironmentVariable("HOUSEHOLD_UPDATER_TOKEN") ?? "";
         if (expected.Length == 0) return Results.Json(new { error = "updater token is not configured" }, statusCode: 503);
         return context.Request.Headers.Authorization == $"Bearer {expected}"
             ? null
@@ -47,18 +47,18 @@ public sealed record UpdateStatus(string State, string? Version = null, string? 
 
 public sealed class UpdateCoordinator(ILogger<UpdateCoordinator> logger, TimeProvider timeProvider)
 {
-    private readonly object gate = new();
-    private UpdateStatus status = new("idle");
-    public UpdateStatus Status { get { lock (gate) return status; } }
+    private readonly object _gate = new();
+    private UpdateStatus _status = new("idle");
+    public UpdateStatus Status { get { lock (this._gate) return this._status; } }
 
     public bool TryStart(UpdateRequest request)
     {
-        lock (gate)
+        lock (this._gate)
         {
-            if (status.State == "running") return false;
-            status = new UpdateStatus("running", request.Version.Trim(), request.Channel, "starting", timeProvider.GetUtcNow().UtcDateTime);
+            if (this._status.State == "running") return false;
+            this._status = new UpdateStatus("running", request.Version.Trim(), request.Channel, "starting", timeProvider.GetUtcNow().UtcDateTime);
         }
-        _ = Task.Run(() => RunAsync(request));
+        _ = Task.Run(() => this.RunAsync(request));
         return true;
     }
 
@@ -66,51 +66,51 @@ public sealed class UpdateCoordinator(ILogger<UpdateCoordinator> logger, TimePro
     {
         try
         {
-            var stack = Get("HOUSEHOLD_UPDATER_STACK_DIR", "/stack");
-            var environment = Get("HOUSEHOLD_UPDATER_ENV_FILE", "/stack/.env");
-            var compose = Get("HOUSEHOLD_UPDATER_COMPOSE_FILE", "/stack/docker-compose.yml");
-            var backups = Get("HOUSEHOLD_UPDATER_BACKUP_DIR", "/stack/backups");
-            SetMessage("updating environment");
+            string stack = Get("HOUSEHOLD_UPDATER_STACK_DIR", "/stack");
+            string environment = Get("HOUSEHOLD_UPDATER_ENV_FILE", "/stack/.env");
+            string compose = Get("HOUSEHOLD_UPDATER_COMPOSE_FILE", "/stack/docker-compose.yml");
+            string backups = Get("HOUSEHOLD_UPDATER_BACKUP_DIR", "/stack/backups");
+            this.SetMessage("updating environment");
             await UpdateVersion(environment, request.Version.Trim());
             Directory.CreateDirectory(backups);
-            SetMessage("creating backup");
-            var backup = Path.Combine(backups, $"household-before-{Clean(request.Version)}-{timeProvider.GetUtcNow():yyyyMMddHHmmss}.dump");
+            this.SetMessage("creating backup");
+            string backup = Path.Combine(backups, $"household-before-{Clean(request.Version)}-{timeProvider.GetUtcNow():yyyyMMddHHmmss}.dump");
             await Run(stack, backup, "docker", "compose", "--env-file", environment, "-f", compose,
                 "exec", "-T", "household-db", "sh", "-c", "pg_dump -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -Fc");
-            SetMessage("pulling images");
+            this.SetMessage("pulling images");
             await Run(stack, null, "docker", "compose", "--env-file", environment, "-f", compose, "pull", "household-api", "household-web");
-            SetMessage("restarting stack");
+            this.SetMessage("restarting stack");
             await Run(stack, null, "docker", "compose", "--env-file", environment, "-f", compose, "up", "-d", "household-api", "household-web");
-            lock (gate) status = status with { State = "succeeded", Message = "update applied", EndedAt = timeProvider.GetUtcNow().UtcDateTime };
+            lock (this._gate) this._status = this._status with { State = "succeeded", Message = "update applied", EndedAt = timeProvider.GetUtcNow().UtcDateTime };
         }
         catch (Exception error)
         {
             logger.LogError(error, "Household update failed");
-            lock (gate) status = status with { State = "failed", Message = error.Message, EndedAt = timeProvider.GetUtcNow().UtcDateTime };
+            lock (this._gate) this._status = this._status with { State = "failed", Message = error.Message, EndedAt = timeProvider.GetUtcNow().UtcDateTime };
         }
     }
 
-    private void SetMessage(string message) { lock (gate) status = status with { Message = message }; }
+    private void SetMessage(string message) { lock (this._gate) this._status = this._status with { Message = message }; }
 
     private static async Task UpdateVersion(string path, string version)
     {
-        var lines = (await File.ReadAllLinesAsync(path)).ToList();
-        var index = lines.FindIndex(x => x.StartsWith("HOUSEHOLD_VERSION=", StringComparison.Ordinal));
+        List<string> lines = (await File.ReadAllLinesAsync(path)).ToList();
+        int index = lines.FindIndex(x => x.StartsWith("HOUSEHOLD_VERSION=", StringComparison.Ordinal));
         if (index >= 0) lines[index] = $"HOUSEHOLD_VERSION={version}"; else lines.Add($"HOUSEHOLD_VERSION={version}");
         await File.WriteAllLinesAsync(path, lines);
     }
 
     private static async Task Run(string workingDirectory, string? outputPath, string executable, params string[] arguments)
     {
-        var info = new ProcessStartInfo(executable) { WorkingDirectory = workingDirectory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var argument in arguments) info.ArgumentList.Add(argument);
-        using var process = Process.Start(info) ?? throw new InvalidOperationException($"Could not start {executable}.");
-        await using var output = outputPath is null ? null : File.Create(outputPath);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        ProcessStartInfo info = new ProcessStartInfo(executable) { WorkingDirectory = workingDirectory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (string argument in arguments) info.ArgumentList.Add(argument);
+        using Process process = Process.Start(info) ?? throw new InvalidOperationException($"Could not start {executable}.");
+        await using FileStream? output = outputPath is null ? null : File.Create(outputPath);
+        using CancellationTokenSource timeout = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         Task outputTask = output is null
             ? process.StandardOutput.ReadToEndAsync(timeout.Token)
             : process.StandardOutput.BaseStream.CopyToAsync(output, timeout.Token);
-        var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+        Task<string> errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
         try
         {
             await Task.WhenAll(outputTask, errorTask, process.WaitForExitAsync(timeout.Token));

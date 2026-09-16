@@ -7,7 +7,7 @@ public sealed class BudgetCsvTests
     [Fact]
     public void Parses_quoted_fields_delimiters_and_line_endings()
     {
-        var rows = BudgetCsv.Parse("a,b,c\r\n\"1,5\",\"say \"\"hi\"\"\",x\nlast,,\n");
+        IReadOnlyList<IReadOnlyList<string>> rows = BudgetCsv.Parse("a,b,c\r\n\"1,5\",\"say \"\"hi\"\"\",x\nlast,,\n");
 
         Assert.Equal(3, rows.Count);
         Assert.Equal(["a", "b", "c"], rows[0]);
@@ -18,7 +18,7 @@ public sealed class BudgetCsvTests
     [Fact]
     public void Detects_semicolon_delimited_files_from_the_header()
     {
-        var rows = BudgetCsv.Parse("Datum;Betrag;Text\n15.07.2026;-45,90;Einkauf\n");
+        IReadOnlyList<IReadOnlyList<string>> rows = BudgetCsv.Parse("Datum;Betrag;Text\n15.07.2026;-45,90;Einkauf\n");
 
         Assert.Equal(["Datum", "Betrag", "Text"], rows[0]);
         Assert.Equal(["15.07.2026", "-45,90", "Einkauf"], rows[1]);

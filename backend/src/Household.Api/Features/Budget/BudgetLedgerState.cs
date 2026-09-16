@@ -6,7 +6,7 @@ public static class BudgetLedgerState
 {
     public static IReadOnlyList<Guid> EffectiveIds(IReadOnlyList<LedgerStateEntry> entries, IReadOnlySet<Guid> voidedIds)
     {
-        var superseded = entries.Where(x => x.CorrectsEntryId.HasValue).Select(x => x.CorrectsEntryId!.Value).ToHashSet();
+        HashSet<Guid> superseded = entries.Where(x => x.CorrectsEntryId.HasValue).Select(x => x.CorrectsEntryId!.Value).ToHashSet();
         return entries.Where(x => !superseded.Contains(x.Id) && !voidedIds.Contains(x.Id)).Select(x => x.Id).ToList();
     }
 

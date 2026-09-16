@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Household.Api.Features.Identity;
 using Household.Api.Platform;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Household.Api.Features.Budget;
 
@@ -22,7 +23,7 @@ public static partial class BudgetSetupEndpoints
         BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         return Results.Ok(await ProjectAsync(user.Id, database, cancellationToken));
     }
@@ -57,18 +58,18 @@ public static partial class BudgetSetupEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (Validate(request) is { } validationError) return validationError;
 
-        var currency = request.BaseCurrency.Trim().ToUpperInvariant();
-        var settings = await database.Settings.SingleOrDefaultAsync(x => x.OwnerUserId == user.Id, cancellationToken);
-        var currencyLocked = await HasFinancialData(user.Id, database, cancellationToken);
+        string currency = request.BaseCurrency.Trim().ToUpperInvariant();
+        BudgetSettings? settings = await database.Settings.SingleOrDefaultAsync(x => x.OwnerUserId == user.Id, cancellationToken);
+        bool currencyLocked = await HasFinancialData(user.Id, database, cancellationToken);
         if (settings is not null && currencyLocked && settings.BaseCurrency != currency)
             return HttpResults.Problem(409, "Base currency locked", "Base currency cannot change after financial data exists");
 
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-        var isFirstSetup = settings?.SetupCompletedAt is null;
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        bool isFirstSetup = settings?.SetupCompletedAt is null;
         settings ??= new BudgetSettings { OwnerUserId = user.Id };
         if (settings.Id == Guid.Empty) database.Settings.Add(settings);
         settings.BaseCurrency = currency;
@@ -82,7 +83,7 @@ public static partial class BudgetSetupEndpoints
         settings.SetupCompletedAt ??= DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
         await database.SaveChangesAsync(cancellationToken);
 
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (includeInitialValues && isFirstSetup)
         {
             database.IncomePlans.AddRange((request.IncomePlans ?? []).Select(plan =>
@@ -109,11 +110,11 @@ public static partial class BudgetSetupEndpoints
         BudgetDbContext database,
         CancellationToken cancellationToken)
     {
-        var settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
-        var incomePlans = await database.IncomePlans.AsNoTracking().Where(
+        BudgetSettings? settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
+        List<InitialIncomePlan> incomePlans = await database.IncomePlans.AsNoTracking().Where(
                 x => x.OwnerUserId == ownerId && x.Active && x.EffectiveTo == null)
             .OrderBy(x => x.Name).Select(x => new InitialIncomePlan(x.Id, x.Name, x.AmountCents)).ToListAsync(cancellationToken);
-        var openingAllocations = await database.OpeningAllocations.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+        List<OpeningAllocation> openingAllocations = await database.OpeningAllocations.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
             .OrderBy(x => x.OccurredOn).ThenBy(x => x.Name)
             .Select(x => new OpeningAllocation(x.Id, x.Kind, x.Name, x.AmountCents, x.OccurredOn)).ToListAsync(cancellationToken);
         return new BudgetSetupState(
@@ -137,7 +138,7 @@ public static partial class BudgetSetupEndpoints
 
     private static BudgetIncomePlan InitialIncomePlanVersion(InitialIncomePlanRequest plan, Guid ownerId, DateOnly today)
     {
-        var seriesId = Guid.NewGuid();
+        Guid seriesId = Guid.NewGuid();
         return new BudgetIncomePlan
         {
             Id = seriesId,

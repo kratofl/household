@@ -1,6 +1,7 @@
 using Household.Api.Features.Identity;
 using Household.Api.Platform;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Household.Api.Features.Budget;
 
@@ -23,11 +24,11 @@ public static class BudgetCommitmentEndpoints
         string? from, string? through, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var start = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly start = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(from) && !TryDate(from, out start)) return InvalidDate("from");
-        var end = start.AddYears(1);
+        DateOnly end = start.AddYears(1);
         if (!string.IsNullOrWhiteSpace(through) && !TryDate(through, out end)) return InvalidDate("through");
         try { return Results.Ok(await new BudgetCommitmentProjector(database).LoadAsync(user.Id, start, end, cancellationToken)); }
         catch (ArgumentOutOfRangeException exception) { return Invalid(exception.Message); }
@@ -37,13 +38,13 @@ public static class BudgetCommitmentEndpoints
         CommitmentRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var parsed = await ParseDefinition(request, user.Id, database, cancellationToken);
+        (CommitmentDefinition? Value, IResult? Error) parsed = await ParseDefinition(request, user.Id, database, cancellationToken);
         if (parsed.Error is not null) return parsed.Error;
-        var value = parsed.Value!;
-        var seriesId = Guid.NewGuid();
-        var plan = NewVersion(seriesId, user.Id, value, value.StartDate, null, "", timeProvider);
+        CommitmentDefinition value = parsed.Value!;
+        Guid seriesId = Guid.NewGuid();
+        BudgetCommitmentPlan plan = NewVersion(seriesId, user.Id, value, value.StartDate, null, "", timeProvider);
         plan.Id = seriesId;
         database.CommitmentPlans.Add(plan);
         if (value.StopDate.HasValue)
@@ -60,19 +61,19 @@ public static class BudgetCommitmentEndpoints
         Guid seriesId, CommitmentEditRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (string.IsNullOrWhiteSpace(request.Reason)) return Invalid("An edit reason is required");
         if (request.Scope == "occurrence") return await EditOccurrence(seriesId, request, user.Id, database, cancellationToken);
         if (request.Scope is not ("future" or "effective_date")) return Invalid("Edit scope must be occurrence, future, or effective_date");
-        if (!TryDate(request.EffectiveOn, out var effectiveOn)) return InvalidDate("effectiveOn");
+        if (!TryDate(request.EffectiveOn, out DateOnly effectiveOn)) return InvalidDate("effectiveOn");
         if (await database.CommitmentStops.AnyAsync(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken))
             return Conflict("A stopped commitment cannot receive future edits");
-        var source = await database.CommitmentPlans.SingleOrDefaultAsync(x =>
+        BudgetCommitmentPlan? source = await database.CommitmentPlans.SingleOrDefaultAsync(x =>
             x.OwnerUserId == user.Id && x.SeriesId == seriesId && x.Active && x.EffectiveFrom <= effectiveOn &&
             (x.EffectiveTo == null || x.EffectiveTo >= effectiveOn), cancellationToken);
         if (source is null) return NotFound();
-        var parsed = await ParseDefinition(new CommitmentRequest(
+        (CommitmentDefinition? Value, IResult? Error) parsed = await ParseDefinition(new CommitmentRequest(
             request.CategoryId ?? source.CategoryId, request.Kind ?? source.Kind, request.Name ?? source.Name,
             request.AmountCents ?? source.AmountCents, request.Cadence ?? source.Cadence,
             request.IntervalUnit ?? source.IntervalUnit, request.IntervalCount ?? source.IntervalCount,
@@ -82,9 +83,9 @@ public static class BudgetCommitmentEndpoints
             request.AutomaticPosting ?? source.AutomaticPosting),
             user.Id, database, cancellationToken);
         if (parsed.Error is not null) return parsed.Error;
-        var previousEnd = source.EffectiveTo;
+        DateOnly? previousEnd = source.EffectiveTo;
         if (effectiveOn == source.EffectiveFrom) source.Active = false; else source.EffectiveTo = effectiveOn.AddDays(-1);
-        var version = NewVersion(seriesId, user.Id, parsed.Value!, effectiveOn, previousEnd, request.Reason.Trim(), timeProvider);
+        BudgetCommitmentPlan version = NewVersion(seriesId, user.Id, parsed.Value!, effectiveOn, previousEnd, request.Reason.Trim(), timeProvider);
         database.CommitmentPlans.Add(version);
         await database.SaveChangesAsync(cancellationToken);
         return Results.Ok(version);
@@ -93,15 +94,15 @@ public static class BudgetCommitmentEndpoints
     private static async Task<IResult> EditOccurrence(
         Guid seriesId, CommitmentEditRequest request, Guid ownerId, BudgetDbContext database, CancellationToken cancellationToken)
     {
-        if (!TryDate(request.ScheduledOn, out var scheduledOn)) return InvalidDate("scheduledOn");
-        var projection = await new BudgetCommitmentProjector(database).LoadAsync(ownerId, scheduledOn, scheduledOn, cancellationToken);
-        var occurrence = projection.Occurrences.SingleOrDefault(x => x.SeriesId == seriesId && x.ScheduledOn == scheduledOn);
+        if (!TryDate(request.ScheduledOn, out DateOnly scheduledOn)) return InvalidDate("scheduledOn");
+        CommitmentProjection projection = await new BudgetCommitmentProjector(database).LoadAsync(ownerId, scheduledOn, scheduledOn, cancellationToken);
+        ExpectedCommitmentOccurrence? occurrence = projection.Occurrences.SingleOrDefault(x => x.SeriesId == seriesId && x.ScheduledOn == scheduledOn);
         if (occurrence is null) return NotFound("Expected commitment occurrence was not found");
-        var occurredOn = scheduledOn;
+        DateOnly occurredOn = scheduledOn;
         if (!string.IsNullOrWhiteSpace(request.OccurredOn) && !TryDate(request.OccurredOn, out occurredOn)) return InvalidDate("occurredOn");
-        var amount = request.AmountCents ?? occurrence.AmountCents;
+        long amount = request.AmountCents ?? occurrence.AmountCents;
         if (amount <= 0) return Invalid("Commitment amount must be positive");
-        var value = new BudgetCommitmentOccurrenceOverride
+        BudgetCommitmentOccurrenceOverride value = new BudgetCommitmentOccurrenceOverride
         {
             OwnerUserId = ownerId, SeriesId = seriesId, ScheduledOn = scheduledOn, OccurredOn = occurredOn,
             Name = string.IsNullOrWhiteSpace(request.Name) ? occurrence.Name : request.Name.Trim(),
@@ -116,12 +117,12 @@ public static class BudgetCommitmentEndpoints
         Guid seriesId, CommitmentPauseRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (!await database.CommitmentPlans.AnyAsync(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken)) return NotFound();
-        if (!TryDate(request.From, out var from) || !TryDate(request.Through, out var through)) return InvalidDate("pause range");
+        if (!TryDate(request.From, out DateOnly from) || !TryDate(request.Through, out DateOnly through)) return InvalidDate("pause range");
         if (through < from) return Invalid("Pause end must not be before its start");
-        var pause = new BudgetCommitmentPause
+        BudgetCommitmentPause pause = new BudgetCommitmentPause
         {
             OwnerUserId = user.Id, SeriesId = seriesId, From = from, Through = through, Reason = request.Reason?.Trim() ?? "",
         };
@@ -133,16 +134,16 @@ public static class BudgetCommitmentEndpoints
         Guid seriesId, CommitmentStopRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var start = await database.CommitmentPlans.Where(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId)
+        DateOnly? start = await database.CommitmentPlans.Where(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId)
             .Select(x => (DateOnly?)x.StartDate).MinAsync(cancellationToken);
         if (!start.HasValue) return NotFound();
-        if (!TryDate(request.EffectiveOn, out var effectiveOn)) return InvalidDate("effectiveOn");
+        if (!TryDate(request.EffectiveOn, out DateOnly effectiveOn)) return InvalidDate("effectiveOn");
         if (effectiveOn < start.Value) return Invalid("Stop date must not be before the plan start date");
         if (await database.CommitmentStops.AnyAsync(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken))
             return Conflict("Commitment is already stopped");
-        var stop = new BudgetCommitmentStop
+        BudgetCommitmentStop stop = new BudgetCommitmentStop
         {
             OwnerUserId = user.Id, SeriesId = seriesId, EffectiveOn = effectiveOn, Reason = request.Reason?.Trim() ?? "",
         };
@@ -154,14 +155,14 @@ public static class BudgetCommitmentEndpoints
         Guid seriesId, string scheduledOn, CommitmentConfirmationRequest request, HttpContext context,
         IIdentityAccess identity, BudgetDbContext database, BudgetService budgetService, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        if (!TryDate(scheduledOn, out var scheduled)) return InvalidDate("scheduledOn");
-        if (!TryDate(request.ActualOn, out var actualOn)) return InvalidDate("actualOn");
+        if (!TryDate(scheduledOn, out DateOnly scheduled)) return InvalidDate("scheduledOn");
+        if (!TryDate(request.ActualOn, out DateOnly actualOn)) return InvalidDate("actualOn");
         if (request.ActualAmountCents <= 0) return Invalid("Actual amount must be positive");
-        var occurrence = await FindOccurrence(user.Id, seriesId, scheduled, database, cancellationToken);
+        ExpectedCommitmentOccurrence? occurrence = await FindOccurrence(user.Id, seriesId, scheduled, database, cancellationToken);
         if (occurrence is null) return NotFound("Expected commitment occurrence was not found");
-        var result = await Post(user.Id, occurrence, actualOn, request.ActualAmountCents, BudgetValues.Manual, null, database, budgetService, cancellationToken);
+        (BudgetCommitmentPosting Posting, bool AlreadyPosted) result = await Post(user.Id, occurrence, actualOn, request.ActualAmountCents, BudgetValues.Manual, null, database, budgetService, cancellationToken);
         return result.AlreadyPosted ? Results.Ok(result.Posting) : Results.Created($"/api/v1/budget/ledger/entries/{result.Posting.LedgerEntryId}", result.Posting);
     }
 
@@ -169,15 +170,15 @@ public static class BudgetCommitmentEndpoints
         Guid seriesId, string scheduledOn, CommitmentMatchRequest request, HttpContext context,
         IIdentityAccess identity, BudgetDbContext database, BudgetService budgetService, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        if (!TryDate(scheduledOn, out var scheduled)) return InvalidDate("scheduledOn");
-        var occurrence = await FindOccurrence(user.Id, seriesId, scheduled, database, cancellationToken);
+        if (!TryDate(scheduledOn, out DateOnly scheduled)) return InvalidDate("scheduledOn");
+        ExpectedCommitmentOccurrence? occurrence = await FindOccurrence(user.Id, seriesId, scheduled, database, cancellationToken);
         if (occurrence is null) return NotFound("Expected commitment occurrence was not found");
-        var ledger = await database.LedgerEntries.Include(x => x.Splits).SingleOrDefaultAsync(x =>
+        BudgetLedgerEntry? ledger = await database.LedgerEntries.Include(x => x.Splits).SingleOrDefaultAsync(x =>
             x.OwnerUserId == user.Id && x.Id == request.LedgerEntryId && x.Kind == BudgetValues.Expense, cancellationToken);
         if (ledger is null) return NotFound("Expense ledger entry was not found");
-        var result = await Post(user.Id, occurrence, ledger.OccurredOn, ledger.AmountCents, BudgetValues.Matched, ledger, database, budgetService, cancellationToken);
+        (BudgetCommitmentPosting Posting, bool AlreadyPosted) result = await Post(user.Id, occurrence, ledger.OccurredOn, ledger.AmountCents, BudgetValues.Matched, ledger, database, budgetService, cancellationToken);
         return result.AlreadyPosted ? Results.Ok(result.Posting) : Results.Created($"/api/v1/budget/ledger/entries/{ledger.Id}", result.Posting);
     }
 
@@ -185,26 +186,26 @@ public static class BudgetCommitmentEndpoints
         string? from, string? through, HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         BudgetService budgetService, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var end = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly end = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(through) && !TryDate(through, out end)) return InvalidDate("through");
-        var start = end.AddYears(-1);
+        DateOnly start = end.AddYears(-1);
         if (!string.IsNullOrWhiteSpace(from) && !TryDate(from, out start)) return InvalidDate("from");
         CommitmentProjection projection;
         try { projection = await new BudgetCommitmentProjector(database).LoadAsync(user.Id, start, end, cancellationToken); }
         catch (ArgumentOutOfRangeException exception) { return Invalid(exception.Message); }
-        var automatic = projection.Plans.SelectMany(x => x.Versions).Where(x => x.AutomaticPosting).Select(x => x.Id).ToHashSet();
-        var posted = 0;
-        var alreadyPosted = 0;
-        foreach (var occurrence in projection.Occurrences.Where(x => automatic.Contains(x.VersionId)))
+        HashSet<Guid> automatic = projection.Plans.SelectMany(x => x.Versions).Where(x => x.AutomaticPosting).Select(x => x.Id).ToHashSet();
+        int posted = 0;
+        int alreadyPosted = 0;
+        foreach (ExpectedCommitmentOccurrence? occurrence in projection.Occurrences.Where(x => automatic.Contains(x.VersionId)))
         {
             if (occurrence.Status != "expected")
             {
                 alreadyPosted++;
                 continue;
             }
-            var result = await Post(user.Id, occurrence, occurrence.OccurredOn, occurrence.AmountCents,
+            (BudgetCommitmentPosting Posting, bool AlreadyPosted) result = await Post(user.Id, occurrence, occurrence.OccurredOn, occurrence.AmountCents,
                 BudgetValues.Automatic, null, database, budgetService, cancellationToken);
             if (result.AlreadyPosted) alreadyPosted++; else posted++;
         }
@@ -216,22 +217,22 @@ public static class BudgetCommitmentEndpoints
         string mode, BudgetLedgerEntry? matchedLedger, BudgetDbContext database, BudgetService budgetService,
         CancellationToken cancellationToken)
     {
-        var existing = await database.CommitmentPostings.AsNoTracking().SingleOrDefaultAsync(x =>
+        BudgetCommitmentPosting? existing = await database.CommitmentPostings.AsNoTracking().SingleOrDefaultAsync(x =>
             x.OwnerUserId == ownerId && x.SeriesId == occurrence.SeriesId && x.ScheduledOn == occurrence.ScheduledOn, cancellationToken);
         if (existing is not null) return (existing, true);
-        var postingId = Guid.NewGuid();
-        var reservationCoverage = occurrence.BudgetingMode == BudgetValues.GradualReservation
+        Guid postingId = Guid.NewGuid();
+        long reservationCoverage = occurrence.BudgetingMode == BudgetValues.GradualReservation
             ? Math.Min(actualAmount, occurrence.ReservationCoverageCents)
             : 0;
-        var directOrdinaryImpact = occurrence.BudgetingMode == BudgetValues.DuePeriod
+        long directOrdinaryImpact = occurrence.BudgetingMode == BudgetValues.DuePeriod
             ? -actualAmount
             : occurrence.ChargeFirstShortfall
                 ? -Math.Max(0, actualAmount - reservationCoverage)
                 : 0;
-        var ledger = matchedLedger;
+        BudgetLedgerEntry? ledger = matchedLedger;
         if (ledger is null)
         {
-            var period = (await budgetService.EnsureDefaultsAsync(ownerId, actualOn, cancellationToken)).Period;
+            BudgetPeriod period = (await budgetService.EnsureDefaultsAsync(ownerId, actualOn, cancellationToken)).Period;
             ledger = new BudgetLedgerEntry
             {
                 Id = Guid.NewGuid(), OwnerUserId = ownerId, PeriodId = period.Id, CategoryId = occurrence.CategoryId,
@@ -244,15 +245,15 @@ public static class BudgetCommitmentEndpoints
         else
         {
             ledger.OrdinaryImpactCents = directOrdinaryImpact;
-            var remainingImpact = Math.Abs(directOrdinaryImpact);
-            foreach (var split in ledger.Splits)
+            long remainingImpact = Math.Abs(directOrdinaryImpact);
+            foreach (BudgetLedgerSplit split in ledger.Splits)
             {
-                var splitImpact = Math.Min(split.AmountCents, remainingImpact);
+                long splitImpact = Math.Min(split.AmountCents, remainingImpact);
                 split.OrdinaryImpactCents = -splitImpact;
                 remainingImpact -= splitImpact;
             }
         }
-        var posting = new BudgetCommitmentPosting
+        BudgetCommitmentPosting posting = new BudgetCommitmentPosting
         {
             Id = postingId, OwnerUserId = ownerId, SeriesId = occurrence.SeriesId, VersionId = occurrence.VersionId,
             ScheduledOn = occurrence.ScheduledOn, ExpectedOn = occurrence.OccurredOn, ActualOn = actualOn,
@@ -260,7 +261,7 @@ public static class BudgetCommitmentEndpoints
             ReservationCoverageCents = reservationCoverage, DirectOrdinaryImpactCents = directOrdinaryImpact,
             PostingMode = mode, LedgerEntryId = ledger.Id,
         };
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             if (matchedLedger is null)
@@ -275,7 +276,7 @@ public static class BudgetCommitmentEndpoints
         catch (DbUpdateException)
         {
             await transaction.RollbackAsync(cancellationToken); database.ChangeTracker.Clear();
-            var winner = await database.CommitmentPostings.AsNoTracking().SingleOrDefaultAsync(x =>
+            BudgetCommitmentPosting? winner = await database.CommitmentPostings.AsNoTracking().SingleOrDefaultAsync(x =>
                 x.OwnerUserId == ownerId && x.SeriesId == occurrence.SeriesId && x.ScheduledOn == occurrence.ScheduledOn, cancellationToken);
             if (winner is not null) return (winner, true); throw;
         }
@@ -285,9 +286,9 @@ public static class BudgetCommitmentEndpoints
         Guid ownerId, Guid? categoryId, BudgetLedgerEntry ledger, BudgetDbContext database, CancellationToken cancellationToken)
     {
         if (!categoryId.HasValue) return;
-        var version = await database.CategoryVersions.AsNoTracking().Where(x => x.OwnerUserId == ownerId && x.CategoryId == categoryId)
+        BudgetCategoryVersion? version = await database.CategoryVersions.AsNoTracking().Where(x => x.OwnerUserId == ownerId && x.CategoryId == categoryId)
             .OrderByDescending(x => x.EffectiveFrom).FirstOrDefaultAsync(cancellationToken);
-        var category = await database.Categories.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId && x.Id == categoryId, cancellationToken);
+        BudgetCategory? category = await database.Categories.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId && x.Id == categoryId, cancellationToken);
         if (category is null) return;
         database.LedgerSplits.Add(new BudgetLedgerSplit
         {
@@ -307,20 +308,20 @@ public static class BudgetCommitmentEndpoints
     private static async Task<(CommitmentDefinition? Value, IResult? Error)> ParseDefinition(
         CommitmentRequest request, Guid ownerId, BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var name = request.Name?.Trim() ?? "";
+        string name = request.Name?.Trim() ?? "";
         if (name.Length == 0 || request.AmountCents <= 0) return (null, Invalid("Commitments require a name and positive amount"));
         if (request.Kind is not (BudgetValues.FixedCost or BudgetValues.Subscription)) return (null, Invalid("Commitment kind is invalid"));
-        if (!TryDate(request.StartDate, out var start)) return (null, InvalidDate("startDate"));
+        if (!TryDate(request.StartDate, out DateOnly start)) return (null, InvalidDate("startDate"));
         DateOnly? stop = null;
         if (!string.IsNullOrWhiteSpace(request.StopDate))
         {
-            if (!TryDate(request.StopDate, out var parsedStop)) return (null, InvalidDate("stopDate"));
+            if (!TryDate(request.StopDate, out DateOnly parsedStop)) return (null, InvalidDate("stopDate"));
             if (parsedStop < start) return (null, Invalid("Stop date must not be before start date"));
             stop = parsedStop;
         }
-        var cadence = request.Cadence?.Trim().ToLowerInvariant() ?? "";
+        string cadence = request.Cadence?.Trim().ToLowerInvariant() ?? "";
         if (cadence == BudgetValues.Daily) return (null, Invalid("Daily recurrence is not supported for commitments"));
-        var unit = cadence switch
+        string unit = cadence switch
         {
             BudgetValues.Weekly => BudgetValues.Week, BudgetValues.Monthly => BudgetValues.Month,
             BudgetValues.Quarterly => BudgetValues.Quarter, BudgetValues.Yearly => BudgetValues.Year,
@@ -328,9 +329,9 @@ public static class BudgetCommitmentEndpoints
         };
         if (unit is not (BudgetValues.Week or BudgetValues.Month or BudgetValues.Quarter or BudgetValues.Year))
             return (null, Invalid("Commitment recurrence is invalid"));
-        var interval = cadence == BudgetValues.Custom ? request.IntervalCount : 1;
+        int interval = cadence == BudgetValues.Custom ? request.IntervalCount : 1;
         if (interval <= 0) return (null, Invalid("Custom interval must be positive"));
-        var weekdays = (request.Weekdays ?? []).Distinct().Order().ToArray();
+        int[] weekdays = (request.Weekdays ?? []).Distinct().Order().ToArray();
         if (weekdays.Any(x => x is < 0 or > 6) || unit != BudgetValues.Week && weekdays.Length > 0)
             return (null, Invalid("Commitment weekdays are invalid"));
         if (cadence != BudgetValues.Custom) weekdays = [];

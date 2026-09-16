@@ -2,6 +2,7 @@ using System.Text.Json;
 using Household.Api.Features.Identity;
 using Household.Api.Platform;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Household.Api.Features.Budget;
 
@@ -26,16 +27,16 @@ public static class BudgetImportEndpoints
         ImportSessionRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var content = request.Content ?? "";
+        string content = request.Content ?? "";
         if (content.Length == 0) return Invalid("CSV content is required");
         if (content.Length > MaxContentLength) return Invalid("CSV content exceeds the supported size");
-        var parsed = BudgetCsv.Parse(content);
+        IReadOnlyList<IReadOnlyList<string>> parsed = BudgetCsv.Parse(content);
         if (parsed.Count < 2) return Invalid("CSV needs a header row and at least one data row");
         if (parsed.Count - 1 > MaxRows) return Invalid($"CSV exceeds the supported {MaxRows} data rows");
-        var header = parsed[0].Select(x => x.Trim()).ToList();
-        var session = new BudgetImportSession
+        List<string> header = parsed[0].Select(x => x.Trim()).ToList();
+        BudgetImportSession session = new BudgetImportSession
         {
             OwnerUserId = user.Id,
             FileName = (request.FileName ?? "").Trim(),
@@ -45,7 +46,7 @@ public static class BudgetImportEndpoints
         };
         database.ImportSessions.Add(session);
         await database.SaveChangesAsync(cancellationToken);
-        for (var index = 1; index < parsed.Count; index++)
+        for (int index = 1; index < parsed.Count; index++)
             database.ImportRows.Add(new BudgetImportRow
             {
                 OwnerUserId = user.Id,
@@ -54,8 +55,8 @@ public static class BudgetImportEndpoints
                 RawJson = JsonSerializer.Serialize(parsed[index]),
             });
         await database.SaveChangesAsync(cancellationToken);
-        var rows = parsed.Skip(1).ToList();
-        var suggested = SuggestMapping(header, rows);
+        List<IReadOnlyList<string>> rows = parsed.Skip(1).ToList();
+        ImportMappingRequest suggested = SuggestMapping(header, rows);
         return Results.Created($"/api/v1/budget/import/sessions/{session.Id}", new
         {
             session = Summary(session),
@@ -69,12 +70,12 @@ public static class BudgetImportEndpoints
         Guid sessionId, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var session = await database.ImportSessions.AsNoTracking()
+        BudgetImportSession? session = await database.ImportSessions.AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == sessionId && x.OwnerUserId == user.Id, cancellationToken);
         if (session is null) return NotFound();
-        var rows = await LoadRows(database, user.Id, sessionId, cancellationToken);
+        List<BudgetImportRow> rows = await LoadRows(database, user.Id, sessionId, cancellationToken);
         return Results.Ok(new
         {
             session = Summary(session),
@@ -90,18 +91,18 @@ public static class BudgetImportEndpoints
         Guid sessionId, ImportMappingRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var session = await database.ImportSessions
+        BudgetImportSession? session = await database.ImportSessions
             .SingleOrDefaultAsync(x => x.Id == sessionId && x.OwnerUserId == user.Id, cancellationToken);
         if (session is null) return NotFound();
         if (session.Status != "staged") return Conflict("The import session was already committed");
-        var header = JsonSerializer.Deserialize<List<string>>(session.HeaderJson) ?? [];
+        List<string> header = JsonSerializer.Deserialize<List<string>>(session.HeaderJson) ?? [];
         if (request.DateColumn < 0 || request.DateColumn >= header.Count)
             return Invalid("A valid date column is required");
         if (request.AmountColumn < 0 || request.AmountColumn >= header.Count)
             return Invalid("A valid amount column is required");
-        var optionalColumns = new[]
+        int?[] optionalColumns = new[]
         {
             request.DescriptionColumn, request.KindColumn, request.CategoryColumn, request.MerchantColumn,
         };
@@ -112,25 +113,25 @@ public static class BudgetImportEndpoints
         string[] supportedFormats = ["yyyy-MM-dd", "dd.MM.yyyy", "MM/dd/yyyy", "dd/MM/yyyy"];
         if (!supportedFormats.Contains(request.DateFormat ?? "yyyy-MM-dd"))
             return Invalid("Date format is not supported");
-        var defaultKind = string.IsNullOrWhiteSpace(request.DefaultKind) ? BudgetValues.Expense : request.DefaultKind;
+        string defaultKind = string.IsNullOrWhiteSpace(request.DefaultKind) ? BudgetValues.Expense : request.DefaultKind;
         if (defaultKind is not (BudgetValues.Expense or BudgetValues.Income))
             return Invalid("Default kind must be income or expense");
 
-        var rows = await LoadRows(database, user.Id, sessionId, cancellationToken, track: true);
-        var normalized = new List<BudgetImportRow>();
-        foreach (var row in rows)
+        List<BudgetImportRow> rows = await LoadRows(database, user.Id, sessionId, cancellationToken, track: true);
+        List<BudgetImportRow> normalized = new List<BudgetImportRow>();
+        foreach (BudgetImportRow row in rows)
         {
-            var values = JsonSerializer.Deserialize<List<string>>(row.RawJson) ?? [];
+            List<string> values = JsonSerializer.Deserialize<List<string>>(row.RawJson) ?? [];
             string Value(int? column) => column.HasValue && column.Value < values.Count ? values[column.Value].Trim() : "";
             row.ValidationError = "";
             row.DuplicateWarning = false;
             row.OccurredOn = BudgetCsv.ParseDate(Value(request.DateColumn), request.DateFormat ?? "yyyy-MM-dd");
-            var amountCents = BudgetCsv.ParseAmountCents(Value(request.AmountColumn), request.DecimalSeparator);
+            long? amountCents = BudgetCsv.ParseAmountCents(Value(request.AmountColumn), request.DecimalSeparator);
             row.Merchant = Value(request.MerchantColumn);
             row.CategoryName = Value(request.CategoryColumn);
             row.Description = Value(request.DescriptionColumn);
             if (row.Description.Length == 0) row.Description = row.Merchant;
-            var kindValue = Value(request.KindColumn).ToLowerInvariant();
+            string kindValue = Value(request.KindColumn).ToLowerInvariant();
             row.Kind = request.KindColumn.HasValue && kindValue.Length > 0
                 ? kindValue switch
                 {
@@ -147,26 +148,26 @@ public static class BudgetImportEndpoints
             normalized.Add(row);
         }
 
-        var from = normalized.Where(x => x.OccurredOn.HasValue).Select(x => x.OccurredOn!.Value).DefaultIfEmpty().Min();
-        var through = normalized.Where(x => x.OccurredOn.HasValue).Select(x => x.OccurredOn!.Value).DefaultIfEmpty().Max();
+        DateOnly from = normalized.Where(x => x.OccurredOn.HasValue).Select(x => x.OccurredOn!.Value).DefaultIfEmpty().Min();
+        DateOnly through = normalized.Where(x => x.OccurredOn.HasValue).Select(x => x.OccurredOn!.Value).DefaultIfEmpty().Max();
         var existing = await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.OccurredOn >= from && x.OccurredOn <= through)
             .Select(x => new { x.Id, x.Kind, x.OccurredOn, x.AmountCents, x.Description, x.MerchantNormalized })
             .ToListAsync(cancellationToken);
-        var voided = (await database.LedgerActions.AsNoTracking()
+        HashSet<Guid> voided = (await database.LedgerActions.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.Kind == BudgetValues.Void)
             .Select(x => x.LedgerEntryId).ToListAsync(cancellationToken)).ToHashSet();
-        var superseded = (await database.LedgerEntries.AsNoTracking()
+        HashSet<Guid> superseded = (await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.CorrectsEntryId.HasValue)
             .Select(x => x.CorrectsEntryId!.Value).ToListAsync(cancellationToken)).ToHashSet();
-        var existingKeys = existing
+        HashSet<string> existingKeys = existing
             .Where(x => !voided.Contains(x.Id) && !superseded.Contains(x.Id))
             .Select(x => DuplicateKey(x.Kind, x.OccurredOn, x.AmountCents, x.Description, x.MerchantNormalized))
             .ToHashSet();
-        var seenKeys = new HashSet<string>();
-        foreach (var row in normalized.Where(x => x.ValidationError.Length == 0))
+        HashSet<string> seenKeys = new HashSet<string>();
+        foreach (BudgetImportRow? row in normalized.Where(x => x.ValidationError.Length == 0))
         {
-            var key = DuplicateKey(
+            string key = DuplicateKey(
                 row.Kind, row.OccurredOn!.Value, row.AmountCents, row.Description,
                 MerchantPresentation.From(row.Merchant).Normalized);
             row.DuplicateWarning = existingKeys.Contains(key) || !seenKeys.Add(key);
@@ -189,22 +190,22 @@ public static class BudgetImportEndpoints
         BudgetDbContext database, BudgetService budgetService, TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var session = await database.ImportSessions.AsNoTracking()
+        BudgetImportSession? session = await database.ImportSessions.AsNoTracking()
             .SingleOrDefaultAsync(x => x.Id == sessionId && x.OwnerUserId == user.Id, cancellationToken);
         if (session is null) return NotFound();
         if (session.Status == "committed")
             return Results.Ok(await CommitResult(database, user.Id, session.Id, cancellationToken));
         if (session.MappingJson.Length == 0) return Invalid("Apply a column mapping before committing");
-        var includeDuplicates = request?.IncludeDuplicates == true;
+        bool includeDuplicates = request?.IncludeDuplicates == true;
 
-        var rows = await LoadRows(database, user.Id, sessionId, cancellationToken, track: true);
-        var importable = rows.Where(x =>
+        List<BudgetImportRow> rows = await LoadRows(database, user.Id, sessionId, cancellationToken, track: true);
+        List<BudgetImportRow> importable = rows.Where(x =>
             x.ValidationError.Length == 0 && (includeDuplicates || !x.DuplicateWarning)).ToList();
 
-        await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
-        var claimed = await database.Database.ExecuteSqlInterpolatedAsync($"""
+        await using IDbContextTransaction transaction = await database.Database.BeginTransactionAsync(cancellationToken);
+        int claimed = await database.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE budget.import_sessions SET status = 'committed',
                 committed_at = CURRENT_TIMESTAMP, committed_entries = {importable.Count}
             WHERE id = {sessionId} AND owner_user_id = {user.Id} AND status = 'staged';
@@ -215,23 +216,23 @@ public static class BudgetImportEndpoints
             return Results.Ok(await CommitResult(database, user.Id, session.Id, cancellationToken));
         }
 
-        var periods = new List<BudgetPeriod>();
+        List<BudgetPeriod> periods = new List<BudgetPeriod>();
         if (importable.Count > 0)
         {
-            var (firstPeriod, _, _) = await budgetService.EnsureDefaultsAsync(
+            (BudgetPeriod? firstPeriod, List<BudgetCategory> _, List<BudgetAccount> _) = await budgetService.EnsureDefaultsAsync(
                 user.Id, importable[0].OccurredOn!.Value, cancellationToken);
             periods.Add(firstPeriod);
         }
-        var categories = (await database.Categories
+        Dictionary<string, BudgetCategory> categories = (await database.Categories
                 .Where(x => x.OwnerUserId == user.Id && x.ArchivedAt == null).ToListAsync(cancellationToken))
             .GroupBy(x => x.Name.ToLowerInvariant()).ToDictionary(x => x.Key, x => x.First());
-        var versions = await database.CategoryVersions.Where(x => x.OwnerUserId == user.Id)
+        List<BudgetCategoryVersion> versions = await database.CategoryVersions.Where(x => x.OwnerUserId == user.Id)
             .OrderByDescending(x => x.EffectiveFrom).ToListAsync(cancellationToken);
-        var latestVersions = versions.GroupBy(x => x.CategoryId).ToDictionary(x => x.Key, x => x.First());
-        foreach (var row in importable)
+        Dictionary<Guid, BudgetCategoryVersion> latestVersions = versions.GroupBy(x => x.CategoryId).ToDictionary(x => x.Key, x => x.First());
+        foreach (BudgetImportRow? row in importable)
         {
-            var occurredOn = row.OccurredOn!.Value;
-            var period = periods.FirstOrDefault(x => x.StartDate <= occurredOn && x.EndDate >= occurredOn);
+            DateOnly occurredOn = row.OccurredOn!.Value;
+            BudgetPeriod? period = periods.FirstOrDefault(x => x.StartDate <= occurredOn && x.EndDate >= occurredOn);
             if (period is null)
             {
                 (period, _, _) = await budgetService.EnsureDefaultsAsync(user.Id, occurredOn, cancellationToken);
@@ -249,7 +250,7 @@ public static class BudgetImportEndpoints
                     };
                     database.Categories.Add(category);
                     await database.SaveChangesAsync(cancellationToken);
-                    var version = new BudgetCategoryVersion
+                    BudgetCategoryVersion version = new BudgetCategoryVersion
                     {
                         OwnerUserId = user.Id, CategoryId = category.Id, Name = category.Name,
                         Color = category.Color, Icon = category.Icon, Behavior = category.Behavior,
@@ -261,8 +262,8 @@ public static class BudgetImportEndpoints
                     latestVersions[category.Id] = version;
                 }
             }
-            var merchant = MerchantPresentation.From(row.Merchant);
-            var entry = new BudgetLedgerEntry
+            MerchantInfo merchant = MerchantPresentation.From(row.Merchant);
+            BudgetLedgerEntry entry = new BudgetLedgerEntry
             {
                 OwnerUserId = user.Id,
                 PeriodId = period.Id,
@@ -282,7 +283,7 @@ public static class BudgetImportEndpoints
             await database.SaveChangesAsync(cancellationToken);
             if (row.Kind == BudgetValues.Expense)
             {
-                var version = category is null ? null : latestVersions.GetValueOrDefault(category.Id);
+                BudgetCategoryVersion? version = category is null ? null : latestVersions.GetValueOrDefault(category.Id);
                 database.LedgerSplits.Add(new BudgetLedgerSplit
                 {
                     OwnerUserId = user.Id,
@@ -307,9 +308,9 @@ public static class BudgetImportEndpoints
     private static async Task<object> CommitResult(
         BudgetDbContext database, Guid ownerId, Guid sessionId, CancellationToken cancellationToken)
     {
-        var session = await database.ImportSessions.AsNoTracking()
+        BudgetImportSession session = await database.ImportSessions.AsNoTracking()
             .SingleAsync(x => x.Id == sessionId && x.OwnerUserId == ownerId, cancellationToken);
-        var rows = await LoadRows(database, ownerId, sessionId, cancellationToken);
+        List<BudgetImportRow> rows = await LoadRows(database, ownerId, sessionId, cancellationToken);
         return new
         {
             session = Summary(session),
@@ -325,12 +326,12 @@ public static class BudgetImportEndpoints
     {
         int? Find(params string[] names)
         {
-            for (var index = 0; index < header.Count; index++)
+            for (int index = 0; index < header.Count; index++)
                 if (names.Contains(header[index].ToLowerInvariant())) return index;
             return null;
         }
-        var dateColumn = Find("occurredon", "date", "datum", "buchungstag") ?? 0;
-        var amountColumn = Find("amount", "betrag", "umsatz") ?? (header.Count > 1 ? 1 : 0);
+        int dateColumn = Find("occurredon", "date", "datum", "buchungstag") ?? 0;
+        int amountColumn = Find("amount", "betrag", "umsatz") ?? (header.Count > 1 ? 1 : 0);
         string[] DateSamples() => rows.Take(50)
             .Select(row => dateColumn < row.Count ? row[dateColumn] : "").ToArray();
         string[] AmountSamples() => rows.Take(50)
@@ -351,7 +352,7 @@ public static class BudgetImportEndpoints
         BudgetDbContext database, Guid ownerId, Guid sessionId, CancellationToken cancellationToken,
         bool track = false)
     {
-        var query = track ? database.ImportRows : database.ImportRows.AsNoTracking();
+        IQueryable<BudgetImportRow> query = track ? database.ImportRows : database.ImportRows.AsNoTracking();
         return query.Where(x => x.OwnerUserId == ownerId && x.SessionId == sessionId)
             .OrderBy(x => x.RowNumber).ToListAsync(cancellationToken);
     }

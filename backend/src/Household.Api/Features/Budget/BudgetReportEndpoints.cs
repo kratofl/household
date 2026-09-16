@@ -24,19 +24,19 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
-        var categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
+        IResult? categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
         if (categoryError is not null) return categoryError;
-        var merchantNormalized = NormalizedMerchant(merchant);
-        var entries = await EffectiveEntriesAsync(database, user.Id, rangeFrom, rangeThrough, cancellationToken);
-        var contributions = SpendContributions(entries.Where(x => merchantNormalized is null || x.MerchantNormalized == merchantNormalized))
+        string? merchantNormalized = NormalizedMerchant(merchant);
+        List<BudgetLedgerEntry> entries = await EffectiveEntriesAsync(database, user.Id, rangeFrom, rangeThrough, cancellationToken);
+        List<(BudgetLedgerEntry Entry, Guid? CategoryId, string Name, string Color, string Icon, long SignedCents)> contributions = SpendContributions(entries.Where(x => merchantNormalized is null || x.MerchantNormalized == merchantNormalized))
             .Where(x => !categoryId.HasValue || x.CategoryId == categoryId).ToList();
         var groups = contributions.GroupBy(x => x.CategoryId).Select(group =>
         {
-            var snapshot = group.Where(x => x.Name != "")
+            (string Name, string Color, string Icon) snapshot = group.Where(x => x.Name != "")
                 .OrderByDescending(x => x.Entry.OccurredOn).ThenByDescending(x => x.Entry.CreatedAt)
                 .Select(x => (x.Name, x.Color, x.Icon)).FirstOrDefault();
             return new
@@ -51,8 +51,8 @@ public static class BudgetReportEndpoints
                 EntryCount = group.Select(x => x.Entry.Id).Distinct().Count(),
             };
         }).OrderByDescending(x => x.Net).ThenBy(x => x.Name).ToList();
-        var shares = BudgetReportMath.ShareBasisPoints(groups.Select(x => x.Net).ToList());
-        var rows = groups.Select((row, index) => new BudgetCategorySpendRow(
+        IReadOnlyList<long> shares = BudgetReportMath.ShareBasisPoints(groups.Select(x => x.Net).ToList());
+        List<BudgetCategorySpendRow> rows = groups.Select((row, index) => new BudgetCategorySpendRow(
             row.CategoryId, row.Name, row.Color, row.Icon,
             row.Gross, row.Refund, row.Net, shares[index], row.EntryCount)).ToList();
         return Results.Ok(new BudgetCategorySpendReport(
@@ -65,15 +65,15 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
-        var categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
+        IResult? categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
         if (categoryError is not null) return categoryError;
-        var merchantNormalized = NormalizedMerchant(merchant);
-        var entries = await EffectiveEntriesAsync(database, user.Id, rangeFrom, rangeThrough, cancellationToken);
-        var filtered = entries.Where(x =>
+        string? merchantNormalized = NormalizedMerchant(merchant);
+        List<BudgetLedgerEntry> entries = await EffectiveEntriesAsync(database, user.Id, rangeFrom, rangeThrough, cancellationToken);
+        List<BudgetLedgerEntry> filtered = entries.Where(x =>
             x.Kind is BudgetValues.Expense or BudgetValues.Refund &&
             (merchantNormalized is null || x.MerchantNormalized == merchantNormalized) &&
             (!categoryId.HasValue || x.CategoryId == categoryId || x.Splits.Any(split => split.CategoryId == categoryId))).ToList();
@@ -86,8 +86,8 @@ public static class BudgetReportEndpoints
             EntryCount = group.Count(),
         }).Select(x => new { x.Merchant, x.BrandKey, x.Gross, x.Refund, Net = checked(x.Gross - x.Refund), x.EntryCount })
             .OrderByDescending(x => x.Net).ThenBy(x => x.Merchant).ToList();
-        var shares = BudgetReportMath.ShareBasisPoints(groups.Select(x => x.Net).ToList());
-        var rows = groups.Select((row, index) => new BudgetMerchantSpendRow(
+        IReadOnlyList<long> shares = BudgetReportMath.ShareBasisPoints(groups.Select(x => x.Net).ToList());
+        List<BudgetMerchantSpendRow> rows = groups.Select((row, index) => new BudgetMerchantSpendRow(
             row.Merchant, row.BrandKey, row.Gross, row.Refund, row.Net, shares[index], row.EntryCount)).ToList();
         return Results.Ok(new BudgetMerchantSpendReport(
             rangeFrom, rangeThrough, categoryId, merchantNormalized,
@@ -99,45 +99,45 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
-        var categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
+        IResult? categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
         if (categoryError is not null) return categoryError;
-        var merchantNormalized = NormalizedMerchant(merchant);
-        var periods = await database.Periods.AsNoTracking()
+        string? merchantNormalized = NormalizedMerchant(merchant);
+        List<BudgetPeriod> periods = await database.Periods.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.EndDate >= rangeFrom && x.StartDate <= rangeThrough)
             .OrderBy(x => x.StartDate).ToListAsync(cancellationToken);
         if (periods.Count == 0)
             return Results.Ok(new BudgetPeriodComparisonReport(rangeFrom, rangeThrough, categoryId, merchantNormalized, []));
-        var periodIds = periods.Select(x => x.Id).ToHashSet();
-        var entries = await EffectiveEntriesAsync(
+        HashSet<Guid> periodIds = periods.Select(x => x.Id).ToHashSet();
+        List<BudgetLedgerEntry> entries = await EffectiveEntriesAsync(
             database, user.Id, periods.Min(x => x.StartDate), periods.Max(x => x.EndDate), cancellationToken);
-        var closes = await database.PeriodCloses.AsNoTracking()
+        Dictionary<Guid, BudgetPeriodClose> closes = await database.PeriodCloses.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && periodIds.Contains(x.PeriodId))
             .ToDictionaryAsync(x => x.PeriodId, cancellationToken);
-        var savings = await database.SavingsContributions.AsNoTracking()
+        Dictionary<Guid, long> savings = await database.SavingsContributions.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.Kind == BudgetValues.Contribution && periodIds.Contains(x.PeriodId))
             .GroupBy(x => x.PeriodId).Select(x => new { PeriodId = x.Key, Amount = x.Sum(item => item.AmountCents) })
             .ToDictionaryAsync(x => x.PeriodId, x => x.Amount, cancellationToken);
-        var investments = await database.InvestmentEvents.AsNoTracking()
+        Dictionary<Guid, long> investments = await database.InvestmentEvents.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.Kind == BudgetValues.Contribution && periodIds.Contains(x.PeriodId))
             .GroupBy(x => x.PeriodId).Select(x => new { PeriodId = x.Key, Amount = x.Sum(item => item.AmountCents) })
             .ToDictionaryAsync(x => x.PeriodId, x => x.Amount, cancellationToken);
-        var rows = new List<BudgetPeriodComparisonRow>();
+        List<BudgetPeriodComparisonRow> rows = new List<BudgetPeriodComparisonRow>();
         long? previousNet = null;
-        foreach (var period in periods)
+        foreach (BudgetPeriod? period in periods)
         {
-            var periodEntries = entries.Where(x => x.PeriodId == period.Id).ToList();
-            var incomeCents = periodEntries.Where(x => x.Kind == BudgetValues.Income).Sum(x => x.AmountCents);
-            var contributions = SpendContributions(periodEntries.Where(x =>
+            List<BudgetLedgerEntry> periodEntries = entries.Where(x => x.PeriodId == period.Id).ToList();
+            long incomeCents = periodEntries.Where(x => x.Kind == BudgetValues.Income).Sum(x => x.AmountCents);
+            List<(BudgetLedgerEntry Entry, Guid? CategoryId, string Name, string Color, string Icon, long SignedCents)> contributions = SpendContributions(periodEntries.Where(x =>
                     merchantNormalized is null || x.MerchantNormalized == merchantNormalized))
                 .Where(x => !categoryId.HasValue || x.CategoryId == categoryId).ToList();
-            var gross = contributions.Where(x => x.SignedCents > 0).Sum(x => x.SignedCents);
-            var refund = -contributions.Where(x => x.SignedCents < 0).Sum(x => x.SignedCents);
-            var net = contributions.Sum(x => x.SignedCents);
-            var close = closes.GetValueOrDefault(period.Id);
+            long gross = contributions.Where(x => x.SignedCents > 0).Sum(x => x.SignedCents);
+            long refund = -contributions.Where(x => x.SignedCents < 0).Sum(x => x.SignedCents);
+            long net = contributions.Sum(x => x.SignedCents);
+            BudgetPeriodClose? close = closes.GetValueOrDefault(period.Id);
             rows.Add(new BudgetPeriodComparisonRow(
                 period.Id, period.Name, period.StartDate, period.EndDate, close is not null,
                 incomeCents, gross, refund, net,
@@ -154,11 +154,11 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
-        var categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
+        IResult? categoryError = await CategoryFilterErrorAsync(categoryId, user.Id, database, cancellationToken);
         if (categoryError is not null) return categoryError;
         IncomePlanProjection incomeProjection;
         CommitmentProjection commitmentProjection;
@@ -174,45 +174,45 @@ public static class BudgetReportEndpoints
         var ledger = await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id)
             .Select(x => new { x.Id, x.CorrectsEntryId, x.AmountCents, x.CreatedAt }).ToListAsync(cancellationToken);
-        var voided = (await database.LedgerActions.AsNoTracking()
+        HashSet<Guid> voided = (await database.LedgerActions.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.Kind == BudgetValues.Void)
             .Select(x => x.LedgerEntryId).ToListAsync(cancellationToken)).ToHashSet();
-        var byId = ledger.ToDictionary(x => x.Id, x => x.AmountCents);
-        var correctedBy = ledger.Where(x => x.CorrectsEntryId.HasValue)
+        Dictionary<Guid, long> byId = ledger.ToDictionary(x => x.Id, x => x.AmountCents);
+        Dictionary<Guid, Guid> correctedBy = ledger.Where(x => x.CorrectsEntryId.HasValue)
             .GroupBy(x => x.CorrectsEntryId!.Value)
             .ToDictionary(x => x.Key, x => x.OrderByDescending(item => item.CreatedAt).First().Id);
         long EffectiveActual(Guid ledgerEntryId)
         {
-            var id = ledgerEntryId;
-            var guard = 0;
-            while (correctedBy.TryGetValue(id, out var next) && guard++ < 1_000) id = next;
+            Guid id = ledgerEntryId;
+            int guard = 0;
+            while (correctedBy.TryGetValue(id, out Guid next) && guard++ < 1_000) id = next;
             return voided.Contains(id) ? 0 : byId.GetValueOrDefault(id);
         }
         List<BudgetPlannedVsActualRow> incomeRows = categoryId.HasValue
             ? []
             : incomeProjection.Plans.Select(plan =>
             {
-                var occurrences = incomeProjection.Occurrences.Where(x => x.SeriesId == plan.SeriesId).ToList();
-                var planned = occurrences.Sum(x => x.AmountCents);
-                var actual = occurrences.Where(x => x.Posting is not null).Sum(x => EffectiveActual(x.Posting!.LedgerEntryId));
+                List<ExpectedIncomeOccurrence> occurrences = incomeProjection.Occurrences.Where(x => x.SeriesId == plan.SeriesId).ToList();
+                long planned = occurrences.Sum(x => x.AmountCents);
+                long actual = occurrences.Where(x => x.Posting is not null).Sum(x => EffectiveActual(x.Posting!.LedgerEntryId));
                 return new BudgetPlannedVsActualRow(
                     plan.SeriesId, plan.Name, BudgetValues.Income, null, planned, actual,
                     checked(actual - planned), BudgetReportMath.ChangeBasisPoints(planned, actual),
                     occurrences.Count, occurrences.Count(x => x.Posting is not null));
             }).Where(x => x.OccurrenceCount > 0).OrderBy(x => x.Name).ToList();
-        var commitmentRows = commitmentProjection.Plans.Select(plan =>
+        List<BudgetPlannedVsActualRow> commitmentRows = commitmentProjection.Plans.Select(plan =>
         {
-            var occurrences = commitmentProjection.Occurrences.Where(x =>
+            List<ExpectedCommitmentOccurrence> occurrences = commitmentProjection.Occurrences.Where(x =>
                 x.SeriesId == plan.SeriesId && (!categoryId.HasValue || x.CategoryId == categoryId)).ToList();
-            var planned = occurrences.Sum(x => x.AmountCents);
-            var actual = occurrences.Where(x => x.Posting is not null).Sum(x => EffectiveActual(x.Posting!.LedgerEntryId));
+            long planned = occurrences.Sum(x => x.AmountCents);
+            long actual = occurrences.Where(x => x.Posting is not null).Sum(x => EffectiveActual(x.Posting!.LedgerEntryId));
             return new BudgetPlannedVsActualRow(
                 plan.SeriesId, plan.Name, plan.Kind, plan.CategoryId, planned, actual,
                 checked(actual - planned), BudgetReportMath.ChangeBasisPoints(planned, actual),
                 occurrences.Count, occurrences.Count(x => x.Posting is not null));
         }).Where(x => x.OccurrenceCount > 0).OrderBy(x => x.Name).ToList();
-        var plannedTotal = incomeRows.Sum(x => x.PlannedCents) + commitmentRows.Sum(x => x.PlannedCents);
-        var actualTotal = incomeRows.Sum(x => x.ActualCents) + commitmentRows.Sum(x => x.ActualCents);
+        long plannedTotal = incomeRows.Sum(x => x.PlannedCents) + commitmentRows.Sum(x => x.PlannedCents);
+        long actualTotal = incomeRows.Sum(x => x.ActualCents) + commitmentRows.Sum(x => x.ActualCents);
         return Results.Ok(new BudgetPlannedVsActualReport(
             rangeFrom, rangeThrough, categoryId, plannedTotal, actualTotal,
             checked(actualTotal - plannedTotal), BudgetReportMath.ChangeBasisPoints(plannedTotal, actualTotal),
@@ -224,9 +224,9 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
         IncomePlanProjection projection;
         try
@@ -237,28 +237,28 @@ public static class BudgetReportEndpoints
         {
             return Invalid(exception.Message);
         }
-        var entries = await EffectiveEntriesAsync(database, user.Id, rangeFrom, rangeThrough, cancellationToken);
-        var incomeEntries = entries.Where(x => x.Kind == BudgetValues.Income).ToList();
-        var postingIds = incomeEntries.Where(x => x.SourceRecordId.HasValue).Select(x => x.SourceRecordId!.Value).ToHashSet();
-        var routing = await database.IncomeVarianceAllocations.AsNoTracking()
+        List<BudgetLedgerEntry> entries = await EffectiveEntriesAsync(database, user.Id, rangeFrom, rangeThrough, cancellationToken);
+        List<BudgetLedgerEntry> incomeEntries = entries.Where(x => x.Kind == BudgetValues.Income).ToList();
+        HashSet<Guid> postingIds = incomeEntries.Where(x => x.SourceRecordId.HasValue).Select(x => x.SourceRecordId!.Value).ToHashSet();
+        List<BudgetIncomeRoutingRow> routing = await database.IncomeVarianceAllocations.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && postingIds.Contains(x.PostingId))
             .GroupBy(x => x.Destination)
             .Select(x => new BudgetIncomeRoutingRow(x.Key, x.Sum(item => item.AmountCents)))
             .ToListAsync(cancellationToken);
-        var periods = await database.Periods.AsNoTracking()
+        List<BudgetPeriod> periods = await database.Periods.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.EndDate >= rangeFrom && x.StartDate <= rangeThrough)
             .OrderBy(x => x.StartDate).ToListAsync(cancellationToken);
-        var rows = periods.Select(period =>
+        List<BudgetIncomeReportRow> rows = periods.Select(period =>
         {
-            var expected = projection.Occurrences
+            long expected = projection.Occurrences
                 .Where(x => x.OccurredOn >= period.StartDate && x.OccurredOn <= period.EndDate).Sum(x => x.AmountCents);
-            var actual = incomeEntries.Where(x => x.PeriodId == period.Id).Sum(x => x.AmountCents);
+            long actual = incomeEntries.Where(x => x.PeriodId == period.Id).Sum(x => x.AmountCents);
             return new BudgetIncomeReportRow(
                 period.Id, period.Name, period.StartDate, period.EndDate, expected, actual,
                 checked(actual - expected), BudgetReportMath.ChangeBasisPoints(expected, actual));
         }).ToList();
-        var expectedTotal = projection.Occurrences.Sum(x => x.AmountCents);
-        var actualTotal = incomeEntries.Sum(x => x.AmountCents);
+        long expectedTotal = projection.Occurrences.Sum(x => x.AmountCents);
+        long actualTotal = incomeEntries.Sum(x => x.AmountCents);
         return Results.Ok(new BudgetIncomeReport(
             rangeFrom, rangeThrough, expectedTotal, actualTotal, checked(actualTotal - expectedTotal),
             BudgetReportMath.ChangeBasisPoints(expectedTotal, actualTotal),
@@ -270,21 +270,21 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         BudgetService budgetService, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
-        var periods = await database.Periods.AsNoTracking()
+        List<BudgetPeriod> periods = await database.Periods.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && x.EndDate >= rangeFrom && x.StartDate <= rangeThrough)
             .OrderBy(x => x.StartDate).ToListAsync(cancellationToken);
-        var closes = await database.PeriodCloses.AsNoTracking()
+        Dictionary<Guid, BudgetPeriodClose> closes = await database.PeriodCloses.AsNoTracking()
             .Where(x => x.OwnerUserId == user.Id && periods.Select(period => period.Id).Contains(x.PeriodId))
             .ToDictionaryAsync(x => x.PeriodId, cancellationToken);
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
-        var rows = new List<BudgetBufferReportRow>();
-        foreach (var period in periods)
+        DateOnly today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        List<BudgetBufferReportRow> rows = new List<BudgetBufferReportRow>();
+        foreach (BudgetPeriod? period in periods)
         {
-            if (closes.TryGetValue(period.Id, out var close))
+            if (closes.TryGetValue(period.Id, out BudgetPeriodClose? close))
             {
                 rows.Add(new BudgetBufferReportRow(
                     period.Id, period.Name, period.StartDate, period.EndDate, false,
@@ -297,7 +297,7 @@ public static class BudgetReportEndpoints
                 continue;
             }
             if (today < period.StartDate || today > period.EndDate) continue;
-            var summary = await budgetService.SummaryAsync(user.Id, today, cancellationToken);
+            BudgetSummary summary = await budgetService.SummaryAsync(user.Id, today, cancellationToken);
             rows.Add(new BudgetBufferReportRow(
                 period.Id, period.Name, period.StartDate, period.EndDate, true,
                 summary.ForecastBufferTargetCents, summary.ActualBufferTargetCents, summary.FundedBufferCents,
@@ -313,21 +313,21 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
-        var projection = await new BudgetSavingsProjector(database).LoadAsync(user.Id, rangeThrough, cancellationToken);
-        var allocatedInRange = projection.Contributions
+        SavingsProjection projection = await new BudgetSavingsProjector(database).LoadAsync(user.Id, rangeThrough, cancellationToken);
+        Dictionary<Guid, long> allocatedInRange = projection.Contributions
             .Where(x => x.OccurredOn >= rangeFrom && x.OccurredOn <= rangeThrough)
             .SelectMany(x => x.Allocations)
             .GroupBy(x => x.PurposeId).ToDictionary(x => x.Key, x => x.Sum(item => item.AmountCents));
-        var consumedInRange = projection.Purchases
+        Dictionary<Guid, long> consumedInRange = projection.Purchases
             .Where(x => x.OccurredOn >= rangeFrom && x.OccurredOn <= rangeThrough && x.Status != "voided")
             .SelectMany(x => x.Funding)
             .Where(x => x.PurposeId.HasValue)
             .GroupBy(x => x.PurposeId!.Value).ToDictionary(x => x.Key, x => x.Sum(item => item.AmountCents));
-        var rows = projection.Purposes.Select(purpose => new BudgetSavingsGoalReportRow(
+        List<BudgetSavingsGoalReportRow> rows = projection.Purposes.Select(purpose => new BudgetSavingsGoalReportRow(
             purpose.Id, purpose.Name, purpose.Status, purpose.Archived,
             purpose.TargetAmountCents, purpose.AllocatedCents,
             purpose.TargetAmountCents.HasValue
@@ -345,14 +345,14 @@ public static class BudgetReportEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var (rangeFrom, rangeThrough, rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
+        (DateOnly rangeFrom, DateOnly rangeThrough, IResult? rangeError) = await RangeAsync(from, through, user.Id, database, timeProvider, cancellationToken);
         if (rangeError is not null) return rangeError;
-        var projector = new BudgetInvestmentProjector(database);
-        var end = await projector.LoadAsync(user.Id, rangeThrough, cancellationToken);
-        var start = await projector.LoadAsync(user.Id, rangeFrom.AddDays(-1), cancellationToken);
-        var events = end.Events.Where(x => x.OccurredOn >= rangeFrom && x.OccurredOn <= rangeThrough).ToList();
+        BudgetInvestmentProjector projector = new BudgetInvestmentProjector(database);
+        InvestmentProjection end = await projector.LoadAsync(user.Id, rangeThrough, cancellationToken);
+        InvestmentProjection start = await projector.LoadAsync(user.Id, rangeFrom.AddDays(-1), cancellationToken);
+        List<InvestmentEventSummary> events = end.Events.Where(x => x.OccurredOn >= rangeFrom && x.OccurredOn <= rangeThrough).ToList();
         return Results.Ok(new BudgetInvestmentReport(
             rangeFrom, rangeThrough,
             end.ContributedCapitalCents, end.CurrentValueCents, end.WithdrawnCents,
@@ -366,13 +366,13 @@ public static class BudgetReportEndpoints
     private static async Task<List<BudgetLedgerEntry>> EffectiveEntriesAsync(
         BudgetDbContext database, Guid ownerId, DateOnly from, DateOnly through, CancellationToken cancellationToken)
     {
-        var entries = await database.LedgerEntries.AsNoTracking().Include(x => x.Splits)
+        List<BudgetLedgerEntry> entries = await database.LedgerEntries.AsNoTracking().Include(x => x.Splits)
             .Where(x => x.OwnerUserId == ownerId && x.OccurredOn >= from && x.OccurredOn <= through)
             .OrderBy(x => x.OccurredOn).ThenBy(x => x.CreatedAt).ToListAsync(cancellationToken);
-        var voided = (await database.LedgerActions.AsNoTracking()
+        HashSet<Guid> voided = (await database.LedgerActions.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Void)
             .Select(x => x.LedgerEntryId).ToListAsync(cancellationToken)).ToHashSet();
-        var superseded = (await database.LedgerEntries.AsNoTracking()
+        HashSet<Guid> superseded = (await database.LedgerEntries.AsNoTracking()
             .Where(x => x.OwnerUserId == ownerId && x.CorrectsEntryId.HasValue)
             .Select(x => x.CorrectsEntryId!.Value).ToListAsync(cancellationToken)).ToHashSet();
         return entries.Where(x => !voided.Contains(x.Id) && !superseded.Contains(x.Id)).ToList();
@@ -384,15 +384,15 @@ public static class BudgetReportEndpoints
     private static IEnumerable<(BudgetLedgerEntry Entry, Guid? CategoryId, string Name, string Color, string Icon, long SignedCents)>
         SpendContributions(IEnumerable<BudgetLedgerEntry> entries)
     {
-        foreach (var entry in entries.Where(x => x.Kind is BudgetValues.Expense or BudgetValues.Refund))
+        foreach (BudgetLedgerEntry? entry in entries.Where(x => x.Kind is BudgetValues.Expense or BudgetValues.Refund))
         {
-            var sign = entry.Kind == BudgetValues.Refund ? -1 : 1;
+            int sign = entry.Kind == BudgetValues.Refund ? -1 : 1;
             if (entry.Splits.Count == 0)
             {
                 yield return (entry, entry.CategoryId, "", "", "", sign * entry.AmountCents);
                 continue;
             }
-            foreach (var split in entry.Splits)
+            foreach (BudgetLedgerSplit split in entry.Splits)
                 yield return (entry, split.CategoryId, split.CategoryNameSnapshot, split.CategoryColorSnapshot,
                     split.CategoryIconSnapshot, sign * split.AmountCents);
         }
@@ -402,13 +402,13 @@ public static class BudgetReportEndpoints
         string? from, string? through, Guid ownerId, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var end = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly end = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(through) && !TryDate(through, out end))
             return (default, default, InvalidDate("through"));
         DateOnly start;
         if (string.IsNullOrWhiteSpace(from))
         {
-            var preferredStartDay = await database.Settings.AsNoTracking()
+            int preferredStartDay = await database.Settings.AsNoTracking()
                 .Where(x => x.OwnerUserId == ownerId).Select(x => (int?)x.PreferredPeriodStartDay)
                 .SingleOrDefaultAsync(cancellationToken) ?? 1;
             start = BudgetPeriodCalendar.ForDate(end.AddMonths(-5), preferredStartDay).Start;

@@ -21,20 +21,20 @@ public static class BudgetIncomePostingEndpoints
         HttpContext context, IIdentityAccess identity, BudgetDbContext database,
         TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        if (!TryDate(scheduledOn, out var scheduled)) return InvalidDate("scheduledOn");
-        if (!TryDate(request.ActualOn, out var actualOn)) return InvalidDate("actualOn");
+        if (!TryDate(scheduledOn, out DateOnly scheduled)) return InvalidDate("scheduledOn");
+        if (!TryDate(request.ActualOn, out DateOnly actualOn)) return InvalidDate("actualOn");
         if (request.ActualAmountCents <= 0) return Invalid("Actual income amount must be positive");
-        var projection = await new BudgetIncomePlanProjector(database).LoadAsync(user.Id, scheduled, scheduled, cancellationToken);
-        var occurrence = projection.Occurrences.SingleOrDefault(x => x.SeriesId == seriesId && x.ScheduledOn == scheduled);
+        IncomePlanProjection projection = await new BudgetIncomePlanProjector(database).LoadAsync(user.Id, scheduled, scheduled, cancellationToken);
+        ExpectedIncomeOccurrence? occurrence = projection.Occurrences.SingleOrDefault(x => x.SeriesId == seriesId && x.ScheduledOn == scheduled);
         if (occurrence is null) return HttpResults.Problem(404, "Not found", "Expected income occurrence was not found");
-        var routing = ParseRule(request.Routing);
+        (IncomeVarianceRuleInput? Value, IResult? Error) routing = ParseRule(request.Routing);
         if (routing.Error is not null) return routing.Error;
-        var service = new BudgetIncomePostingService(database, new BudgetService(database, timeProvider));
+        BudgetIncomePostingService service = new BudgetIncomePostingService(database, new BudgetService(database, timeProvider));
         try
         {
-            var result = await service.ConfirmAsync(
+            (BudgetIncomePosting Posting, bool AlreadyPosted) result = await service.ConfirmAsync(
                 user.Id, occurrence, actualOn, request.ActualAmountCents, BudgetValues.Manual,
                 routing.Value, cancellationToken);
             return result.AlreadyPosted ? Results.Ok(result.Posting) : Results.Created(
@@ -51,20 +51,20 @@ public static class BudgetIncomePostingEndpoints
         BudgetDbContext database, BudgetService budgetService, TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var end = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        DateOnly end = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         if (!string.IsNullOrWhiteSpace(through) && !TryDate(through, out end)) return InvalidDate("through");
-        var start = end.AddYears(-1);
+        DateOnly start = end.AddYears(-1);
         if (!string.IsNullOrWhiteSpace(from) && !TryDate(from, out start)) return InvalidDate("from");
         IncomePlanProjection projection;
         try { projection = await new BudgetIncomePlanProjector(database).LoadAsync(user.Id, start, end, cancellationToken); }
         catch (ArgumentOutOfRangeException exception) { return Invalid(exception.Message); }
-        var automaticVersions = projection.Plans.SelectMany(x => x.Versions).Where(x => x.AutomaticPosting).Select(x => x.Id).ToHashSet();
-        var service = new BudgetIncomePostingService(database, budgetService);
-        var posted = 0;
-        var alreadyPosted = 0;
-        foreach (var occurrence in projection.Occurrences.Where(
+        HashSet<Guid> automaticVersions = projection.Plans.SelectMany(x => x.Versions).Where(x => x.AutomaticPosting).Select(x => x.Id).ToHashSet();
+        BudgetIncomePostingService service = new BudgetIncomePostingService(database, budgetService);
+        int posted = 0;
+        int alreadyPosted = 0;
+        foreach (ExpectedIncomeOccurrence? occurrence in projection.Occurrences.Where(
                      x => x.OccurredOn <= end && automaticVersions.Contains(x.VersionId)))
         {
             if (occurrence.Status != "expected")
@@ -72,7 +72,7 @@ public static class BudgetIncomePostingEndpoints
                 alreadyPosted++;
                 continue;
             }
-            var result = await service.ConfirmAsync(
+            (BudgetIncomePosting Posting, bool AlreadyPosted) result = await service.ConfirmAsync(
                 user.Id, occurrence, occurrence.OccurredOn, occurrence.AmountCents,
                 BudgetValues.Automatic, null, cancellationToken);
             if (result.AlreadyPosted) alreadyPosted++; else posted++;
@@ -83,12 +83,12 @@ public static class BudgetIncomePostingEndpoints
     private static async Task<IResult> ListRules(
         HttpContext context, IIdentityAccess identity, BudgetDbContext database, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
-        var rules = await database.IncomeVarianceRules.AsNoTracking().Include(x => x.Routes)
+        List<BudgetIncomeVarianceRule> rules = await database.IncomeVarianceRules.AsNoTracking().Include(x => x.Routes)
             .Where(x => x.OwnerUserId == user.Id)
             .OrderBy(x => x.SeriesId).ThenByDescending(x => x.EffectiveFrom).ToListAsync(cancellationToken);
-        var latest = rules.GroupBy(x => x.SeriesId).Select(x => x.First()).ToList();
+        List<BudgetIncomeVarianceRule> latest = rules.GroupBy(x => x.SeriesId).Select(x => x.First()).ToList();
         return Results.Ok(latest);
     }
 
@@ -101,7 +101,7 @@ public static class BudgetIncomePostingEndpoints
         Guid seriesId, VarianceRuleRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
-        var user = await identity.CurrentUserAsync(context, cancellationToken);
+        CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Unauthorized();
         if (!await database.IncomePlans.AnyAsync(x => x.OwnerUserId == user.Id && x.SeriesId == seriesId, cancellationToken))
             return HttpResults.Problem(404, "Not found", "Income plan was not found");
@@ -112,23 +112,23 @@ public static class BudgetIncomePostingEndpoints
         Guid? seriesId, VarianceRuleRequest request, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider timeProvider, CancellationToken cancellationToken, Guid? knownOwnerId = null)
     {
-        var ownerId = knownOwnerId;
+        Guid? ownerId = knownOwnerId;
         if (!ownerId.HasValue)
         {
-            var user = await identity.CurrentUserAsync(context, cancellationToken);
+            CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
             if (user is null) return Unauthorized();
             ownerId = user.Id;
         }
-        var parsed = ParseRule(request);
+        (IncomeVarianceRuleInput? Value, IResult? Error) parsed = ParseRule(request);
         if (parsed.Error is not null || parsed.Value is null) return parsed.Error!;
-        var rule = new BudgetIncomeVarianceRule
+        BudgetIncomeVarianceRule rule = new BudgetIncomeVarianceRule
         {
             OwnerUserId = ownerId.Value, SeriesId = seriesId, Mode = parsed.Value.Mode,
             EffectiveFrom = DateTime.SpecifyKind(timeProvider.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified),
         };
-        for (var index = 0; index < parsed.Value.Routes.Count; index++)
+        for (int index = 0; index < parsed.Value.Routes.Count; index++)
         {
-            var route = parsed.Value.Routes[index];
+            IncomeVarianceRouteInput route = parsed.Value.Routes[index];
             rule.Routes.Add(new BudgetIncomeVarianceRuleRoute
             {
                 OwnerUserId = ownerId.Value, Position = index, Destination = route.Destination,
@@ -143,7 +143,7 @@ public static class BudgetIncomePostingEndpoints
     private static (IncomeVarianceRuleInput? Value, IResult? Error) ParseRule(VarianceRuleRequest? request)
     {
         if (request is null) return (null, null);
-        var input = new IncomeVarianceRuleInput(
+        IncomeVarianceRuleInput input = new IncomeVarianceRuleInput(
             request.Mode?.Trim().ToLowerInvariant() ?? "",
             (request.Routes ?? []).Select(x => new IncomeVarianceRouteInput(
                 x.Destination?.Trim().ToLowerInvariant() ?? "", x.Value, x.TargetId)).ToList());
