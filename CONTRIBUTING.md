@@ -4,6 +4,21 @@ Thanks for considering a contribution to Household. The project is local-network
 
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## What we accept
+
+Household is early and built by one maintainer, so scope stays tight on purpose.
+
+Likely to be merged: small, focused bug fixes; reliability and install fixes;
+documentation corrections; small performance improvements with a measurement.
+
+Talk first: new features, new product areas, dependency swaps, and anything that
+changes the data model. Open an issue with the problem you want solved before writing
+code. A feature PR that arrives without that conversation will probably be closed, not
+because the work is bad but because the direction is not settled.
+
+Pull requests are labeled `size:XS` to `size:XXL` automatically. Small is good.
+Anything above `size:L` should be split unless it is a single mechanical change.
+
 ## Before opening an issue
 
 - Search existing issues and discussions first.
@@ -69,6 +84,7 @@ Keep feature code inside the owning feature unless a helper is genuinely reusabl
 - Use focused xUnit theory tests for pure domain logic.
 - Exercise public backend behavior through authenticated HTTP integration tests against production PostgreSQL migrations.
 - Keep nullable analysis and warnings-as-errors clean.
+- Code style (`backend/.editorconfig`) is part of the build: explicit types instead of `var`, `this.`-qualified member access, `_camelCase` private fields. Run `dotnet format style Household.slnx` from `backend/` to fix most violations automatically.
 
 Create feature migrations with:
 
