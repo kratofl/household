@@ -41,6 +41,7 @@ help:
 	@echo "  make web-lint               Lint web app"
 	@echo "  make web-build              Build web app"
 	@echo "  make compose-config         Validate Compose configuration"
+	@echo "  make workflow-check         Lint workflows and test release bundles"
 	@echo ""
 	@echo "Production:"
 	@echo "  make prod-pull              Pull published production images"
@@ -108,8 +109,12 @@ validate-prod-env: require-env
 # ----------------------
 # QUALITY
 # ----------------------
-.PHONY: check test build backend-test backend-build web-build web-lint compose-config
-check: backend-test backend-build web-lint web-build compose-config
+.PHONY: check test build backend-test backend-build web-build web-lint compose-config workflow-check
+check: backend-test backend-build web-lint web-build compose-config workflow-check
+
+workflow-check:
+	@docker run --rm -v "$(CURDIR):/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
+	@node --test scripts/create-release-bundle.test.mjs
 
 test: backend-test
 

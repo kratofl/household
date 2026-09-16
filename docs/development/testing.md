@@ -6,7 +6,8 @@ Run all standard checks from the repository root:
 make check
 ```
 
-This runs backend migration/API tests, backend builds, web lint/build, and Compose validation.
+This runs backend migration/API tests, backend builds, web lint/build, Compose validation,
+workflow linting, and release-bundle tests.
 
 ## Backend
 
@@ -36,3 +37,10 @@ make compose-config
 ```
 
 Run `npm ci` in `clients/web` first when dependencies are missing.
+
+## Workflow changes
+
+Run `make workflow-check` or `.\make.ps1 workflow-check` before changing CI or
+release packaging. This requires Docker, Node.js, and `tar`; it downloads the pinned
+actionlint image on first use. Bundle tests use temporary directories and parse
+the extracted Compose files without starting services or reading your local `.env`.

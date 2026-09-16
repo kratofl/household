@@ -62,6 +62,11 @@ See [backups and restores](backups.md) for restore commands.
 
 ## Release artifacts
 
+Publishing a GitHub Release starts validation of its exact commit. Images and
+install bundles are uploaded only after CI passes. The release page can exist
+before its downloads are ready; wait for the Release workflow to finish before
+installing it. If validation fails, inspect the failed job before retrying the run.
+
 Release bundles include:
 
 - `docker-compose.yml`

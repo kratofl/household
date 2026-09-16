@@ -5,8 +5,7 @@ on:
     types: [published]
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 env:
   REGISTRY: ghcr.io
@@ -15,9 +14,18 @@ env:
   CHANNEL: ${{ github.event.release.prerelease && 'unstable' || 'stable' }}
 
 jobs:
+  validate:
+    name: Validate release commit
+    uses: ./.github/workflows/ci.yml
+
   build-images:
     name: Build and publish images
+    needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
     outputs:
       api_digest: ${{ steps.api.outputs.digest }}
       web_digest: ${{ steps.web.outputs.digest }}
@@ -25,6 +33,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -85,90 +96,37 @@ jobs:
   publish-bundle:
     name: Publish install bundle
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: build-images
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.12.0"
 
       - name: Create release bundle
-        run: |
-          mkdir -p dist
-          cp deployments/docker-compose.yml dist/docker-compose.yml
-          cp deployments/.env.example dist/.env.example
-          cp -R deployments/observability dist/observability
-
-          cat > dist/INSTALL.md <<'EOF'
-          # Household release bundle
-
-          1. Copy `.env.example` to `.env`.
-          2. Replace every `change-me` value.
-          3. Set `HOUSEHOLD_SEED_DEMO_USER=true` for first boot.
-          4. Start the stack:
-
-             ```bash
-             docker compose --env-file .env -f docker-compose.yml pull
-             docker compose --env-file .env -f docker-compose.yml up -d
-             ```
-
-          After the first admin account is usable, set `HOUSEHOLD_SEED_DEMO_USER=false` and restart.
-          EOF
-
-          cat > dist/UPGRADE.md <<'EOF'
-          # Upgrade notes
-
-          Create a backup before upgrading. To upgrade manually, set `HOUSEHOLD_VERSION` in `.env`, pull images, and restart the stack.
-
-          ```bash
-          docker compose --env-file .env -f docker-compose.yml pull
-          docker compose --env-file .env -f docker-compose.yml up -d
-          ```
-
-          If you need to roll back, restore the backup and set `HOUSEHOLD_VERSION` back to the previous release tag.
-          EOF
-
-          cat > dist/household-release.json <<JSON
-          {
-            "version": "${{ github.event.release.tag_name }}",
-            "channel": "${{ env.CHANNEL }}",
-            "repository": "${{ github.repository }}",
-            "compose": "docker-compose.yml",
-            "envExample": ".env.example",
-            "platforms": "${{ env.PLATFORMS }}",
-            "images": {
-              "api": {
-                "image": "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-api",
-                "tag": "${{ github.event.release.tag_name }}",
-                "digest": "${{ needs.build-images.outputs.api_digest }}"
-              },
-              "web": {
-                "image": "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-web",
-                "tag": "${{ github.event.release.tag_name }}",
-                "digest": "${{ needs.build-images.outputs.web_digest }}"
-              },
-              "updater": {
-                "image": "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-updater",
-                "tag": "${{ github.event.release.tag_name }}",
-                "digest": "${{ needs.build-images.outputs.updater_digest }}"
-              }
-            },
-            "requiresBackup": true
-          }
-          JSON
-
-          (
-            cd dist
-            find docker-compose.yml .env.example INSTALL.md UPGRADE.md household-release.json observability -type f -print0 \
-              | sort -z \
-              | xargs -0 sha256sum > SHA256SUMS
-          )
-          tar -C dist -czf household-release-bundle.tar.gz .
+        env:
+          RELEASE_VERSION: ${{ github.event.release.tag_name }}
+          API_DIGEST: ${{ needs.build-images.outputs.api_digest }}
+          WEB_DIGEST: ${{ needs.build-images.outputs.web_digest }}
+          UPDATER_DIGEST: ${{ needs.build-images.outputs.updater_digest }}
+        run: node scripts/create-release-bundle.mjs
 
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            household-release-bundle.tar.gz \
+          gh release upload "$RELEASE_TAG" \
+            dist/household-release-bundle.tar.gz \
             dist/household-release.json \
             dist/SHA256SUMS \
             --clobber

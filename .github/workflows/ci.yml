@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   pull_request:
     branches: ["main"]
   push:
@@ -9,13 +10,39 @@ on:
 permissions:
   contents: read
 
+# Release calls get their own group; only newer commits on a PR cancel old runs.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  backend:
-    name: Backend
+  workflows:
+    name: Workflows and release bundle
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.12.0"
+
+      - name: Lint workflows and test release bundles
+        run: make workflow-check
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
@@ -31,9 +58,12 @@ jobs:
   web:
     name: Web
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -57,9 +87,12 @@ jobs:
   compose:
     name: Compose config
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Validate Compose files
         run: make compose-config
@@ -67,6 +100,7 @@ jobs:
   docker:
     name: Docker image smoke build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       # Smoke build only verifies that images build; the per-step .dockerbuild
       # record artifacts are pure overhead and stay off the storage pool.
@@ -74,6 +108,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
