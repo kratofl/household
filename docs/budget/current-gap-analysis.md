@@ -169,7 +169,7 @@ conflict with accepted ADRs:
   historical category snapshots instead.
 - The notes describe a protected excluded category; ADR 0059 separates Budget
   impact from category identity and removes that target requirement.
-- The earlier frontend navigation design under `docs/superpowers/specs/` predates
+- The earlier frontend navigation design under `docs/specs/` predates
   Saving & Investing, Wishlist, Reports, and the final sidebar structure in
   ADR 0057.
 

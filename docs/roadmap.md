@@ -5,7 +5,7 @@ Household is early-stage self-hosted software. The current work is focused on ma
 ## Implemented foundation
 
 - Docker Compose production stack with web, API, updater, and Postgres.
-- Local development workflow with Docker Postgres, Go API, and Next.js web app.
+- Worktree-isolated Docker development stack with PostgreSQL, the .NET API, and the Next.js web app.
 - Identity users with active/pending status.
 - Admin-oriented user/module management foundation.
 - Access and refresh token sessions.
