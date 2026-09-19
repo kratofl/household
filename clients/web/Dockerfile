@@ -3,6 +3,12 @@ WORKDIR /app
 COPY clients/web/package.json clients/web/package-lock.json ./
 RUN npm ci
 
+FROM deps AS dev
+COPY clients/web ./
+ENV NEXT_TELEMETRY_DISABLED=1
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+
 FROM node:26.7.0-alpine3.23 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules

@@ -1,15 +1,54 @@
 export type BudgetPeriod = {
   id: string
   name: string
+  startDate: string
+  endDate: string
+  preferredStartDay: number
   spendingLimitCents: number
   overspendCarryoverCents: number
+}
+
+export type BudgetSetupState = {
+  completed: boolean
+  baseCurrency: string
+  baseCurrencyLocked: boolean
+  preferredPeriodStartDay: number
+  bufferRule: "fixed" | "percentage"
+  bufferAmountCents: number
+  bufferPercentageBasisPoints: number
+  defaultBufferDisposition: "retain" | "ordinary" | "savings" | "investment"
+  incomePlans: Array<{ id: string; name: string; amountCents: number }>
+  openingAllocations: Array<{
+    id: string
+    kind: "buffer" | "savings" | "investment"
+    name: string
+    amountCents: number
+    occurredOn: string
+  }>
+}
+
+export type BudgetSetupInput = {
+  baseCurrency: string
+  preferredPeriodStartDay: number
+  bufferRule: BudgetSetupState["bufferRule"]
+  bufferAmountCents: number
+  bufferPercentageBasisPoints: number
+  defaultBufferDisposition?: BudgetSetupState["defaultBufferDisposition"]
+  incomePlans?: Array<{ name: string; amountCents: number }>
+  openingAllocations?: Array<{
+    kind: "buffer" | "savings" | "investment"
+    name: string
+    amountCents: number
+  }>
 }
 
 export type BudgetCategory = {
   id: string
   name: string
   color: string
+  icon: string
   behavior: "include_in_limit" | "exclude_from_limit"
+  archived: boolean
   spentCents: number
 }
 
@@ -43,6 +82,83 @@ export type BudgetSummary = {
   accountBalanceCents: number
   accounts: BudgetAccount[]
   plannedExpenses: PlannedExpense[]
+  actualIncomeCents: number
+  forecastBufferTargetCents: number
+  actualBufferTargetCents: number
+  fundedBufferCents: number
+  bufferShortfallCents: number
+  accumulatedBufferCents: number
+  protectedBufferCents: number
+  deficitCarryoverCents: number
+  savingsContributionCents: number
+  totalSavingsCents: number
+  unallocatedSavingsCents: number
+  investmentContributionCents: number
+  totalInvestmentCents: number
+  investmentContributedCapitalCents: number
+  investmentGainCents: number
+  investmentGainBasisPoints: number
+  reservationCents: number
+  maximumOrdinaryCents: number
+  ordinaryAvailableCents: number
+  ledgerEntries: BudgetLedgerEntry[]
+}
+
+export type BudgetLedgerEntry = {
+  id: string
+  periodId: string
+  categoryId?: string
+  kind: "income" | "expense"
+  occurredOn: string
+  description: string
+  amountCents: number
+  ordinaryImpactCents: number
+  source: string
+  merchantRaw: string
+  merchantNormalized: string
+  merchantBrandKey?: string
+  splits: Array<{
+    id: string
+    categoryId?: string
+    categoryNameSnapshot: string
+    categoryColorSnapshot: string
+    categoryIconSnapshot: string
+    amountCents: number
+    ordinaryImpactCents: number
+  }>
+  createdAt: string
+}
+
+export type BudgetLedgerEntryInput = {
+  kind: BudgetLedgerEntry["kind"]
+  occurredOn: string
+  description: string
+  amountCents: number
+  categoryId?: string
+  affectsOrdinary?: boolean
+  merchant?: string
+  splits?: Array<{
+    categoryId: string
+    amountCents?: number
+    useRemaining: boolean
+    affectsOrdinary: boolean
+  }>
+}
+
+export type BudgetTimelineItem = {
+  id: string
+  entryType: "actual" | "expected"
+  kind: "income" | "expense" | "refund" | "savings" | "investment"
+  status: "actual" | "expected" | "confirmed" | "automatically_posted" | "corrected" | "voided"
+  occurredOn: string
+  description: string
+  amountCents: number
+  ordinaryImpactCents: number
+  categoryId?: string
+  merchant: string
+  merchantBrandKey?: string
+  origin: string
+  splits: BudgetLedgerEntry["splits"]
 }
 
 export type BudgetTransactionInput = {
@@ -59,7 +175,9 @@ export type BudgetPeriodInput = {
   overspendCarryoverCents: number
 }
 
-export type BudgetCategoryInput = Pick<BudgetCategory, "name" | "color" | "behavior">
+export type BudgetCategoryInput = Pick<BudgetCategory, "name" | "color" | "icon" | "behavior"> & {
+  archived?: boolean
+}
 
 export type PlannedExpenseInput = {
   accountId: string
@@ -72,4 +190,500 @@ export type PlannedExpenseInput = {
   dueMonth?: number
   includeInLimit: boolean
   active: boolean
+}
+
+export type IncomePlan = {
+  seriesId: string
+  name: string
+  amountCents: number
+  cadence: "daily" | "weekly" | "monthly" | "quarterly" | "yearly" | "custom"
+  intervalUnit: "day" | "week" | "month" | "quarter" | "year"
+  intervalCount: number
+  weekdays: number[]
+  startDate: string
+  automaticPosting: boolean
+  stoppedOn?: string
+  pauses: Array<{ id: string; from: string; through: string; reason: string }>
+  versions: Array<{ id: string; effectiveFrom: string; effectiveTo?: string; automaticPosting: boolean; changeReason: string }>
+}
+
+export type ExpectedIncomeOccurrence = {
+  id: string
+  seriesId: string
+  versionId: string
+  scheduledOn: string
+  occurredOn: string
+  name: string
+  amountCents: number
+  overridden: boolean
+  status: "expected" | "confirmed" | "automatically_posted"
+  posting?: {
+    id: string
+    ledgerEntryId: string
+    actualOn: string
+    actualAmountCents: number
+    varianceCents: number
+    postingMode: "manual" | "automatic"
+    allocations: Array<{ destination: string; targetId?: string; amountCents: number }>
+  }
+}
+
+export type IncomePlanProjection = {
+  plans: IncomePlan[]
+  occurrences: ExpectedIncomeOccurrence[]
+}
+
+export type IncomePlanInput = {
+  name: string
+  amountCents: number
+  cadence: IncomePlan["cadence"]
+  intervalUnit: IncomePlan["intervalUnit"]
+  intervalCount: number
+  weekdays: number[]
+  automaticPosting: boolean
+  startDate: string
+  stopDate?: string
+}
+
+export type CommitmentPlan = {
+  seriesId: string
+  categoryId?: string
+  kind: "fixed_cost" | "subscription"
+  name: string
+  amountCents: number
+  cadence: "weekly" | "monthly" | "quarterly" | "yearly" | "custom"
+  intervalUnit: "week" | "month" | "quarter" | "year"
+  intervalCount: number
+  weekdays: number[]
+  startDate: string
+  budgetingMode: "due_period" | "gradual_reservation"
+  chargeFirstShortfall: boolean
+  automaticPosting: boolean
+  stoppedOn?: string
+  pauses: Array<{ id: string; from: string; through: string; reason: string }>
+  versions: Array<{
+    id: string
+    effectiveFrom: string
+    effectiveTo?: string
+    categoryId?: string
+    kind: CommitmentPlan["kind"]
+    name: string
+    amountCents: number
+    cadence: CommitmentPlan["cadence"]
+    intervalUnit: CommitmentPlan["intervalUnit"]
+    intervalCount: number
+    weekdays: number[]
+    budgetingMode: CommitmentPlan["budgetingMode"]
+    chargeFirstShortfall: boolean
+    automaticPosting: boolean
+    changeReason: string
+    active: boolean
+  }>
+}
+
+export type ExpectedCommitmentOccurrence = {
+  id: string
+  seriesId: string
+  versionId: string
+  categoryId?: string
+  kind: CommitmentPlan["kind"]
+  scheduledOn: string
+  occurredOn: string
+  name: string
+  amountCents: number
+  budgetingMode: CommitmentPlan["budgetingMode"]
+  chargeFirstShortfall: boolean
+  reservationRateCents: number
+  reservationCoverageCents: number
+  reservationShortfallCents: number
+  reservations: Array<{
+    periodStart: string
+    periodEnd: string
+    amountCents: number
+    eligible: boolean
+  }>
+  overridden: boolean
+  status: "expected" | "confirmed" | "automatically_posted"
+  posting?: {
+    id: string
+    ledgerEntryId: string
+    actualOn: string
+    actualAmountCents: number
+    reservationCoverageCents: number
+    directOrdinaryImpactCents: number
+    postingMode: "manual" | "automatic" | "matched" | "legacy"
+  }
+}
+
+export type CommitmentProjection = {
+  plans: CommitmentPlan[]
+  occurrences: ExpectedCommitmentOccurrence[]
+}
+
+export type CommitmentInput = {
+  categoryId?: string
+  kind: CommitmentPlan["kind"]
+  name: string
+  amountCents: number
+  cadence: CommitmentPlan["cadence"]
+  intervalUnit: CommitmentPlan["intervalUnit"]
+  intervalCount: number
+  weekdays: number[]
+  startDate: string
+  stopDate?: string
+  budgetingMode: CommitmentPlan["budgetingMode"]
+  chargeFirstShortfall: boolean
+  automaticPosting: boolean
+}
+
+export type SavingsProjection = {
+  totalSavedCents: number
+  unallocatedCents: number
+  purposes: Array<{
+    id: string
+    name: string
+    archived: boolean
+    allocatedCents: number
+    targetAmountCents: number | null
+    planningMode: "date" | "rate" | null
+    targetDate: string | null
+    plannedContributionCents: number | null
+    revisedContributionCents: number | null
+    plannedFundingDate: string | null
+    revisedFundingDate: string | null
+    status: "active" | "behind" | "fully_funded" | "completed"
+    contributionsPaused: boolean
+  }>
+  contributions: Array<{
+    id: string
+    kind: "contribution" | "opening"
+    occurredOn: string
+    description: string
+    amountCents: number
+    unallocatedCents: number
+    allocations: Array<{
+      id: string
+      purposeId: string
+      mode: "fixed" | "percentage"
+      requestedValue: number
+      amountCents: number
+    }>
+  }>
+  purchases: Array<{
+    id: string
+    ledgerEntryId: string
+    occurredOn: string
+    description: string
+    amountCents: number
+    status: "actual" | "voided" | "refunded" | "partially_refunded"
+    funding: Array<{
+      source: "goal" | "ordinary"
+      purposeId: string | null
+      amountCents: number
+    }>
+  }>
+}
+
+export type InvestmentProjection = {
+  contributedCapitalCents: number
+  currentValueCents: number
+  withdrawnCents: number
+  gainCents: number
+  gainBasisPoints: number
+  latestValuationDate: string | null
+  events: Array<{
+    id: string
+    kind: "opening" | "contribution" | "valuation" | "withdrawal"
+    occurredOn: string
+    description: string
+    amountCents: number
+    destination: "buffer" | "savings" | "ordinary" | null
+    targetPurposeId: string | null
+  }>
+}
+
+export type WishlistItem = {
+  id: string
+  name: string
+  estimatedPriceCents: number | null
+  priority: "low" | "medium" | "high"
+  notes: string
+  status: "active" | "completed" | "removed"
+  savingsGoalId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type BudgetReminder = {
+  id: string
+  planKind: "income" | "commitment"
+  seriesId: string
+  occurrenceId: string
+  kind: "due" | "overdue"
+  dueOn: string
+  name: string
+  amountCents: number
+}
+
+export type BudgetReminderSetting = {
+  id: string
+  planKind: "income" | "commitment"
+  seriesId: string
+  dueEnabled: boolean
+  overdueEnabled: boolean
+  updatedAt: string
+}
+
+export type ReminderSettingInput = {
+  dueEnabled: boolean
+  overdueEnabled: boolean
+}
+
+export type BudgetReportQuery = {
+  from?: string
+  through?: string
+  categoryId?: string
+  merchant?: string
+}
+
+export type BudgetCategorySpendRow = {
+  categoryId: string | null
+  name: string
+  color: string
+  icon: string
+  grossExpenseCents: number
+  refundCents: number
+  netSpentCents: number
+  shareBasisPoints: number
+  entryCount: number
+}
+
+export type BudgetCategorySpendReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  merchant: string | null
+  totalGrossExpenseCents: number
+  totalRefundCents: number
+  totalNetSpentCents: number
+  rows: BudgetCategorySpendRow[]
+}
+
+export type BudgetMerchantSpendRow = {
+  merchant: string
+  brandKey: string | null
+  grossExpenseCents: number
+  refundCents: number
+  netSpentCents: number
+  shareBasisPoints: number
+  entryCount: number
+}
+
+export type BudgetMerchantSpendReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  merchant: string | null
+  totalGrossExpenseCents: number
+  totalRefundCents: number
+  totalNetSpentCents: number
+  rows: BudgetMerchantSpendRow[]
+}
+
+export type BudgetPeriodComparisonRow = {
+  periodId: string
+  name: string
+  startDate: string
+  endDate: string
+  closed: boolean
+  incomeCents: number
+  grossExpenseCents: number
+  refundCents: number
+  netSpendCents: number
+  savingsContributionCents: number
+  investmentContributionCents: number
+  fundedBufferCents: number | null
+  retainedBufferCents: number | null
+  changeVsPreviousBasisPoints: number | null
+}
+
+export type BudgetPeriodComparisonReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  merchant: string | null
+  rows: BudgetPeriodComparisonRow[]
+}
+
+export type BudgetPlannedVsActualRow = {
+  seriesId: string
+  name: string
+  kind: string
+  categoryId: string | null
+  plannedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+  occurrenceCount: number
+  postedCount: number
+}
+
+export type BudgetPlannedVsActualReport = {
+  from: string
+  through: string
+  categoryId: string | null
+  plannedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+  income: BudgetPlannedVsActualRow[]
+  commitments: BudgetPlannedVsActualRow[]
+}
+
+export type BudgetIncomeReportRow = {
+  periodId: string
+  name: string
+  startDate: string
+  endDate: string
+  expectedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+}
+
+export type BudgetIncomeReport = {
+  from: string
+  through: string
+  expectedCents: number
+  actualCents: number
+  varianceCents: number
+  varianceBasisPoints: number | null
+  routing: Array<{ destination: string; amountCents: number }>
+  rows: BudgetIncomeReportRow[]
+}
+
+export type BudgetBufferReportRow = {
+  periodId: string
+  name: string
+  startDate: string
+  endDate: string
+  open: boolean
+  forecastBufferTargetCents: number
+  actualBufferTargetCents: number
+  fundedBufferCents: number
+  bufferShortfallCents: number
+  fundedShareBasisPoints: number | null
+  deficitCents: number | null
+  coveredFromBufferCents: number | null
+  carriedDeficitCents: number | null
+  disposition: string | null
+  dispositionAmountCents: number | null
+  retainedBufferCents: number | null
+  protectedBufferCents: number
+  closedAt: string | null
+}
+
+export type BudgetBufferReport = {
+  from: string
+  through: string
+  rows: BudgetBufferReportRow[]
+}
+
+export type BudgetSavingsGoalReportRow = {
+  purposeId: string
+  name: string
+  status: "active" | "behind" | "fully_funded" | "completed"
+  archived: boolean
+  targetAmountCents: number | null
+  allocatedCents: number
+  progressBasisPoints: number | null
+  allocatedInRangeCents: number
+  consumedInRangeCents: number
+  plannedContributionCents: number | null
+  revisedContributionCents: number | null
+  plannedFundingDate: string | null
+  revisedFundingDate: string | null
+  contributionsPaused: boolean
+}
+
+export type BudgetSavingsGoalReport = {
+  from: string
+  through: string
+  totalSavedCents: number
+  unallocatedCents: number
+  rows: BudgetSavingsGoalReportRow[]
+}
+
+export type ImportMapping = {
+  dateColumn: number
+  amountColumn: number
+  descriptionColumn: number | null
+  kindColumn: number | null
+  categoryColumn: number | null
+  merchantColumn: number | null
+  dateFormat: string
+  decimalSeparator: string
+  defaultKind: "expense" | "income" | null
+}
+
+export type ImportSessionSummary = {
+  id: string
+  fileName: string
+  status: "staged" | "committed"
+  rowCount: number
+  committedEntries: number
+  createdAt: string
+  committedAt: string | null
+}
+
+export type ImportRowView = {
+  id: string
+  rowNumber: number
+  raw: string[]
+  kind: string
+  occurredOn: string | null
+  description: string
+  amountCents: number
+  categoryName: string
+  merchant: string
+  validationError: string
+  duplicateWarning: boolean
+  ledgerEntryId: string | null
+}
+
+export type ImportSessionCreated = {
+  session: ImportSessionSummary
+  header: string[]
+  suggestedMapping: ImportMapping
+  preview: string[][]
+}
+
+export type ImportPreview = {
+  session: ImportSessionSummary
+  rows: ImportRowView[]
+  validRows: number
+  invalidRows: number
+  duplicateRows: number
+}
+
+export type ImportCommitResult = {
+  session: ImportSessionSummary
+  importedRows: number
+  skippedInvalidRows: number
+  skippedDuplicateRows: number
+  rows: ImportRowView[]
+}
+
+export type BudgetInvestmentReport = {
+  from: string
+  through: string
+  contributedCapitalCents: number
+  currentValueCents: number
+  withdrawnCents: number
+  gainCents: number
+  gainBasisPoints: number
+  latestValuationDate: string | null
+  contributedDeltaCents: number
+  valueDeltaCents: number
+  events: InvestmentProjection["events"]
 }

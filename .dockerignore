@@ -5,6 +5,8 @@
 **/.next
 **/out
 **/coverage
+**/bin
+**/obj
 **/tmp
 **/logs
 **/*.log

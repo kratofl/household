@@ -1,0 +1,205 @@
+using System.Globalization;
+using Microsoft.EntityFrameworkCore;
+
+namespace Household.Api.Features.Budget;
+
+public sealed class BudgetService(BudgetDbContext database, TimeProvider timeProvider)
+{
+    public Task<BudgetSummary> SummaryAsync(Guid ownerId, CancellationToken cancellationToken) =>
+        this.SummaryAsync(ownerId, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime), cancellationToken);
+
+    public async Task<BudgetSummary> SummaryAsync(
+        Guid ownerId,
+        DateOnly selectedDate,
+        CancellationToken cancellationToken)
+    {
+        (BudgetPeriod? period, List<BudgetCategory>? categories, List<BudgetAccount>? accounts) = await this.EnsureDefaultsAsync(
+            ownerId, selectedDate, cancellationToken);
+        List<BudgetLedgerEntry> ledgerEntries = await database.LedgerEntries.AsNoTracking()
+            .Include(x => x.Splits)
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id)
+            .OrderByDescending(x => x.OccurredOn).ThenByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+        HashSet<Guid> voidedIds = (await database.LedgerActions.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.Kind == BudgetValues.Void && ledgerEntries.Select(entry => entry.Id).Contains(x.LedgerEntryId))
+            .Select(x => x.LedgerEntryId).ToListAsync(cancellationToken)).ToHashSet();
+        HashSet<Guid> effectiveIds = BudgetLedgerState.EffectiveIds(
+            ledgerEntries.Select(x => new LedgerStateEntry(x.Id, x.CorrectsEntryId)).ToList(), voidedIds).ToHashSet();
+        List<BudgetLedgerEntry> effectiveEntries = ledgerEntries.Where(x => effectiveIds.Contains(x.Id)).ToList();
+        List<Guid> applications = await database.PlannedExpenseApplications.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id)
+            .Select(x => x.PlannedExpenseId).ToListAsync(cancellationToken);
+        HashSet<Guid> applied = applications.ToHashSet();
+        List<PlannedExpense> planned = await database.PlannedExpenses.AsNoTracking().Where(x => x.OwnerUserId == ownerId)
+            .OrderByDescending(x => x.Active).ThenBy(x => x.DueDay).ThenBy(x => x.Name)
+            .ToListAsync(cancellationToken);
+
+        Dictionary<Guid, long> spentByCategory = effectiveEntries.SelectMany(entry => entry.Splits.Select(split => new { entry.Kind, Split = split }))
+            .Where(x => x.Split.CategoryId.HasValue && x.Kind is BudgetValues.Expense or BudgetValues.Refund)
+            .GroupBy(x => x.Split.CategoryId!.Value)
+            .ToDictionary(x => x.Key, x => x.Sum(item => item.Kind == BudgetValues.Refund ? -item.Split.AmountCents : item.Split.AmountCents));
+        List<CategorySummary> categorySummaries = categories.Select(category => new CategorySummary(
+            category.Id, category.Name, category.Color, category.Icon, category.Behavior, category.ArchivedAt is not null,
+            spentByCategory.GetValueOrDefault(category.Id))).ToList();
+        long spent = effectiveEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents < 0).Sum(x => x.AmountCents)
+            - effectiveEntries.Where(x => x.Kind == BudgetValues.Refund && x.OrdinaryImpactCents > 0).Sum(x => x.AmountCents);
+        long excluded = effectiveEntries.Where(x => x.Kind == BudgetValues.Expense && x.OrdinaryImpactCents == 0).Sum(x => x.AmountCents);
+        long income = effectiveEntries.Where(x => x.Kind == BudgetValues.Income).Sum(x => x.AmountCents);
+        long ordinaryImpact = effectiveEntries.Where(x => x.Kind != BudgetValues.Income).Sum(x => x.OrdinaryImpactCents);
+        HashSet<Guid> incomePostingIds = effectiveEntries.Where(x => x.Kind == BudgetValues.Income && x.SourceRecordId.HasValue)
+            .Select(x => x.SourceRecordId!.Value).ToHashSet();
+        Dictionary<string, long> varianceAllocations = await database.IncomeVarianceAllocations.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && incomePostingIds.Contains(x.PostingId))
+            .GroupBy(x => x.Destination).Select(x => new { Destination = x.Key, Amount = x.Sum(y => y.AmountCents) })
+            .ToDictionaryAsync(x => x.Destination, x => x.Amount, cancellationToken);
+        long savingsContributionCents = await database.SavingsContributions.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id && x.Kind == BudgetValues.Contribution)
+            .SumAsync(x => x.AmountCents, cancellationToken);
+        SavingsProjection savingsProjection = await new BudgetSavingsProjector(database).LoadAsync(ownerId, selectedDate, cancellationToken);
+        long investmentContributionCents = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id && x.Kind == BudgetValues.Contribution)
+            .SumAsync(x => x.AmountCents, cancellationToken);
+        long ordinaryInvestmentWithdrawals = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id &&
+                        x.Kind == BudgetValues.Withdrawal && x.Destination == BudgetValues.Ordinary)
+            .SumAsync(x => x.AmountCents, cancellationToken);
+        long bufferInvestmentWithdrawals = await database.InvestmentEvents.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId && x.PeriodId == period.Id &&
+                        x.Kind == BudgetValues.Withdrawal && x.Destination == BudgetValues.Buffer)
+            .SumAsync(x => x.AmountCents, cancellationToken);
+        InvestmentProjection investmentProjection = await new BudgetInvestmentProjector(database).LoadAsync(
+            ownerId, selectedDate, cancellationToken);
+        BudgetSettings? settings = await database.Settings.AsNoTracking().SingleOrDefaultAsync(x => x.OwnerUserId == ownerId, cancellationToken);
+        long expectedIncome = (await new BudgetIncomePlanProjector(database).LoadAsync(
+            ownerId, period.StartDate, period.EndDate, cancellationToken)).Occurrences.Sum(x => x.AmountCents);
+        CommitmentProjection commitmentProjection = await new BudgetCommitmentProjector(database).LoadAsync(
+            ownerId, period.StartDate, period.StartDate.AddYears(5), cancellationToken);
+        long reservationCents = commitmentProjection.Occurrences
+            .SelectMany(x => x.Reservations)
+            .Where(x => x.Eligible && x.PeriodStart == period.StartDate)
+            .Sum(x => x.AmountCents);
+        BudgetAvailabilityResult availability = BudgetAvailability.Calculate(
+            income,
+            ordinaryImpact,
+            settings?.BufferRule ?? BudgetValues.FixedBuffer,
+            settings?.BufferAmountCents ?? 0,
+            settings?.BufferPercentageBasisPoints ?? 0,
+            varianceAllocations.GetValueOrDefault(BudgetValues.Buffer),
+            checked(varianceAllocations.GetValueOrDefault(BudgetValues.Savings) + savingsContributionCents),
+            checked(varianceAllocations.GetValueOrDefault(BudgetValues.Investment) + investmentContributionCents),
+            reservationCents);
+        long forecastBufferTarget = settings?.BufferRule == BudgetValues.PercentageBuffer
+            ? checked(expectedIncome * (settings?.BufferPercentageBasisPoints ?? 0) / 10_000)
+            : settings?.BufferAmountCents ?? 0;
+        BudgetPeriodClose? priorClose = await (
+            from close in database.PeriodCloses.AsNoTracking()
+            join closedPeriod in database.Periods.AsNoTracking() on close.PeriodId equals closedPeriod.Id
+            where close.OwnerUserId == ownerId && closedPeriod.EndDate < period.StartDate
+            orderby closedPeriod.EndDate descending
+            select close).FirstOrDefaultAsync(cancellationToken);
+        BudgetPeriodClose? currentClose = await database.PeriodCloses.AsNoTracking().SingleOrDefaultAsync(
+            x => x.OwnerUserId == ownerId && x.PeriodId == period.Id, cancellationToken);
+        long openingBuffer = priorClose is null
+            ? await database.OpeningAllocations.AsNoTracking().Where(x =>
+                    x.OwnerUserId == ownerId && x.Kind == BudgetValues.Buffer && x.OccurredOn <= period.EndDate)
+                .SumAsync(x => x.AmountCents, cancellationToken)
+            : 0;
+        long accumulatedBuffer = checked((priorClose?.RetainedBufferCents ?? openingBuffer) +
+                                        bufferInvestmentWithdrawals);
+        long deficitCarryover = priorClose?.CarriedDeficitCents ?? 0;
+        long releasedOrdinary = priorClose?.Disposition == BudgetValues.Ordinary
+            ? priorClose.DispositionAmountCents
+            : 0;
+        long protectedBuffer = currentClose?.RetainedBufferCents
+            ?? checked(accumulatedBuffer + availability.FundedBufferCents);
+        long maximumOrdinary = Math.Max(
+            0,
+            checked(availability.MaximumOrdinaryCents - deficitCarryover + releasedOrdinary +
+                    ordinaryInvestmentWithdrawals));
+        long ordinaryAvailable = checked(availability.OrdinaryAvailableCents - deficitCarryover + releasedOrdinary +
+                                        ordinaryInvestmentWithdrawals);
+        List<PlannedExpenseSummary> plannedSummaries = planned.Select(item => new PlannedExpenseSummary(
+            item.Id, item.OwnerUserId, item.AccountId, item.CategoryId, item.Name, item.Kind, item.Cadence,
+            item.AmountCents, item.DueDay, item.DueMonth, item.IncludeInLimit, item.Active,
+            item.CreatedAt, item.UpdatedAt, applied.Contains(item.Id))).ToList();
+        return new BudgetSummary(period, categorySummaries, spent, excluded,
+            ordinaryAvailable,
+            accounts.Sum(x => x.BalanceCents), accounts, plannedSummaries,
+            income, forecastBufferTarget, availability.TargetBufferCents,
+            availability.FundedBufferCents, availability.BufferShortfallCents,
+            currentClose?.RetainedBufferCents ?? accumulatedBuffer, protectedBuffer, deficitCarryover,
+            savingsContributionCents, savingsProjection.TotalSavedCents, savingsProjection.UnallocatedCents,
+            investmentContributionCents, investmentProjection.CurrentValueCents,
+            investmentProjection.ContributedCapitalCents, investmentProjection.GainCents,
+            investmentProjection.GainBasisPoints,
+            reservationCents, maximumOrdinary, ordinaryAvailable, ledgerEntries);
+    }
+
+    public async Task<(BudgetPeriod Period, List<BudgetCategory> Categories, List<BudgetAccount> Accounts)> EnsureDefaultsAsync(
+        Guid ownerId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+    {
+        BudgetPeriod? period = await database.Periods
+            .Where(x => x.OwnerUserId == ownerId && x.StartDate <= date && x.EndDate >= date)
+            .OrderByDescending(x => x.StartDate)
+            .FirstOrDefaultAsync(cancellationToken);
+        int preferredStartDay = await database.Settings.AsNoTracking()
+            .Where(x => x.OwnerUserId == ownerId)
+            .Select(x => (int?)x.PreferredPeriodStartDay)
+            .SingleOrDefaultAsync(cancellationToken) ?? 1;
+        BudgetPeriodRange selected = period is null
+            ? BudgetPeriodCalendar.ForDate(date, preferredStartDay)
+            : new BudgetPeriodRange(period.StartDate, period.EndDate, period.PreferredStartDay);
+        DateOnly start = selected.Start;
+        DateOnly end = selected.End;
+        string name = start.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+        if (period is null)
+        {
+            await database.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO budget.periods (owner_user_id, name, start_date, end_date, preferred_start_day, spending_limit_cents)
+                VALUES ({ownerId}, {name}, {start}, {end}, {selected.PreferredStartDay}, 240000)
+                ON CONFLICT (owner_user_id, start_date) DO NOTHING;
+                """, cancellationToken);
+        }
+        foreach ((string Name, string Color, string Behavior, bool Protected) category in DefaultCategories)
+        {
+            await database.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO budget.categories (owner_user_id, name, color, behavior, protected)
+                VALUES ({ownerId}, {category.Name}, {category.Color}, {category.Behavior}, {category.Protected})
+                ON CONFLICT (owner_user_id, name) DO NOTHING;
+                """, cancellationToken);
+        }
+        await database.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO budget.accounts (owner_user_id, name, balance_cents)
+            VALUES ({ownerId}, {"Girokonto"}, 0)
+            ON CONFLICT (owner_user_id, name) DO NOTHING;
+            """, cancellationToken);
+
+        period ??= await database.Periods.SingleAsync(
+            x => x.OwnerUserId == ownerId && x.StartDate == start, cancellationToken);
+        List<BudgetCategory> categories = await database.Categories.Where(x => x.OwnerUserId == ownerId)
+            .OrderBy(x => x.Protected).ThenBy(x => x.Name).ToListAsync(cancellationToken);
+        List<BudgetAccount> accounts = await database.Accounts.Where(x => x.OwnerUserId == ownerId)
+            .OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        return (period, categories, accounts);
+    }
+
+    public static DateOnly? OccurrenceDate(BudgetPeriod period, PlannedExpense planned)
+    {
+        if (!planned.Active) return null;
+        if (planned.Cadence == BudgetValues.Yearly && planned.DueMonth != period.StartDate.Month) return null;
+        if (planned.Cadence is not (BudgetValues.Monthly or BudgetValues.Yearly)) return null;
+        int day = Math.Clamp(planned.DueDay, 1, period.EndDate.Day);
+        return new DateOnly(period.StartDate.Year, period.StartDate.Month, day);
+    }
+
+    private static readonly (string Name, string Color, string Behavior, bool Protected)[] DefaultCategories =
+    [
+        ("Fixkosten", "#2563eb", BudgetValues.IncludeInLimit, false),
+        ("Lebensmittel", "#16a34a", BudgetValues.IncludeInLimit, false),
+        ("Flexibel", "#f97316", BudgetValues.IncludeInLimit, false),
+        ("Sparen", "#7c3aed", BudgetValues.IncludeInLimit, false),
+        ("Nicht speichern", "#64748b", BudgetValues.ExcludeFromLimit, true),
+    ];
+}

@@ -5,14 +5,12 @@ PROD_BUILD_FILE=$(DEPLOYMENTS_DIR)/docker-compose.build.yml
 ENV_FILE=$(DEPLOYMENTS_DIR)/.env
 ENV_EXAMPLE_FILE=$(DEPLOYMENTS_DIR)/.env.example
 
-COMPOSE_DEV=docker compose --env-file $(ENV_FILE) -f $(DEV_FILE)
 COMPOSE_PROD=docker compose --env-file $(ENV_FILE) -f $(PROD_FILE)
 COMPOSE_PROD_BUILD=docker compose --env-file $(ENV_FILE) -f $(PROD_FILE) -f $(PROD_BUILD_FILE)
 COMPOSE_EXAMPLE=docker compose --env-file $(ENV_EXAMPLE_FILE)
 
 BACKEND_DIR=backend
 WEB_DIR=clients/web
-BUILD_DIR=tmp/household-build
 
 .PHONY: help
 help:
@@ -20,25 +18,30 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  make setup-env              Copy deployments/.env.example to deployments/.env if missing"
-	@echo "  make bootstrap              Download Go modules and install web dependencies"
+	@echo "  make bootstrap              Restore .NET and web dependencies"
 	@echo "  make doctor                 Check required local tools"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev                    Start dev DB, local API, and local web app"
+	@echo "  make dev                    Start this worktree in Docker and watch source changes"
+	@echo "  make dev-info               Show this worktree URL and services"
+	@echo "  make dev-down               Stop this worktree, keep its data"
+	@echo "  make dev-logs               Follow this worktree logs"
 	@echo "  make db-up                  Start local dev Postgres in Docker"
 	@echo "  make db-down                Stop local dev Postgres"
 	@echo "  make db-logs                Follow local dev Postgres logs"
-	@echo "  make api-dev                Start local API with Air if installed, otherwise go run"
-	@echo "  make web-dev                Start Next.js web dev server"
+	@echo "  make api-dev                Deprecated: use make dev"
+	@echo "  make web-dev                Deprecated: use make dev"
 	@echo "  make reset-dev-db           Remove the dev Postgres volume"
+	@echo "  make seed-dev BACKUP=path   Restore a Postgres dump into this worktree database"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make check                  Run backend, web, and Compose checks"
-	@echo "  make backend-test           Run Go tests"
+	@echo "  make backend-test           Run .NET tests"
 	@echo "  make backend-build          Build API and updater binaries"
 	@echo "  make web-lint               Lint web app"
 	@echo "  make web-build              Build web app"
 	@echo "  make compose-config         Validate Compose configuration"
+	@echo "  make workflow-check         Lint workflows and test release bundles"
 	@echo ""
 	@echo "Production:"
 	@echo "  make prod-pull              Pull published production images"
@@ -54,7 +57,7 @@ help:
 	@echo "  make observability-up       Start dev Grafana, Loki, and Alloy"
 	@echo "  make observability-down     Stop dev observability stack"
 	@echo "  make observability-logs     Follow dev observability logs"
-	@echo "  make create-migration feature=<name> name=<migration_name>"
+	@echo "  make create-migration feature=<identity|budget|audit> name=<migration_name>"
 
 # ----------------------
 # SETUP
@@ -69,14 +72,14 @@ setup-env:
 	fi
 
 bootstrap: setup-env
-	@echo ">> Downloading backend dependencies"
-	@cd $(BACKEND_DIR) && go mod download
+	@echo ">> Restoring backend dependencies"
+	@cd $(BACKEND_DIR) && dotnet restore Household.slnx
 	@echo ">> Installing web dependencies"
 	@cd $(WEB_DIR) && npm ci
 
 doctor:
 	@missing=0; \
-	for cmd in go node npm docker; do \
+	for cmd in dotnet node npm docker; do \
 		if ! command -v "$$cmd" >/dev/null 2>&1; then \
 			echo "Missing required tool: $$cmd"; \
 			missing=1; \
@@ -106,21 +109,24 @@ validate-prod-env: require-env
 # ----------------------
 # QUALITY
 # ----------------------
-.PHONY: check test build backend-test backend-build web-build web-lint compose-config
-check: backend-test backend-build web-lint web-build compose-config
+.PHONY: check test build backend-test backend-build web-build web-lint compose-config workflow-check
+check: backend-test backend-build web-lint web-build compose-config workflow-check
+
+workflow-check:
+	@docker run --rm -v "$(CURDIR):/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
+	@node --test scripts/create-release-bundle.test.mjs
 
 test: backend-test
 
 build: backend-build
 
 backend-test:
-	@echo ">> Testing $(BACKEND_DIR)"
-	@cd $(BACKEND_DIR) && go test ./...
+	@echo ">> Testing $(BACKEND_DIR) against PostgreSQL"
+	@cd $(BACKEND_DIR) && dotnet test Household.slnx --configuration Release
 
 backend-build:
-	@mkdir -p $(BUILD_DIR)
 	@echo ">> Building household-api and household-updater"
-	@cd $(BACKEND_DIR) && go build -o $(BUILD_DIR)/household-api ./cmd/household-api && go build -o $(BUILD_DIR)/household-updater ./cmd/household-updater
+	@cd $(BACKEND_DIR) && dotnet build Household.slnx --configuration Release
 
 web-build:
 	@echo ">> Building web"
@@ -136,58 +142,21 @@ compose-config:
 	@echo ">> Validating production source-build Compose"
 	@$(COMPOSE_EXAMPLE) -f $(PROD_FILE) -f $(PROD_BUILD_FILE) config --quiet
 	@echo ">> Validating development Compose"
-	@$(COMPOSE_EXAMPLE) -f $(DEV_FILE) config --quiet
+	@docker compose --env-file $(DEPLOYMENTS_DIR)/dev.env -f $(DEV_FILE) config --quiet
 
-# ----------------------
-# DEV DATABASE
-# ----------------------
-.PHONY: db-up db-down db-logs core-up core-down
-db-up: setup-env
-	@echo ">> Starting local dev Postgres..."
-	@$(COMPOSE_DEV) --profile db up -d household-db
+# Development commands share one implementation with make.ps1.
+.PHONY: dev dev-info dev-project dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs core-up core-down
+dev dev-info dev-project dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs:
+	@sh scripts/dev.sh $@
 
-db-down:
-	@$(COMPOSE_DEV) --profile db down --remove-orphans
-
-db-logs:
-	@$(COMPOSE_DEV) logs -f household-db
-
+.PHONY: seed-dev
+seed-dev:
+	@if [ -z "$(BACKUP)" ]; then \
+		echo "Please add BACKUP=path (a dump from make prod-backup)"; exit 1; \
+	fi
+	@sh scripts/dev.sh seed-dev "$(BACKUP)"
 core-up: db-up
-core-down: db-down
-
-.PHONY: api-dev logs dev-down reset-dev-db
-api-dev:
-	@echo ">> Starting local API..."
-	@set -a; \
-	if [ -f "$(ENV_FILE)" ]; then . "$(ENV_FILE)"; fi; \
-	set +a; \
-	export HOUSEHOLD_API_DB_HOST=localhost; \
-	export HOUSEHOLD_API_DB_PORT=$${HOUSEHOLD_DB_PORT:-5432}; \
-	export HOUSEHOLD_API_DB_DATABASE=$${HOUSEHOLD_DB_DATABASE:-household}; \
-	export HOUSEHOLD_API_DB_USER=$${HOUSEHOLD_DB_USER:-household}; \
-	export HOUSEHOLD_API_DB_PASSWORD=$${HOUSEHOLD_DB_PASSWORD:-household}; \
-	export HOUSEHOLD_API_SERVER_PORT=$${HOUSEHOLD_API_SERVER_PORT:-8090}; \
-	export HOUSEHOLD_API_SERVER_TIMEOUT_READ=$${HOUSEHOLD_API_SERVER_TIMEOUT_READ:-5s}; \
-	export HOUSEHOLD_API_SERVER_TIMEOUT_WRITE=$${HOUSEHOLD_API_SERVER_TIMEOUT_WRITE:-10s}; \
-	export HOUSEHOLD_API_SERVER_TIMEOUT_IDLE=$${HOUSEHOLD_API_SERVER_TIMEOUT_IDLE:-60s}; \
-	export HOUSEHOLD_LOG_LEVEL=$${HOUSEHOLD_LOG_LEVEL:-debug}; \
-	export HOUSEHOLD_LOG_ENVIRONMENT=dev; \
-	export HOUSEHOLD_LOG_VERSION=dev; \
-	export HOUSEHOLD_UPDATES_GITHUB_REPOSITORY=$${HOUSEHOLD_UPDATES_GITHUB_REPOSITORY:-kratofl/household}; \
-	export HOUSEHOLD_SEED_DEMO_USER=true; \
-	export HOUSEHOLD_SEED_DEMO_USER_NAME=$${HOUSEHOLD_SEED_DEMO_USER_NAME:-admin}; \
-	export HOUSEHOLD_SEED_DEMO_USER_EMAIL=$${HOUSEHOLD_SEED_DEMO_USER_EMAIL:-admin@household.local}; \
-	export HOUSEHOLD_SEED_DEMO_USER_PASSWORD=$${HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD:-admin}; \
-	cd $(BACKEND_DIR); \
-	if command -v air >/dev/null 2>&1; then air -c .air.toml; else go run ./cmd/household-api; fi
-
-logs: db-logs
-
-dev-down:
-	@$(MAKE) db-down
-
-reset-dev-db: setup-env
-	@$(COMPOSE_DEV) --profile db down -v --remove-orphans
+core-down: dev-down
 
 # ----------------------
 # PRODUCTION
@@ -224,36 +193,6 @@ prod-restore: validate-prod-env
 	@$(COMPOSE_PROD) exec -T household-db sh -c 'pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --clean --if-exists' < "$(BACKUP)"
 
 # ----------------------
-# OBSERVABILITY
-# ----------------------
-.PHONY: observability-up observability-down observability-logs
-observability-up: setup-env
-	@echo ">> Starting observability stack..."
-	@$(COMPOSE_DEV) --profile observability up -d
-
-observability-down:
-	@$(COMPOSE_DEV) stop grafana alloy loki
-
-observability-logs:
-	@$(COMPOSE_DEV) logs -f grafana alloy loki
-
-# ----------------------
-# WEB
-# ----------------------
-.PHONY: web-dev
-web-dev:
-	@echo ">> Starting Next.js web dev server..."
-	@cd $(WEB_DIR) && npm run dev
-
-# ----------------------
-# ONE-SHOT DEV (DB + local monolith API + Web)
-# ----------------------
-.PHONY: dev
-dev:
-	@$(MAKE) db-up
-	@$(MAKE) -j2 api-dev web-dev
-
-# ----------------------
 # MIGRATIONS
 # ----------------------
 .PHONY: create-migration
@@ -264,8 +203,17 @@ create-migration:
 	@if [ -z "$(name)" ]; then \
 		echo "Please add name: make create-migration feature=budget name=add_accounts"; exit 1; \
 	fi
-	@if ! command -v migrate >/dev/null 2>&1; then \
-		echo "golang-migrate CLI not found, installing..."; \
-		go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest; \
-	fi
-	@migrate create -ext sql -dir "$(BACKEND_DIR)/internal/features/$(feature)/migrations" -format "20060102150405" $(name)
+	@case "$(feature)" in \
+		identity) context=IdentityDbContext ;; \
+		budget) context=BudgetDbContext ;; \
+		audit) context=AuditDbContext ;; \
+		*) echo "Unknown feature: $(feature)"; exit 1 ;; \
+	esac; \
+	if ! command -v dotnet-ef >/dev/null 2>&1; then \
+		echo "dotnet-ef not found, installing..."; \
+		dotnet tool install --global dotnet-ef --version 10.0.10; \
+	fi; \
+	cd $(BACKEND_DIR) && dotnet ef migrations add "$(name)" \
+		--project src/Household.Api/Household.Api.csproj \
+		--context "$$context" \
+		--output-dir "Features/$(feature)/Migrations"

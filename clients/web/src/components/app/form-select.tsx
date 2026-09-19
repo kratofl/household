@@ -28,8 +28,8 @@ export function FormSelect({
     <select
       id={id}
       className={cn(
-        "h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs transition-colors outline-none",
-        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+        "h-7 w-full rounded-md bg-input px-2.5 text-[13px] shadow-[inset_0_0_0_0.5px_var(--hairline)] transition-[box-shadow] outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ring/40",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}

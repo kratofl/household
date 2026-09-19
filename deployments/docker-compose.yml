@@ -91,7 +91,9 @@ services:
       POSTGRES_USER: ${HOUSEHOLD_DB_USER:-household}
       POSTGRES_PASSWORD: ${HOUSEHOLD_DB_PASSWORD:?set HOUSEHOLD_DB_PASSWORD}
     volumes:
-      - household_db_data:/var/lib/postgresql/data
+      # PostgreSQL 18+ images require the mount at /var/lib/postgresql and place
+      # the cluster in a version-specific subdirectory.
+      - household_db_data:/var/lib/postgresql
     restart: unless-stopped
     networks:
       - backend

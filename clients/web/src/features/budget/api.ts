@@ -1,19 +1,83 @@
-import { apiRequest } from "@/lib/api"
+import { apiRequest, apiRequestText } from "@/lib/api"
 
 import type {
+  BudgetBufferReport,
   BudgetCategoryInput,
+  BudgetCategorySpendReport,
+  BudgetIncomeReport,
+  BudgetInvestmentReport,
+  BudgetLedgerEntry,
+  BudgetLedgerEntryInput,
+  BudgetMerchantSpendReport,
+  BudgetPeriodComparisonReport,
   BudgetPeriodInput,
+  BudgetPlannedVsActualReport,
+  BudgetReminder,
+  BudgetReminderSetting,
+  BudgetReportQuery,
+  BudgetSavingsGoalReport,
   BudgetSummary,
+  BudgetTimelineItem,
+  BudgetSetupInput,
+  BudgetSetupState,
   BudgetTransactionInput,
+  CommitmentInput,
+  CommitmentProjection,
+  ImportCommitResult,
+  ImportMapping,
+  ImportPreview,
+  ImportSessionCreated,
+  IncomePlanInput,
+  IncomePlanProjection,
+  InvestmentProjection,
   PlannedExpenseInput,
+  ReminderSettingInput,
+  SavingsProjection,
+  WishlistItem,
 } from "./types"
 
-export function loadBudgetSummary(accessToken: string) {
-  return apiRequest<BudgetSummary>("/budget/summary", { accessToken })
+export function loadBudgetSetup(accessToken: string) {
+  return apiRequest<BudgetSetupState>("/budget/setup", { accessToken })
+}
+
+export function saveBudgetSetup(accessToken: string, body: BudgetSetupInput) {
+  return apiRequest<BudgetSetupState>("/budget/setup", { method: "PUT", accessToken, body })
+}
+
+export function updateBudgetSettings(accessToken: string, body: BudgetSetupInput) {
+  return apiRequest<BudgetSetupState>("/budget/settings", { method: "PATCH", accessToken, body })
+}
+
+export function loadBudgetSummary(accessToken: string, date?: string) {
+  return apiRequest<BudgetSummary>(`/budget/summary${date ? `?date=${date}` : ""}`, { accessToken })
 }
 
 export function createBudgetTransaction(accessToken: string, body: BudgetTransactionInput) {
   return apiRequest("/budget/transactions", { method: "POST", accessToken, body })
+}
+
+export function createBudgetLedgerEntry(accessToken: string, body: BudgetLedgerEntryInput) {
+  return apiRequest("/budget/ledger/entries", { method: "POST", accessToken, body })
+}
+
+export function loadBudgetTimeline(accessToken: string, query = "") {
+  return apiRequest<BudgetTimelineItem[]>(`/budget/timeline${query ? `?${query}` : ""}`, { accessToken })
+}
+
+export function loadBudgetLedgerDetails(accessToken: string, id: string) {
+  return apiRequest<{ entry: BudgetLedgerEntry; auditHistory: unknown }>(`/budget/ledger/entries/${id}`, { accessToken })
+}
+
+export function correctBudgetLedgerEntry(accessToken: string, id: string, body: unknown) {
+  return apiRequest(`/budget/ledger/entries/${id}/corrections`, { method: "POST", accessToken, body })
+}
+
+export function voidBudgetLedgerEntry(accessToken: string, id: string, reason: string) {
+  return apiRequest(`/budget/ledger/entries/${id}/voids`, { method: "POST", accessToken, body: { reason } })
+}
+
+export function refundBudgetLedgerEntry(accessToken: string, id: string, body: unknown) {
+  return apiRequest(`/budget/ledger/entries/${id}/refunds`, { method: "POST", accessToken, body })
 }
 
 export function updateCurrentBudgetPeriod(accessToken: string, body: BudgetPeriodInput) {
@@ -38,4 +102,223 @@ export function updatePlannedExpense(accessToken: string, id: string, body: Plan
 
 export function applyCurrentPlannedExpenses(accessToken: string) {
   return apiRequest("/budget/planned-expenses/apply-current", { method: "POST", accessToken })
+}
+
+export function loadIncomePlans(accessToken: string, from: string, through: string) {
+  return apiRequest<IncomePlanProjection>(`/budget/income-plans?from=${from}&through=${through}`, { accessToken })
+}
+
+export function createIncomePlan(accessToken: string, body: IncomePlanInput) {
+  return apiRequest("/budget/income-plans", { method: "POST", accessToken, body })
+}
+
+export function editIncomePlan(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}`, { method: "PATCH", accessToken, body })
+}
+
+export function pauseIncomePlan(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/pauses`, { method: "POST", accessToken, body })
+}
+
+export function stopIncomePlan(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/stop`, { method: "POST", accessToken, body })
+}
+
+export function confirmIncomeOccurrence(accessToken: string, seriesId: string, scheduledOn: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/occurrences/${scheduledOn}/confirm`, { method: "POST", accessToken, body })
+}
+
+export function autoPostIncome(accessToken: string, from: string, through: string) {
+  return apiRequest(`/budget/income-plans/auto-post?from=${from}&through=${through}`, { method: "POST", accessToken })
+}
+
+export function saveDefaultIncomeVarianceRule(accessToken: string, body: unknown) {
+  return apiRequest("/budget/income-variance-rules/default", { method: "PUT", accessToken, body })
+}
+
+export function saveIncomePlanVarianceRule(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/income-plans/${seriesId}/variance-rule`, { method: "PUT", accessToken, body })
+}
+
+export function loadCommitments(accessToken: string, from: string, through: string) {
+  return apiRequest<CommitmentProjection>(`/budget/commitments?from=${from}&through=${through}`, { accessToken })
+}
+
+export function createCommitment(accessToken: string, body: CommitmentInput) {
+  return apiRequest("/budget/commitments", { method: "POST", accessToken, body })
+}
+
+export function editCommitment(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}`, { method: "PATCH", accessToken, body })
+}
+
+export function pauseCommitment(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}/pauses`, { method: "POST", accessToken, body })
+}
+
+export function stopCommitment(accessToken: string, seriesId: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}/stop`, { method: "POST", accessToken, body })
+}
+
+export function confirmCommitmentOccurrence(accessToken: string, seriesId: string, scheduledOn: string, body: unknown) {
+  return apiRequest(`/budget/commitments/${seriesId}/occurrences/${scheduledOn}/confirm`, { method: "POST", accessToken, body })
+}
+
+export function matchCommitmentOccurrence(accessToken: string, seriesId: string, scheduledOn: string, ledgerEntryId: string) {
+  return apiRequest(`/budget/commitments/${seriesId}/occurrences/${scheduledOn}/match`, {
+    method: "POST",
+    accessToken,
+    body: { ledgerEntryId },
+  })
+}
+
+export function autoPostCommitments(accessToken: string, from: string, through: string) {
+  return apiRequest(`/budget/commitments/auto-post?from=${from}&through=${through}`, { method: "POST", accessToken })
+}
+
+export function closeBudgetPeriod(accessToken: string, periodId: string, body: unknown) {
+  return apiRequest(`/budget/periods/${periodId}/close`, { method: "POST", accessToken, body })
+}
+
+export function loadSavings(accessToken: string) {
+  return apiRequest<SavingsProjection>("/budget/savings", { accessToken })
+}
+
+export function createSavingsPurpose(accessToken: string, name: string) {
+  return apiRequest("/budget/savings/purposes", { method: "POST", accessToken, body: { name } })
+}
+
+export function createSavingsGoal(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/goals", { method: "POST", accessToken, body })
+}
+
+export function createSavingsContribution(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/contributions", { method: "POST", accessToken, body })
+}
+
+export function createSavingsOpeningValue(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/opening-values", { method: "POST", accessToken, body })
+}
+
+export function createSavingsPurchase(accessToken: string, body: unknown) {
+  return apiRequest("/budget/savings/purchases", { method: "POST", accessToken, body })
+}
+
+export function loadInvestments(accessToken: string) {
+  return apiRequest<InvestmentProjection>("/budget/investments", { accessToken })
+}
+
+export function createInvestmentEvent(
+  accessToken: string,
+  kind: "opening-values" | "contributions" | "valuations" | "withdrawals",
+  body: unknown,
+) {
+  return apiRequest(`/budget/investments/${kind}`, { method: "POST", accessToken, body })
+}
+
+export function loadWishlist(accessToken: string) {
+  return apiRequest<WishlistItem[]>("/budget/wishlist", { accessToken })
+}
+
+export function createWishlistItem(accessToken: string, body: unknown) {
+  return apiRequest<WishlistItem>("/budget/wishlist", { method: "POST", accessToken, body })
+}
+
+export function updateWishlistItem(accessToken: string, itemId: string, body: unknown) {
+  return apiRequest<WishlistItem>(`/budget/wishlist/${itemId}`, { method: "PATCH", accessToken, body })
+}
+
+export function promoteWishlistItem(accessToken: string, itemId: string, body: unknown) {
+  return apiRequest<WishlistItem>(`/budget/wishlist/${itemId}/promote`, { method: "POST", accessToken, body })
+}
+
+export function loadBudgetReminders(accessToken: string, asOf?: string) {
+  return apiRequest<BudgetReminder[]>(`/budget/reminders${asOf ? `?asOf=${asOf}` : ""}`, { accessToken })
+}
+
+export function loadReminderSettings(accessToken: string) {
+  return apiRequest<BudgetReminderSetting[]>("/budget/reminders/settings", { accessToken })
+}
+
+export function saveReminderSetting(
+  accessToken: string,
+  planKind: "income" | "commitment",
+  seriesId: string,
+  body: ReminderSettingInput,
+) {
+  return apiRequest<BudgetReminderSetting>(`/budget/reminders/settings/${planKind}/${seriesId}`, {
+    method: "PUT",
+    accessToken,
+    body,
+  })
+}
+
+function reportQuery(query: BudgetReportQuery) {
+  const params = new URLSearchParams()
+  if (query.from) params.set("from", query.from)
+  if (query.through) params.set("through", query.through)
+  if (query.categoryId) params.set("categoryId", query.categoryId)
+  if (query.merchant) params.set("merchant", query.merchant)
+  const value = params.toString()
+  return value ? `?${value}` : ""
+}
+
+export function loadPeriodComparisonReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetPeriodComparisonReport>(`/budget/reports/period-comparison${reportQuery(query)}`, { accessToken })
+}
+
+export function loadCategorySpendReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetCategorySpendReport>(`/budget/reports/category-spend${reportQuery(query)}`, { accessToken })
+}
+
+export function loadMerchantSpendReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetMerchantSpendReport>(`/budget/reports/merchant-spend${reportQuery(query)}`, { accessToken })
+}
+
+export function loadPlannedVsActualReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetPlannedVsActualReport>(`/budget/reports/planned-vs-actual${reportQuery(query)}`, { accessToken })
+}
+
+export function loadIncomeReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetIncomeReport>(`/budget/reports/income${reportQuery(query)}`, { accessToken })
+}
+
+export function loadBufferReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetBufferReport>(`/budget/reports/buffer${reportQuery(query)}`, { accessToken })
+}
+
+export function loadSavingsGoalReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetSavingsGoalReport>(`/budget/reports/savings-goals${reportQuery(query)}`, { accessToken })
+}
+
+export function loadInvestmentReport(accessToken: string, query: BudgetReportQuery = {}) {
+  return apiRequest<BudgetInvestmentReport>(`/budget/reports/investments${reportQuery(query)}`, { accessToken })
+}
+
+export function exportBudgetCsv(accessToken: string, type: string) {
+  return apiRequestText(`/budget/export/${type}`, { accessToken })
+}
+
+export function createImportSession(accessToken: string, fileName: string, content: string) {
+  return apiRequest<ImportSessionCreated>("/budget/import/sessions", {
+    method: "POST",
+    accessToken,
+    body: { fileName, content },
+  })
+}
+
+export function applyImportMapping(accessToken: string, sessionId: string, mapping: ImportMapping) {
+  return apiRequest<ImportPreview>(`/budget/import/sessions/${sessionId}/mapping`, {
+    method: "PUT",
+    accessToken,
+    body: mapping,
+  })
+}
+
+export function commitImportSession(accessToken: string, sessionId: string, includeDuplicates: boolean) {
+  return apiRequest<ImportCommitResult>(`/budget/import/sessions/${sessionId}/commit`, {
+    method: "POST",
+    accessToken,
+    body: { includeDuplicates },
+  })
 }

@@ -86,7 +86,8 @@ The API reads database settings as `HOUSEHOLD_API_DB_*`. Compose and the Makefil
 | `HOUSEHOLD_SEED_DEMO_USER_EMAIL` | `admin@household.local` | Email for the seed admin login. |
 | `HOUSEHOLD_SEED_DEMO_USER_PASSWORD` | `change-me-before-first-boot` | Password for the seed admin. Must be changed before first production boot. |
 
-For local development, `make api-dev` defaults to a seed admin if no env file overrides it.
+For local development, `make dev` seeds `admin` / `admin` in an isolated database
+per worktree. It does not load the production `.env`; see [Local setup](development/local-setup.md).
 
 ## Updates
 

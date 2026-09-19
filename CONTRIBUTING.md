@@ -4,6 +4,21 @@ Thanks for considering a contribution to Household. The project is local-network
 
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+## What we accept
+
+Household is early and built by one maintainer, so scope stays tight on purpose.
+
+Likely to be merged: small, focused bug fixes; reliability and install fixes;
+documentation corrections; small performance improvements with a measurement.
+
+Talk first: new features, new product areas, dependency swaps, and anything that
+changes the data model. Open an issue with the problem you want solved before writing
+code. A feature PR that arrives without that conversation will probably be closed, not
+because the work is bad but because the direction is not settled.
+
+Pull requests are labeled `size:XS` to `size:XXL` automatically. Small is good.
+Anything above `size:L` should be split unless it is a single mechanical change.
+
 ## Before opening an issue
 
 - Search existing issues and discussions first.
@@ -12,30 +27,17 @@ Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
-Prerequisites:
+Install Git, Docker Desktop (Linux containers), and Docker Compose 2.32+.
+Use Make on macOS/Linux, or PowerShell with Git for Windows on Windows.
 
-- Go 1.26.x
-- Node.js 24.x and npm
-- Docker Engine with the Docker Compose plugin
-- Optional: `air` for backend hot reload
+Start the complete local stack with `make dev` or `.\make.ps1 dev`.
+The command prints an automatically assigned localhost URL. Sign in with
+`admin` / `admin`. Each worktree has an independent database and network.
+Keep the command running to synchronize source changes into the containers.
+Stop the stack with `make dev-down` or `.\make.ps1 dev-down`; data is retained.
 
-Bootstrap a clean clone:
-
-```bash
-git clone https://github.com/kratofl/household.git
-cd household
-make setup-env
-make bootstrap
-make doctor
-```
-
-Start the local development stack:
-
-```bash
-make dev
-```
-
-This starts Postgres in Docker, then runs the Go API and Next.js locally. Local development seeds an admin user with `admin` / `admin` unless `HOUSEHOLD_DEV_SEED_DEMO_USER_PASSWORD` overrides the password.
+For host-side checks and migration generation, also install .NET 10 SDK and
+Node.js 26 with npm, then run `make bootstrap` or `.\make.ps1 bootstrap`.
 
 More details:
 
@@ -65,8 +67,8 @@ make compose-config
 ## Project boundaries
 
 - Backend code lives in `backend/`.
-- Feature modules live under `backend/internal/features/<feature>`.
-- Shared backend platform code lives under `backend/internal/platform`.
+- Feature modules live under `backend/src/Household.Api/Features/<Feature>`.
+- Shared backend platform code lives under `backend/src/Household.Api/Platform`.
 - Feature data should stay in feature-owned Postgres schemas, such as `identity`, `budget`, and `audit`.
 - The web UI lives in `clients/web/`.
 - Docker and operations files live in `deployments/`.
@@ -75,18 +77,19 @@ Keep feature code inside the owning feature unless a helper is genuinely reusabl
 
 ## Backend conventions
 
-- API entry point: `backend/cmd/household-api`.
-- Updater entry point: `backend/cmd/household-updater`.
-- Route registration happens through feature `RegisterRoutes` implementations.
+- API entry point: `backend/src/Household.Api`.
+- Updater entry point: `backend/src/Household.Updater`.
+- Route registration happens through feature-owned endpoint mapping extensions.
 - Migrations run on API startup.
-- Use table-driven Go tests for pure logic.
-- Use `httptest` and small fakes for handler behavior where possible.
-- Run `gofmt` on changed Go files.
+- Use focused xUnit theory tests for pure domain logic.
+- Exercise public backend behavior through authenticated HTTP integration tests against production PostgreSQL migrations.
+- Keep nullable analysis and warnings-as-errors clean.
+- Code style (`backend/.editorconfig`) is part of the build: explicit types instead of `var`, `this.`-qualified member access, `_camelCase` private fields. Run `dotnet format style Household.slnx` from `backend/` to fix most violations automatically.
 
 Create feature migrations with:
 
 ```bash
-make create-migration feature=budget name=add_accounts
+make create-migration feature=budget name=AddAccounts
 ```
 
 ## Frontend conventions

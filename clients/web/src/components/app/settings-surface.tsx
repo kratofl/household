@@ -2,6 +2,9 @@ import type { ReactNode } from "react"
 
 import { cn } from "@/lib/utils"
 
+// Settings pages in the grouped-list idiom: a section title, then one opaque
+// group with hairline-separated rows.
+
 export function SettingsSurface({
   title,
   description,
@@ -12,12 +15,12 @@ export function SettingsSurface({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8">
+    <div className="space-y-7">
       <div>
-        <h3 className="text-xl font-semibold tracking-tight">{title}</h3>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+        <h1 className="text-[28px] font-bold tracking-[-0.02em] lg:text-[34px]">{title}</h1>
+        <p className="mt-0.5 text-muted-foreground">{description}</p>
       </div>
-      <div className="space-y-8">{children}</div>
+      {children}
     </div>
   )
 }
@@ -34,13 +37,13 @@ export function SettingsSection({
   children: ReactNode
 }) {
   return (
-    <section className="grid gap-4 border-t pt-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-      <div>
-        <h4 className="text-sm font-semibold">{title}</h4>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
-        {aside ? <div className="mt-4">{aside}</div> : null}
+    <section>
+      <div className="mb-1.5 flex items-baseline justify-between px-1">
+        <h2 className="text-[13px] font-semibold">{title}</h2>
+        {aside}
       </div>
-      <div className="space-y-3">{children}</div>
+      <div className="surface-group hairline-rows">{children}</div>
+      {description ? <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">{description}</p> : null}
     </section>
   )
 }
@@ -57,10 +60,10 @@ export function SettingsRow({
   className?: string
 }) {
   return (
-    <div className={cn("flex flex-wrap items-center justify-between gap-4 rounded-md border bg-card p-4", className)}>
+    <div className={cn("flex min-h-[44px] flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2", className)}>
       <div className="min-w-0">
-        <p className="text-sm font-medium">{title}</p>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+        <p>{title}</p>
+        {description ? <p className="text-[11px] text-muted-foreground">{description}</p> : null}
       </div>
       {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
     </div>
@@ -75,9 +78,14 @@ export function SettingsField({
   value: string
 }) {
   return (
-    <div className="rounded-md border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value}</p>
+    <div className="flex min-h-[44px] items-center justify-between gap-4 px-4 py-2">
+      <span>{label}</span>
+      <span className="truncate text-muted-foreground">{value}</span>
     </div>
   )
+}
+
+/** A block inside a group that needs its own padding (forms, pickers). */
+export function SettingsBlock({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("px-4 py-3", className)}>{children}</div>
 }

@@ -34,7 +34,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Einkaufsliste", en: "Shopping List" },
     description: {
-      de: "Gemeinsame Listen fuer Haushaltseinkaeufe.",
+      de: "Gemeinsame Listen für Haushaltseinkäufe.",
       en: "Plan and share household shopping lists.",
     },
   },
@@ -44,7 +44,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Rezepte", en: "Recipes" },
     description: {
-      de: "Rezepte sammeln und fuer Essensplaene verwenden.",
+      de: "Rezepte sammeln und für Essenspläne verwenden.",
       en: "Manage recipes and reuse them for meal plans.",
     },
   },
@@ -54,7 +54,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Essensplan", en: "Meal Plan" },
     description: {
-      de: "Mahlzeiten ueber Woche und Kalender planen.",
+      de: "Mahlzeiten über Woche und Kalender planen.",
       en: "Plan meals across the week and calendar.",
     },
   },
@@ -72,9 +72,9 @@ export const moduleCatalog = {
     route: "/waste-schedule",
     defaultEnabled: false,
     defaultActive: false,
-    name: { de: "Muellplan", en: "Waste Schedule" },
+    name: { de: "Müllplan", en: "Waste Schedule" },
     description: {
-      de: "Abholtermine und Erinnerungen fuer Tonnen.",
+      de: "Abholtermine und Erinnerungen für Tonnen.",
       en: "Track waste collection dates and reminders.",
     },
   },
@@ -82,21 +82,39 @@ export const moduleCatalog = {
 
 export const moduleKeys = Object.keys(moduleCatalog) as Array<keyof typeof moduleCatalog>
 
+// Budget has two families of views while the monthly budget is in preview:
+// "monthly" is the new flow and the primary navigation; "legacy" is the old
+// Budget that stays reachable until the cutover (docs/budget/monthly-budget-preview.md).
+export type BudgetViewFamily = "monthly" | "legacy"
+
 export const budgetViews = {
-  overview: { route: "/budget", segment: "", labelKey: "budget.nav.overview" },
-  transactions: {
-    route: "/budget/transactions",
-    segment: "transactions",
-    labelKey: "budget.nav.transactions",
-  },
-  planning: { route: "/budget/planning", segment: "planning", labelKey: "budget.nav.planning" },
-  categories: {
-    route: "/budget/categories",
-    segment: "categories",
-    labelKey: "budget.nav.categories",
-  },
-  settings: { route: "/budget/settings", segment: "settings", labelKey: "budget.nav.settings" },
-} as const
+  previewOverview: { route: "/budget/preview", segment: "preview", family: "monthly", labelKey: "budget.nav.preview" },
+  previewExpenses: { route: "/budget/preview/expenses", segment: "preview/expenses", family: "monthly", labelKey: "budget.nav.transactions" },
+  previewPlan: { route: "/budget/preview/plan", segment: "preview/plan", family: "monthly", labelKey: "budget.nav.planning" },
+  previewSavings: { route: "/budget/preview/savings", segment: "preview/savings", family: "monthly", labelKey: "budget.nav.previewSavings" },
+  overview: { route: "/budget", segment: "", family: "legacy", labelKey: "budget.nav.overview" },
+  transactions: { route: "/budget/transactions", segment: "transactions", family: "legacy", labelKey: "budget.nav.transactions" },
+  planning: { route: "/budget/planning", segment: "planning", family: "legacy", labelKey: "budget.nav.planning" },
+  saving: { route: "/budget/saving-investing", segment: "saving-investing", family: "legacy", labelKey: "budget.nav.saving" },
+  wishlist: { route: "/budget/wishlist", segment: "wishlist", family: "legacy", labelKey: "budget.nav.wishlist" },
+  categories: { route: "/budget/categories", segment: "categories", family: "legacy", labelKey: "budget.nav.categories" },
+  reports: { route: "/budget/reports", segment: "reports", family: "legacy", labelKey: "budget.nav.reports" },
+  settings: { route: "/budget/settings", segment: "settings", family: "legacy", labelKey: "budget.nav.settings" },
+} as const satisfies Record<string, { route: string; segment: string; family: BudgetViewFamily; labelKey: string }>
+
+export function budgetViewsFor(family: BudgetViewFamily) {
+  return Object.entries(budgetViews).filter(([, view]) => view.family === family)
+}
+
+/**
+ * Views for the phone segmented control: the family the current path is in.
+ * The legacy family also offers the monthly overview as the way across.
+ */
+export function visibleBudgetViews(pathname: string) {
+  const family = budgetViews[budgetViewFromPath(pathname)].family
+  const views = budgetViewsFor(family)
+  return family === "legacy" ? [...views, ["previewOverview", budgetViews.previewOverview] as const] : views
+}
 
 export type BudgetViewKey = keyof typeof budgetViews
 

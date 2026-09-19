@@ -24,6 +24,7 @@ Household is a local-network-first household management app. These docs focus on
 ## Project context
 
 - [Architecture](architecture.md)
+- [Feature specs](specs/) and [decision records](decisions/)
 - [Current status and roadmap](roadmap.md)
 - [Repository README](../README.md)
 - [Contributing guide](../CONTRIBUTING.md)

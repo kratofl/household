@@ -1,199 +1,219 @@
-# AGENTS.md
+# Household
 
-Guidance for AI coding agents working in this repository.
+Household is a local-network-first, self-hosted household management app: one Docker
+Compose stack with a Next.js web UI, a .NET 10 modular-monolith API, an updater
+sidecar, and PostgreSQL. Budget is the first complete feature slice; shopping lists,
+recipes, meal planning, calendar, and waste schedule are planned. It runs on a home
+server for one household, so install reliability, safe defaults, and honest docs
+matter as much as features.
 
-## Project Shape
+These are good defaults, not hard rules. The developer's instructions in conversation
+override anything here. If a rule fights the task in front of you, say so and get a
+sign-off before breaking it.
 
-This is currently a multi-module household application, moving toward a modular-monolith architecture:
+## What we do not compromise on
 
-- `identity/`: Go HTTP API for users and auth, using Chi, GORM, PostgreSQL, `golang-migrate`, and shared packages.
-- `budget/`: Go HTTP API scaffold, using Chi, GORM, PostgreSQL, and shared packages.
-- `shared/`: Go module for shared config, logging, validation, HTTP middleware, error responses, and database migration helpers.
-- `clients/web/`: Next.js 16 App Router client with TypeScript, Tailwind CSS 4, and shadcn/ui preset `b6FAZ7jW6a`.
-- `deployments/`: Docker Compose files for dev and prod infrastructure.
-- `docs/`: Project documentation. Some docs are currently stale; verify against code before relying on them.
+1. **Financial history is append-only.** Actual transactions are corrected or voided,
+   never edited in place or deleted. Recurring plans are versioned by effective date,
+   and past occurrences keep the values that produced them. A report about a past
+   period must give the same answer next year.
+2. **Money is exact.** Amounts are integer cents. Nothing financial passes through
+   binary floating point. Category splits must sum exactly to their transaction.
+3. **Data is user-owned and authenticated.** Every Budget row belongs to one user.
+   Identity decides who the user is; features never trust a client-supplied user id.
+   Registration defaults to `pending` / `user` and admin-gated behavior stays intact.
+4. **Self-hosted, local-network-first.** Core workflows need no cloud service. The
+   stack installs from published images with a `.env` and nothing else.
+5. **German and English, desktop and mobile, keyboard-operable.** Every user-facing
+   string exists in both languages (`npm run check:i18n` enforces it), every workflow
+   works on a phone, and every control is reachable without a mouse.
 
-The repository root is a Go workspace (`go.work`), not a Go module.
+## Glossary
 
-Target architecture:
+Shared vocabulary for talking about the code. The full Budget glossary with every
+term is `docs/budget/glossary.md`; the ADRs in `docs/decisions/` are normative for
+intended Budget behavior.
 
-- Prefer a modular monolith over microservices.
-- Keep feature folders/packages separate. Do not collapse identity, budget, and future modules into one mixed package.
-- Use one Postgres database for the application.
-- Use Postgres schemas per feature, for example `identity`, `budget`, `shopping`, `recipes`, and `calendar`.
-- Feature code may call another feature through explicit internal services/interfaces, but should not reach into another feature's tables directly.
-- Identity is the central auth/OAuth/OIDC-style module for the app. Other features should depend on Identity for current user, claims, active modules, and permissions.
-- Budget and other feature modules should store owner references such as `user_id` or `household_id`, not duplicate auth logic.
+| Term | Meaning |
+| --- | --- |
+| Feature | A module under `Features/<Feature>` that owns its entities, `DbContext`, migrations, and endpoints. Identity, Budget, Audit, Updates. |
+| Module (Identity) | A product area an admin can enable; active modules drive navigation visibility in the web UI. |
+| Ledger | The dated, authoritative record of one user's actual Budget activity. Historical totals derive from it. |
+| Ledger entry / split | One actual transaction and its categorized monetary portions. Splits sum exactly to the entry. |
+| Correction / void | The only ways to change an actual transaction. The original stays; reports use the corrected state once. |
+| Recurring plan | A dated rule for expected income or a commitment. Produces occurrences; changing it never rewrites the past. |
+| Plan version | The immutable values of a plan for one effective-date range. Every edit creates a new version. |
+| Occurrence | One dated realization of a plan, frozen with the values that applied when it was produced. |
+| Posting | Turning an occurrence into a ledger entry, manually or by automatic posting when the plan allows it. |
+| Budget period | The user's monthly interval, starting on a user-selected day. Late start days clamp in short months. |
+| Budgeting mode | Per commitment: due-period budgeting or gradual reservation across periods. Effective-dated. |
+| Buffer | Income withheld from ordinary spending. At period close its disposition is retained, allocated, or released. |
+| Availability | The calculated ordinary spending amount for a period after commitments, reservations, allocations, buffer, and carryover. |
+| Budget impact | How much a transaction or reservation changes availability. Separate from its amount so reserved expenses are not charged twice. |
+| Allocation | Money moved from availability to a savings goal or investment. A change of purpose, not consumption. |
+| Income variance | Expected minus actual income for a period. Positive variance is routed by configurable rules. |
+| Monthly plan | The simplified single-plan model in `Features/Budget/Monthly` that everyday budgeting follows. See `docs/budget/monthly-budget-preview.md`. |
+| Worktree stack | This checkout's own Compose project (`household-dev-<folder>-<hash>`) with its own API, web, database, and volume. |
 
-## Product Context From Notes
+## The ways to hurt yourself
 
-Project notes live outside the repo in:
+1. **Production targets.** `make prod-*` and `.\make.ps1 prod-*` read `deployments/.env`
+   and act on the production Compose stack. If that file is configured on this machine,
+   they touch a real home server. Never run them unless explicitly asked. Development
+   never reads `deployments/.env`.
+2. **Destructive data commands.** `reset-dev-db` deletes this worktree's volumes.
+   `prod-restore` overwrites production data. Data flows into a worktree, never out of
+   it.
+3. **Stopping the wrong stack.** Every worktree's containers are named `household-dev-*`.
+   Stop yours with `make dev-down`, never with `docker rm` or `docker stop` by name
+   pattern. Kill processes only by a PID you captured yourself.
+4. **Two Watch sessions.** Do not run `make dev` twice in one worktree; the sync loops
+   fight. If a stack is already up, use `make dev-info`.
+5. **Environment files.** Do not edit `.env` or other local environment files unless
+   asked.
 
-`/Users/kratofl/Library/Mobile Documents/com~apple~CloudDocs/01 Notes/Dev/household`
+## Hit every surface
 
-Use those notes as product context, but keep repository code and checked-in docs as the implementation source of truth.
+The most common defect is a change that works on the path you tested and is missing
+everywhere else. Before calling work done, walk this list and say which entries applied:
 
-Current product direction from the notes:
+- **Task runners.** Every Makefile target has a `make.ps1` twin, including help text.
+  `scripts/dev.sh` is shared by both; put shell logic there, not in the Makefile.
+- **Languages.** Every string in German and English. Locale-aware dates and money.
+- **Backend seam.** A new endpoint needs a client function in `clients/web/src/lib/api.ts`.
+  Browser code never calls the API directly; the Next route proxy forwards `/api/backend/*`.
+- **Migrations.** Inside the owning feature, history in the owning schema. Migrations run
+  on API startup and must be additive-safe for existing installs.
+- **Reverse states.** Archive needs restore, pause needs resume, stop needs a visible
+  stopped state, a wishlist promotion needs a way to see where it went.
+- **UI states.** Loading, empty, validation, conflict, success, error. Mobile layout and
+  keyboard operation.
+- **Docs.** `docs/configuration.md` when env vars change; install and update docs when
+  the Compose stack changes; `docs/db/migrations.md` when migration conventions change.
 
-- The application is intended to be hosted in the local network first, not as a public internet service.
-- The user model is admin-gated: an admin can create/provision credentials, or users can register and remain pending until an admin approves them.
-- Users must be able to change their own password after login.
-- The broader app should eventually cover budget, shopping list, recipes, meal planning, calendar, and waste schedule.
-- Budget is the most developed concept and should replace an existing spreadsheet for tracking and categorizing expenses.
-- Budget should support connected accounts, including a shared account.
-- Identity is intended to grow beyond the current implemented endpoints into auth refresh/logout, current-user access, user administration, and module activation.
+## Dev stack
 
-Budget domain concepts from the notes:
+- `make dev` (or `.\make.ps1 dev`) builds and starts this worktree's isolated stack and
+  watches source changes. `make dev-info` prints the URL; the port is Docker-assigned
+  and can change on recreation. Sign in with `admin` / `admin`.
+- `make dev-down` stops the stack and keeps data. Host-side checks and migration
+  generation need .NET 10 and Node.js; run `make bootstrap` once.
+- Backend tests spawn their own PostgreSQL container through Docker, independent of the
+  worktree database. Docker must be running.
+- An empty database is a bad test for UI work. `make seed-dev BACKUP=<file>` restores a
+  Postgres dump from `make prod-backup` into this worktree's database. Copy in, never
+  out. See `docs/development/local-setup.md`.
+- The Playwright specs under `clients/web/e2e` currently have no runner or `stack`
+  helper. Do not count them as verification.
 
-- Monthly spending limit with a visual bar that shows spending categories and remaining budget.
-- Pre-planned expenses split into fixed costs and subscriptions.
-- Fixed costs can have behaviors such as subtract from budget or move into savings plan.
-- Subscriptions can be monthly or yearly. Yearly subscriptions may be represented as yearly subscriptions in overview views while being distributed into monthly transactions for budgeting.
-- Changes to pre-planned expenses should apply either to the current month or a future month without rewriting past months.
-- The intended model is a working copy plus month-specific copied versions for fixed costs and similar recurring expense definitions.
-- Overspending carries into the next month. Underspending does not automatically increase the next month, unless this is later made configurable.
-- Month start should be configurable: calendar month start or salary arrival.
-- Expenses can be marked as excluded from the spending limit while still affecting real bank-account tracking.
-- Income should be configurable, with salary as the default source.
-- Categories should be editable, colored, and behavior-driven. Deleted categories should leave expenses as uncategorized.
-- A special non-deletable category should represent expenses that are not counted toward the limit.
-- Savings plan receives fixed-cost entries with the "move into savings plan" behavior and tracks planned large expenses plus a configurable minimum buffer.
+## Verifying
 
-Planned identity endpoints from notes:
+- Smallest proof that the change works: `dotnet build`, `dotnet test --filter`, or
+  `npm run lint` for the scope you changed. `make check` is the pre-PR gate, and CI owns
+  the full suite; do not run it after every edit.
+- Test public behavior at the authenticated HTTP seam. Use focused domain tests only for
+  combinatorial logic such as recurrence, availability, or split allocation. Do not write
+  tests that mirror the implementation or only assert wiring.
+- Use `TimeProvider` for anything time-dependent so tests can pin the clock.
+- C# style is part of the build (`backend/.editorconfig`): no `var`, `this.` on instance
+  member access, `_camelCase` private fields. `dotnet format style Household.slnx` fixes
+  most violations; rerun it until it reports no changes.
+- Never call work done without verifying it. Say explicitly what you did not verify.
 
-```text
-POST   /auth/authorize
-POST   /auth/logout
-POST   /auth/refresh
-GET    /users
-GET    /users/me
-PUT    /users
-PUT    /users/{id}
-DELETE /users/{id}
-GET    /modules
-PUT    /modules/{id}
-PATCH  /modules/active
-```
+## Pull requests
 
-Currently implemented identity routes include `POST /auth/authorize`, `POST /auth/refresh`, `POST /auth/logout`, `GET /users`, `GET /users/me`, `PUT /users`, `PUT /users/me/password`, `GET /users/{id}`, `PUT /users/{id}`, `GET /modules`, `PUT /modules/{id}`, and `PATCH /modules/active` under `/api/v1`.
+- Never open a PR unless the developer asks. Open real PRs, not drafts.
+- Title says what changed for a user or maintainer and why, in plain language.
+- Body: the problem in a sentence or two, then how you fixed it. Call out migrations,
+  config changes, breaking changes, and operational follow-up. UI changes need
+  before/after screenshots.
+- One concern per PR. If the description says "also", split it.
+- Branch names: `feature/`, `enhancement/`, `bug/`, `chore/`, `docs/`.
 
-## General Rules
+## Documentation
 
-- Prefer existing patterns over new abstractions.
-- Do not edit local environment files such as `.env`, `.env.dev`, or service-specific `.env` files unless explicitly asked.
-- Keep service-local code inside the owning service module. Put only reusable cross-service helpers in `shared/`.
-- Use `rg` / `rg --files` for searching.
-- For Go code, run `gofmt` on changed files.
-- Keep frontend components focused and colocated under the Next.js app structure.
-- Do not commit generated build output, local caches, logs, or `node_modules`.
+Most code changes do not need a documentation change. Agents can read the code.
 
-## Common Commands
+- `docs/decisions/` holds ADRs. They are normative for Budget behavior; when a decision
+  changes, add a superseding ADR rather than editing the old one.
+- `docs/budget/` holds product vocabulary and definitions. `docs/specs/` holds the
+  accepted feature specs. Code and migrations are implementation truth.
+- `docs/architecture.md`, `docs/db/`, and `docs/development/` explain constraints and
+  traps a maintainer would get wrong from the source alone. Before adding a paragraph,
+  ask what would go wrong without it. Do not narrate control flow or catalog files.
+- `docs/install/`, `docs/operations/`, and `docs/configuration.md` help someone run the
+  stack. Keep them in the shipped product's voice and update them when behavior changes.
+- When a documented decision changes, rewrite the affected text. Do not append a second
+  account of the new behavior.
+- Do not commit implementation plans, research notes, design explorations, or agent
+  scratch files. `.plans/` is gitignored for that purpose. A merged PR is the record.
 
-### Go
+## How it works
 
-Run Go checks from each module, not from the repository root:
+One ASP.NET Core process hosts feature modules under `Features/<Feature>`. Each feature
+owns its `DbContext`, EF Core migrations, entities, application behavior, and endpoint
+mapping; PostgreSQL stays one database with feature-owned schemas (`identity`, `budget`,
+`audit`). A feature may call another feature's explicit internal interface, never its
+tables. Identity issues opaque access and refresh sessions and exposes the current-user
+interface everyone else uses.
+
+Budget keeps a ledger of actual entries and splits. Recurring income plans and
+commitments produce occurrences through projectors; postings turn occurrences into ledger
+entries; the availability calculation and period close derive what is spendable, with
+buffer disposition decided at close. Savings goals and investments are allocations out of
+availability. Everyday budgeting follows the simplified monthly plan in
+`Features/Budget/Monthly` on top of this model.
+
+The web client is a Next.js App Router app. `src/lib/api.ts` is the only place that talks
+to the backend, through the route proxy. Views render state and raise intent; shadcn/ui
+primitives live in `src/components/ui`.
+
+## Where code lives
+
+- `backend/src/Household.Api/Program.cs` - host and feature registration.
+- `backend/src/Household.Api/Features/<Feature>/` - Identity, Budget, Audit, Updates.
+- `backend/src/Household.Api/Platform/` - hosting, configuration, problem responses,
+  migration orchestration. Only genuinely cross-cutting code.
+- `backend/src/Household.Updater/` - internal updater sidecar.
+- `backend/tests/Household.Api.Tests/` - HTTP and migration tests against real
+  PostgreSQL, plus focused domain tests.
+- `clients/web/src/lib/api.ts` - typed backend client. `src/features/` - feature UI.
+  `src/components/ui/` - shadcn/ui primitives.
+- `deployments/` - Compose files, `dev.env`, observability config, `backups/`.
+- `scripts/dev.sh` - shared implementation of the development targets.
+
+## Common commands
 
 ```bash
-make test
+make bootstrap                    # restore .NET and npm dependencies
+make dev / dev-info / dev-down    # this worktree's stack
+make seed-dev BACKUP=<file>       # restore a dump into this worktree's database
+make backend-build                # includes style enforcement
+make backend-test
+make web-lint / web-build
+make check                        # everything CI runs; use before a PR
+make create-migration feature=budget name=AddExample
 ```
 
-The root `make test` target runs:
+Windows PowerShell uses `.\make.ps1 <target>` with the same names.
 
-```bash
-cd identity && go test ./...
-cd budget && go test ./...
-cd shared && go test ./...
-```
+## Taste
 
-`go test ./...` from the repository root currently fails because `.` is not one of the modules listed in `go.work`.
-
-Build service binaries:
-
-```bash
-make build
-```
-
-### Web
-
-Install dependencies and run Next.js commands from `clients/web/`:
-
-```bash
-cd clients/web
-npm install
-npm run lint
-npm run build
-npm run dev
-```
-
-The web UI proxies backend calls through `src/app/api/backend/[...path]/route.ts`. Set `HOUSEHOLD_API_URL` or `NEXT_PUBLIC_HOUSEHOLD_API_URL` when the Identity API is not reachable at `http://localhost:8090/api/v1`.
-
-### Local Dev
-
-The `Makefile` is the main local orchestration surface:
-
-```bash
-make core-up
-make core-down
-make services-dev SERVICE=identity
-make services-dev SERVICE=budget
-make services-dev SERVICE=identity,budget
-make web-dev
-make dev
-```
-
-Go service hot reload expects `air` to be installed and uses each service's `.air.toml`.
-
-Create SQL migrations with:
-
-```bash
-make create-migration service=identity name=add_example_table
-```
-
-This uses `golang-migrate` style files in `<service>/database/migrations`.
-
-## Backend Conventions
-
-- Service entry points live in `cmd/api/main.go`.
-- HTTP routers live in `internal/router/router.go`.
-- Resource code is grouped under `internal/resource/<name>/`.
-- Shared error responses use `shared/pkg/err` and RFC-style problem JSON.
-- Shared config comes from `shared/pkg/config` with service prefixes such as `IDENTITY_` and `BUDGET_`.
-- Identity migrations run at startup via `shared/pkg/database.Migrate("file://./database/migrations", ...)`.
-- Budget uses the same Postgres DSN style as Identity.
-- Identity tables should be schema-qualified under `identity.*`.
-- Budget tables should be schema-qualified under `budget.*`.
-- Auth currently uses opaque access and refresh tokens stored as SHA-256 hashes in `identity.sessions`.
-- User registrations default to `status=pending` and `role=user`.
-- Admin-only operations currently include updating users and managing modules.
-- Local dev may seed an active admin via `IDENTITY_SEED_DEMO_USER=true`. Production should leave seed flags disabled and run migrations only.
-
-Watch for current inconsistencies:
-
-- `docs/db/migrations.md` references Goose and `internal/db/migrations`, but current code and the `Makefile` use `golang-migrate` and `database/migrations`.
-- The code is still physically split into service modules, while the target architecture is a modular monolith with separate feature folders.
-- The budget service is still mostly scaffolded and has no resource routes.
-- Budget implementation should start with a narrow domain slice, but it must preserve the monthly snapshot requirement for recurring expense definitions. Do not model recurring fixed costs or subscriptions in a way that mutates historical months in place.
-
-## Frontend Conventions
-
-- The frontend is Next.js App Router under `clients/web/src/app`.
-- Use shadcn/ui components from `clients/web/src/components/ui`.
-- Do not hand-roll buttons, inputs, selects, alerts, cards, tabs, navigation controls, or form controls directly in feature pages when a shadcn/ui component or a shared local wrapper exists. Put reusable UI patterns in a shared component area and reuse them.
-- Keep browser-side backend access behind `clients/web/src/lib/api.ts`.
-- Use the Next route proxy for Identity/Budget calls to avoid local-network CORS issues.
-- Slice/module toggles are driven by Identity modules. Active and enabled modules determine navigation visibility.
-- Do not show an "Active slices" dashboard/card/list on user-facing pages. Active slices are a navigation/availability concern, not page content.
-- Dashboard subnavigation must be integrated into the sidebar as a real dashboard-style nested navigation. Do not implement slice subnavigation as loose buttons/tabs floating in page content.
-- Keep the sidebar, account entry, and admin settings entry singular and visually coherent. Do not duplicate Account/Admin controls between header and sidebar in a way that makes the page feel like two competing navigation systems.
-- Use a clear, readable primary UI font. Avoid decorative serif/display fonts as the global app font; reserve them only for deliberate brand moments if explicitly requested.
-- Admin and account settings should look like first-class settings screens, not temporary cards dropped into content. Keep settings layout consistent with the dashboard navigation model and avoid duplicated controls.
-
-## Testing Status
-
-There are still only a few committed Go `_test.go` files and no committed frontend tests. Existing `make test`, `make build`, `make web-lint`, and `make web-build` should pass before handoff.
-
-When adding behavior, add focused tests near the changed package or component. For backend handlers, prefer `httptest` plus fake or in-memory dependencies where possible. For pure shared helpers, use table-driven Go tests.
-
-## Documentation Notes
-
-The top-level `README.md` and several docs are sparse or stale. Treat code, `Makefile`, and Compose files as the source of truth until docs are refreshed.
+- Complexity belongs at the boundary: parsers, CSV import, HTTP adapters, the updater.
+  Orchestration stays pure and testable without I/O. UI stays dumb.
+- Prefer existing patterns over new abstractions. YAGNI: no config knobs or plugin
+  systems nobody asked for.
+- TypeScript: `any` is the enemy, no assertions to silence errors, discriminated unions
+  over optional-field soup, `unknown` at the edges narrowed once.
+- C#: records for data, classes for behavior, async all the way with
+  `CancellationToken`, pattern matching over cast chains, `using` declarations. Public
+  JSON is camelCase with language-neutral enum values; errors are problem JSON.
+- Web UI: use shadcn/ui primitives, do not rebuild common controls in feature pages.
+  Dashboard subnavigation is nested sidebar navigation, not page-level tab rows. Do not
+  render an "Active slices" card; active modules only control navigation. Keep Account
+  and Admin as single, coherent entries. No decorative display fonts as the app font.
+  No continuously repainting animations.
+- Comments describe how a thing is used and move with the code. Keep them current.
+- Use `rg` for searching. Do not commit generated output, caches, logs, backups, or
+  `node_modules`. Treat existing working-tree changes as user-owned unless the task
+  clearly owns them.

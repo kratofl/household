@@ -9,7 +9,7 @@ The project is early-stage. The install, identity foundation, module toggles, up
 ## Why run it?
 
 - **Home-server first:** designed for trusted local networks, NAS boxes, small VMs, and homelabs.
-- **One Compose stack:** web UI, Go API, updater sidecar, and Postgres.
+- **One Compose stack:** web UI, .NET modular-monolith API, updater sidecar, and PostgreSQL.
 - **Public-image installs:** normal installs use published container images, not local source builds.
 - **Admin-gated identity:** users can register, remain pending, and be approved by an admin.
 - **Modular foundation:** one backend process with feature-owned packages and Postgres schemas.
@@ -53,26 +53,46 @@ Full guide: [docs/install/home-server.md](docs/install/home-server.md)
 
 ## Develop locally
 
-Requirements: Go 1.26.x, Node.js 24.x, npm, Docker Engine with the Compose plugin.
+Install Git and Docker Desktop with Linux containers on Windows/macOS, or Docker
+Engine on Linux. Docker Compose 2.32+ is required for source synchronization.
+On macOS/Linux use Make; on Windows use PowerShell and Git for Windows.
+The images support AMD64 and ARM64, including Apple Silicon.
 
-```bash
-git clone https://github.com/kratofl/household.git
-cd household
-make setup-env
-make bootstrap
-make doctor
-make dev
-```
+Clone the repository, then start from its root:
 
-Local development starts Postgres in Docker and runs the Go API and Next.js locally. The default local admin is `admin` / `admin`.
+| Action | macOS / Linux | Windows PowerShell |
+| --- | --- | --- |
+| Start and watch source changes | `make dev` | `.\make.ps1 dev` |
+| Show URL and status | `make dev-info` | `.\make.ps1 dev-info` |
+| Follow logs | `make dev-logs` | `.\make.ps1 dev-logs` |
+| Stop, retain data | `make dev-down` | `.\make.ps1 dev-down` |
+| Reset development data, with confirmation | `make reset-dev-db` | `.\make.ps1 reset-dev-db` |
 
-Run checks:
+API, Next.js, and PostgreSQL run in Docker. The first start builds the development
+images and seeds `admin` / `admin`. Open the localhost URL printed by the command.
+Keep the terminal open for automatic source synchronization and hot reload.
+Ctrl+C ends synchronization; services keep running until `dev-down`.
+Use `dev-logs` in another terminal to follow application logs.
 
-```bash
-make check
-```
+**Each worktree gets its own environment automatically.** Its directory path
+determines the Compose project name, isolating containers, networks, and database
+volumes. Docker allocates an available localhost web port. API and database ports
+stay internal. Data persists across stops and branch changes within that worktree;
+new worktrees start with independent development data. URLs may change after
+container recreation; `dev-info` prints the current one.
 
-Contributor guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+No local .NET/Node installation or env file is needed to run the app. Development
+does not read `deployments/.env` and does not reuse the previous shared development
+database. Existing volumes are left intact. Source stays in your editor; build
+outputs and dependencies stay inside each container.
+
+Quality checks and migration generation still use host tools. Install .NET 10
+SDK and Node.js 26 with npm, then run `make bootstrap` and `make check`, or their
+`.\make.ps1` equivalents. `bootstrap` also creates the existing production env
+template if absent; it is not needed for `dev`.
+
+More details: [Local setup](docs/development/local-setup.md),
+[Contributor guide](CONTRIBUTING.md).
 
 ## Production operations
 
@@ -102,7 +122,7 @@ Useful docs:
 
 Household is moving toward a modular monolith:
 
-- `backend/`: Go API, updater, feature modules, migrations, and platform code.
+- `backend/`: .NET 10 API, updater, feature modules, EF Core migrations, and platform code.
 - `clients/web/`: Next.js 16 App Router UI.
 - `deployments/`: Docker Compose and observability configuration.
 - `docs/`: install, operations, architecture, and contributor documentation.
