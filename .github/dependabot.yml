@@ -1,31 +1,50 @@
 version: 2
+
+# Minor and patch updates arrive grouped once a month; majors stay separate so
+# they are visible. Security updates ignore schedule, grouping and cooldown and
+# arrive as soon as an advisory is published.
+#
+# To stay on a version deliberately, add an `ignore` entry with `update-types`.
+# Pinning with `versions:` instead would also suppress security updates.
 updates:
   - package-ecosystem: nuget
     directory: /backend
     schedule:
-      interval: weekly
+      interval: monthly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      backend:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: /clients/web
     schedule:
-      interval: weekly
+      interval: monthly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      web:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
-    directory: /backend
+    directories: ["/backend", "/clients/web", "/deployments"]
     schedule:
-      interval: weekly
-
-  - package-ecosystem: docker
-    directory: /clients/web
-    schedule:
-      interval: weekly
-
-  - package-ecosystem: docker
-    directory: /deployments
-    schedule:
-      interval: weekly
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      images:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
