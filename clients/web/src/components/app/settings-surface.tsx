@@ -1,9 +1,13 @@
-import type { ReactNode } from "react"
+"use client"
 
+import type { ReactNode } from "react"
+import { IconRestore } from "@tabler/icons-react"
+
+import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
 
-// Settings pages in the grouped-list idiom: a section title, then one opaque
-// group with hairline-separated rows.
+// Settings pages in the grouped-list idiom: a section title, then one grouped
+// surface with hairline-separated rows.
 
 export function SettingsSurface({
   title,
@@ -88,4 +92,67 @@ export function SettingsField({
 /** A block inside a group that needs its own padding (forms, pickers). */
 export function SettingsBlock({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("px-4 py-3", className)}>{children}</div>
+}
+
+/**
+ * A row whose value is a range: label and hint on the left, the current value and
+ * a slider on the right. The reset button only appears once the value was changed,
+ * so an untouched setting stays quiet.
+ */
+export function SettingsSlider({
+  title,
+  description,
+  value,
+  display,
+  min,
+  max,
+  step,
+  resetLabel,
+  onChange,
+  onReset,
+}: {
+  title: string
+  description?: string
+  value: number
+  display: string
+  min: number
+  max: number
+  step: number
+  resetLabel: string
+  onChange: (value: number) => void
+  onReset?: () => void
+}) {
+  return (
+    <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p className="font-medium">{title}</p>
+          {onReset ? (
+            <button
+              type="button"
+              aria-label={resetLabel}
+              title={resetLabel}
+              onClick={onReset}
+              className="flex size-5 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-fill-3 hover:text-foreground"
+            >
+              <IconRestore className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
+        {description ? <p className="text-[11px] text-muted-foreground">{description}</p> : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="min-w-14 rounded-full bg-fill-3 px-2 py-0.5 text-center text-[11px] tabular-nums">{display}</span>
+        <Slider
+          className="w-36 sm:w-44"
+          aria-label={title}
+          value={[value]}
+          min={min}
+          max={max}
+          step={step}
+          onValueChange={(next) => onChange(next[0])}
+        />
+      </div>
+    </div>
+  )
 }

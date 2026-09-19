@@ -12,6 +12,7 @@ public static partial class BudgetEndpoints
     {
         Microsoft.AspNetCore.Routing.RouteGroupBuilder budget = routes.MapGroup("/budget");
         budget.MapMonthlyBudgetEndpoints();
+        budget.MapMerchantEndpoints();
         budget.MapBudgetSetupEndpoints();
         budget.MapBudgetLedgerEndpoints();
         budget.MapBudgetIncomePlanEndpoints();

@@ -6,8 +6,14 @@ public sealed record MonthlyPlan(long IncomeCents, long BufferCents, long Saving
     IReadOnlyList<MonthlyCost> Costs, IReadOnlyList<MonthlyReserve> Reserves);
 public sealed record MonthlyFunding(string Source, Guid? CategoryId, long AmountCents);
 public sealed record MonthlyPlanVersion(long Revision, DateOnly EffectiveFrom, MonthlyPlan Plan);
+// CategoryName is frozen at posting because the category drives budget behaviour and past
+// reports must not move. The merchant is a label, so only its id is kept and a rename shows
+// through everywhere.
 public sealed record MonthlyExpense(Guid Id, DateOnly OccurredOn, string Description, Guid CategoryId,
-    string CategoryName, long AmountCents, IReadOnlyList<MonthlyFunding> Funding, string Kind, Guid? RelatedId);
+    string CategoryName, long AmountCents, IReadOnlyList<MonthlyFunding> Funding, string Kind, Guid? RelatedId)
+{
+    public Guid? MerchantId { get; init; }
+}
 public sealed record MonthlyAllowance(Guid CategoryId, long ReservedCents, long RemainingCents);
 public sealed record MonthlyCostDue(Guid Id, string Name, string Kind, long AmountCents);
 public sealed record MonthlyPeriodSummary(DateOnly Start, DateOnly End, long IncomeCents,

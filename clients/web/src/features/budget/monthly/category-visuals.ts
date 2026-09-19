@@ -1,6 +1,6 @@
 // Icon and system colour for a category tile. Categories carry no visual
 // metadata yet, so the glyph comes from keywords in the name and the colour
-// from a stable hash. Both are presentation only.
+// from the shared tile hash. Both are presentation only.
 
 import {
   IconBabyCarriage,
@@ -19,6 +19,8 @@ import {
   IconTag,
   IconToolsKitchen2,
 } from "@tabler/icons-react"
+
+import { tileColor } from "../tile-colors"
 
 type Glyph = typeof IconTag
 
@@ -39,20 +41,6 @@ const glyphs: [RegExp, Glyph][] = [
   [/reise|urlaub|flug|hotel/i, IconPlane],
 ]
 
-const colors = [
-  "var(--sys-green)",
-  "var(--sys-blue)",
-  "var(--sys-indigo)",
-  "var(--sys-purple)",
-  "var(--sys-pink)",
-  "var(--sys-teal)",
-  "var(--sys-brown)",
-  "var(--sys-orange)",
-]
-
 export function categoryVisual(name: string): { icon: Glyph; color: string } {
-  const icon = glyphs.find(([pattern]) => pattern.test(name))?.[1] ?? IconTag
-  let hash = 0
-  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return { icon, color: colors[hash % colors.length] }
+  return { icon: glyphs.find(([pattern]) => pattern.test(name))?.[1] ?? IconTag, color: tileColor(name) }
 }

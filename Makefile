@@ -43,6 +43,10 @@ help:
 	@echo "  make compose-config         Validate Compose configuration"
 	@echo "  make workflow-check         Lint workflows and test release bundles"
 	@echo ""
+	@echo "Assets:"
+	@echo "  make merchant-logos         Fetch merchant logos from Wikimedia Commons"
+	@echo "                              MERCHANTS=\"rewe dm\" limits it to those keys"
+	@echo ""
 	@echo "Production:"
 	@echo "  make prod-pull              Pull published production images"
 	@echo "  make prod-up                Start production stack from published images"
@@ -143,6 +147,14 @@ compose-config:
 	@$(COMPOSE_EXAMPLE) -f $(PROD_FILE) -f $(PROD_BUILD_FILE) config --quiet
 	@echo ">> Validating development Compose"
 	@docker compose --env-file $(DEPLOYMENTS_DIR)/dev.env -f $(DEV_FILE) config --quiet
+
+# Fetches merchant logos from Wikimedia Commons into the web client. Run by hand, review the
+# diff, commit the result. Never part of a build: the shipped image must not depend on a
+# third party being reachable. Add merchant keys to fetch only those.
+.PHONY: merchant-logos
+merchant-logos:
+	@echo ">> Fetching merchant logos"
+	@node scripts/merchant-logos.mjs $(MERCHANTS)
 
 # Development commands share one implementation with make.ps1.
 .PHONY: dev dev-info dev-project dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs core-up core-down

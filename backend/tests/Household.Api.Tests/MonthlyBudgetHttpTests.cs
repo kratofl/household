@@ -85,6 +85,37 @@ public sealed class MonthlyBudgetHttpTests(LegacyParityFixture fixture) : IClass
         Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
     }
 
+    [Fact]
+    public async Task Plan_can_overwrite_the_running_period_unless_it_unfunds_recorded_expenses()
+    {
+        using HttpClient client = this.Fixture.Client;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.SplitAccessToken);
+        using HttpResponseMessage categoryResponse = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory("Einkauf"));
+        MonthlyCategoryRow category = await Read<MonthlyCategoryRow>(categoryResponse);
+        MonthlyPlan plan = new(300000, 0, 0, [], [new(category.Id, 50000)]);
+        using HttpResponseMessage setup = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan", new SaveMonthlyPlan(0, plan, 0, "Europe/Berlin"));
+        Assert.Equal(250000, (await Read<MonthlyBudgetState>(setup)).Summary?.FunRemainingCents);
+
+        using HttpResponseMessage expense = await client.PostAsJsonAsync("/api/v1/budget/monthly/expenses",
+            new AddMonthlyExpense("current-period-groceries", new(2026, 7, 10), "Markt", category.Id, 20000, null));
+        Assert.Equal(HttpStatusCode.OK, expense.StatusCode);
+
+        // The running period is rewritten in place, so the raise shows up now instead of next month.
+        using HttpResponseMessage raise = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan",
+            new SaveMonthlyPlan(1, plan with { IncomeCents = 400000 }, 0, "Europe/Berlin", true));
+        MonthlyBudgetState applied = await Read<MonthlyBudgetState>(raise);
+        Assert.Equal(400000, applied.CurrentPlan?.IncomeCents);
+        Assert.Null(applied.NextPlan);
+        Assert.Equal(350000, applied.Summary?.FunRemainingCents);
+        Assert.Equal(30000, Assert.Single(applied.Summary?.Categories ?? []).RemainingCents);
+
+        // Dropping the reserve the recorded expense was paid from is refused.
+        using HttpResponseMessage unfunded = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan",
+            new SaveMonthlyPlan(2, plan with { IncomeCents = 400000, Reserves = [] }, 0, "Europe/Berlin", true));
+        Assert.Equal(HttpStatusCode.Conflict, unfunded.StatusCode);
+        Assert.Equal(2, (await this.State(client)).Revision);
+    }
+
     private async Task<MonthlyBudgetState> State(HttpClient client)
     {
         using HttpResponseMessage response = await client.GetAsync("/api/v1/budget/monthly/");

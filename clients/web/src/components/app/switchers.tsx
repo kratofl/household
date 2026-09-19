@@ -5,7 +5,7 @@ import { IconMoon, IconSun } from "@tabler/icons-react"
 
 import type { Locale, Translator } from "@/lib/i18n"
 import { isLocale } from "@/lib/i18n"
-import { cn } from "@/lib/utils"
+import { Segmented } from "@/components/app/segmented"
 
 /** Hell / Dunkel / Automatisch as a segmented control. */
 export function AppearanceControl({ t }: { t: Translator }) {
@@ -58,37 +58,5 @@ export function LanguageControl({
         if (isLocale(value)) setLocale(value)
       }}
     />
-  )
-}
-
-function Segmented<T extends string>({
-  ariaLabel,
-  value,
-  options,
-  onChange,
-}: {
-  ariaLabel: string
-  value: string
-  options: { value: T; label: string }[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div role="radiogroup" aria-label={ariaLabel} className="seg flex text-xs">
-      {options.map((option) => {
-        const selected = option.value === value
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onChange(option.value)}
-            className={cn("h-6 px-2.5 leading-6", selected ? "seg-on" : "text-muted-foreground")}
-          >
-            {option.label}
-          </button>
-        )
-      })}
-    </div>
   )
 }

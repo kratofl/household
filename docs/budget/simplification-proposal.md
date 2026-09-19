@@ -1,7 +1,7 @@
 # Budget simplification proposal
 
 Status: design proposal, based on Luca's four requirements on 2026-09-13.
-A working preview is now described in [monthly-budget-preview.md](monthly-budget-preview.md).
+The implemented model is described in [monthly-budget.md](monthly-budget.md).
 It does not replace the existing Budget or supersede accepted ADRs yet.
 Defaults below are recommendations where the request leaves behavior open.
 

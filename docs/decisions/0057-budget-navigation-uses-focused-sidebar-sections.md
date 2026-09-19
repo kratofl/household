@@ -1,6 +1,6 @@
 # ADR 0057: Budget Navigation Uses Focused Sidebar Sections
 
-- Status: Accepted
+- Status: Superseded by ADR 0067
 - Date: 2026-07-16
 
 ## Context

@@ -1,13 +1,13 @@
 "use client"
 
 import { IconChevronRight, IconHome, IconLogout, IconPigMoney, IconSettings, IconShield, IconUserCircle } from "@tabler/icons-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DashboardPage } from "@/features/dashboard/dashboard-page"
 import { Skeleton } from "@/components/ui/skeleton"
-import { apiRequest } from "@/lib/api"
+import { ApiError, apiRequest } from "@/lib/api"
 import {
   fallbackModules,
   budgetViewFromPath,
@@ -28,7 +28,7 @@ import type { AuditEvent, UpdateCandidate, UpdateStatus } from "@/features/admin
 import { LoginScreen } from "@/features/auth/login-screen"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
 import { errorMessage } from "@/lib/error-message"
-import { LOCALE_STORAGE_KEY, TOKENS_STORAGE_KEY } from "@/lib/session"
+import { LOCALE_STORAGE_KEY, TOKENS_STORAGE_KEY, registerSession } from "@/lib/session"
 import { applyTheme, isThemeId, type ThemeId } from "@/lib/theme"
 import type { CurrentUser, TokenPair } from "@/lib/session"
 
@@ -123,16 +123,49 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
         setCurrentUser(user)
         if (isThemeId(user.theme)) applyTheme(user.theme)
         await loadModules(nextTokens.accessToken)
-      } catch {
-        window.localStorage.removeItem(TOKENS_STORAGE_KEY)
-        setTokens(null)
-        setCurrentUser(null)
+      } catch (err) {
+        // Only an actual rejection ends the session. A restarting API or a
+        // dropped network must not log the user out; api.ts has already tried
+        // to refresh by the time a 401 reaches here.
+        if (err instanceof ApiError && err.status === 401) {
+          window.localStorage.removeItem(TOKENS_STORAGE_KEY)
+          setTokens(null)
+          setCurrentUser(null)
+        } else {
+          setError(errorMessage(err, t))
+        }
       } finally {
         setLoading(false)
       }
     },
-    [loadModules],
+    [loadModules, t],
   )
+
+  // api.ts refreshes expired access tokens through this and, when the refresh
+  // token is spent too, ends the session here instead of letting the user keep
+  // clicking into 401s.
+  const tokensRef = useRef<TokenPair | null>(null)
+  useEffect(() => {
+    tokensRef.current = tokens
+  }, [tokens])
+
+  useEffect(() => {
+    registerSession({
+      tokens: () => tokensRef.current,
+      adopt: (next) => {
+        window.localStorage.setItem(TOKENS_STORAGE_KEY, JSON.stringify(next))
+        setTokens(next)
+      },
+      expire: () => {
+        window.localStorage.removeItem(TOKENS_STORAGE_KEY)
+        setTokens(null)
+        setCurrentUser(null)
+        setMessage(null)
+        setError(t("auth.sessionExpired"))
+      },
+    })
+    return () => registerSession(null)
+  }, [t])
 
   useEffect(() => {
     const storedLocale = window.localStorage.getItem(LOCALE_STORAGE_KEY)
@@ -248,7 +281,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
       setTokens(nextTokens)
       await hydrateSession(nextTokens)
       setPassword("")
-      setMessage(t("auth.loggedIn"))
+      // No success banner: landing on the dashboard already says the login worked.
     } catch (err) {
       setError(errorMessage(err, t))
     }
@@ -437,8 +470,8 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
   const inBudget = selectedModule?.key === "budget"
   const crumb = selectedModule ? moduleName(selectedModule, locale) : t("app.subtitle")
   const initials = currentUser.name.slice(0, 2).toUpperCase()
-  // Settings pages and the monthly budget render their own large title.
-  const showTitle = isHome || (Boolean(selectedModule) && !pathname.startsWith("/budget/preview"))
+  // Every panel renders its own large title; the shell only titles the dashboard.
+  const showTitle = isHome
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -511,7 +544,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-5xl px-4 pb-32 pt-5 lg:px-8 lg:pb-12">
+        <main className="w-full px-4 pb-32 pt-5 lg:px-8 lg:pb-12">
           <div className="space-y-5">
             {inBudget ? <BudgetSubnav pathname={pathname} t={t} /> : null}
             {showTitle ? (
@@ -573,6 +606,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
                   locale={locale}
                   pathname={pathname}
                   selectedModule={selectedModule}
+                  isAdmin={currentUser?.role === "admin"}
                   t={t}
                 />
               ) : (

@@ -1,4 +1,4 @@
-import type { Locale } from "@/lib/i18n"
+import type { Locale, TranslationKey } from "@/lib/i18n"
 
 export type AppModule = {
   id: string
@@ -82,46 +82,23 @@ export const moduleCatalog = {
 
 export const moduleKeys = Object.keys(moduleCatalog) as Array<keyof typeof moduleCatalog>
 
-// Budget has two families of views while the monthly budget is in preview:
-// "monthly" is the new flow and the primary navigation; "legacy" is the old
-// Budget that stays reachable until the cutover (docs/budget/monthly-budget-preview.md).
-export type BudgetViewFamily = "monthly" | "legacy"
-
+// The Budget module's pages. The monthly budget is the Budget; the sidebar
+// lists these four in this order.
 export const budgetViews = {
-  previewOverview: { route: "/budget/preview", segment: "preview", family: "monthly", labelKey: "budget.nav.preview" },
-  previewExpenses: { route: "/budget/preview/expenses", segment: "preview/expenses", family: "monthly", labelKey: "budget.nav.transactions" },
-  previewPlan: { route: "/budget/preview/plan", segment: "preview/plan", family: "monthly", labelKey: "budget.nav.planning" },
-  previewSavings: { route: "/budget/preview/savings", segment: "preview/savings", family: "monthly", labelKey: "budget.nav.previewSavings" },
-  overview: { route: "/budget", segment: "", family: "legacy", labelKey: "budget.nav.overview" },
-  transactions: { route: "/budget/transactions", segment: "transactions", family: "legacy", labelKey: "budget.nav.transactions" },
-  planning: { route: "/budget/planning", segment: "planning", family: "legacy", labelKey: "budget.nav.planning" },
-  saving: { route: "/budget/saving-investing", segment: "saving-investing", family: "legacy", labelKey: "budget.nav.saving" },
-  wishlist: { route: "/budget/wishlist", segment: "wishlist", family: "legacy", labelKey: "budget.nav.wishlist" },
-  categories: { route: "/budget/categories", segment: "categories", family: "legacy", labelKey: "budget.nav.categories" },
-  reports: { route: "/budget/reports", segment: "reports", family: "legacy", labelKey: "budget.nav.reports" },
-  settings: { route: "/budget/settings", segment: "settings", family: "legacy", labelKey: "budget.nav.settings" },
-} as const satisfies Record<string, { route: string; segment: string; family: BudgetViewFamily; labelKey: string }>
+  overview: { route: "/budget", labelKey: "budget.nav.overview" },
+  expenses: { route: "/budget/expenses", labelKey: "budget.nav.expenses" },
+  plan: { route: "/budget/plan", labelKey: "budget.nav.plan" },
+  savings: { route: "/budget/savings", labelKey: "budget.nav.savings" },
+} as const satisfies Record<string, BudgetView>
 
-export function budgetViewsFor(family: BudgetViewFamily) {
-  return Object.entries(budgetViews).filter(([, view]) => view.family === family)
-}
-
-/**
- * Views for the phone segmented control: the family the current path is in.
- * The legacy family also offers the monthly overview as the way across.
- */
-export function visibleBudgetViews(pathname: string) {
-  const family = budgetViews[budgetViewFromPath(pathname)].family
-  const views = budgetViewsFor(family)
-  return family === "legacy" ? [...views, ["previewOverview", budgetViews.previewOverview] as const] : views
-}
-
+type BudgetView = { route: string; labelKey: TranslationKey }
 export type BudgetViewKey = keyof typeof budgetViews
+export const budgetViewEntries = Object.entries(budgetViews) as [BudgetViewKey, BudgetView][]
 
 export function budgetViewFromPath(pathname: string): BudgetViewKey {
-  const match = Object.entries(budgetViews).find(([, view]) => view.route === pathname)
+  const match = budgetViewEntries.find(([, view]) => view.route === pathname)
 
-  return (match?.[0] as BudgetViewKey | undefined) ?? "overview"
+  return match?.[0] ?? "overview"
 }
 
 export function fallbackModules(locale: Locale): AppModule[] {

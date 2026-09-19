@@ -9,7 +9,8 @@ param(
     [Parameter(Position = 0)] [string] $Target = "help",
     [string] $Feature,
     [string] $Name,
-    [string] $Backup
+    [string] $Backup,
+    [string] $Merchants
 )
 
 $ErrorActionPreference = "Stop"
@@ -84,6 +85,7 @@ switch ($Target) {
         Write-Host "Quality:      check, backend-test, backend-build, web-lint, web-build, compose-config, workflow-check"
         Write-Host "Production:   prod-pull, prod-up, prod-build-up, prod-down, prod-logs, prod-backup,"
         Write-Host "              prod-restore -Backup <path>, prod-observability-up"
+        Write-Host "Assets:       merchant-logos [-Merchants <key,key>]"
         Write-Host "Other:        observability-up, observability-down, observability-logs,"
         Write-Host "              create-migration -Feature <identity|budget|audit> -Name <MigrationName>"
     }
@@ -132,6 +134,11 @@ switch ($Target) {
     }
 
     "web-lint" { Invoke-Step "Linting web" { Set-Location $webDir; npm run lint } }
+
+    "merchant-logos" {
+        $keys = if ($Merchants) { $Merchants -split "[,\s]+" } else { @() }
+        Invoke-Step "Fetching merchant logos" { Set-Location $root; node scripts/merchant-logos.mjs @keys }
+    }
 
     "web-build" { Invoke-Step "Building web" { Set-Location $webDir; npm run build } }
 

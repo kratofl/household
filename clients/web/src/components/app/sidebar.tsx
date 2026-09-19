@@ -2,7 +2,7 @@
 
 // Navigation in the macOS Tahoe idiom: a floating translucent sidebar panel on
 // desktop, a floating capsule tab bar on phones. Icons stay monochrome; the
-// accent only marks the active tab on mobile. Modules with several views are
+// accent only marks the active tab on mobile. Modules with several pages are
 // collapsible groups that stay open until the user folds them, so the tree
 // never changes shape just because the route changed.
 
@@ -23,15 +23,7 @@ import {
 } from "@tabler/icons-react"
 
 import type { Locale, Translator } from "@/lib/i18n"
-import {
-  budgetViewFromPath,
-  budgetViews,
-  budgetViewsFor,
-  moduleHref,
-  moduleName,
-  visibleBudgetViews,
-  type AppModule,
-} from "@/lib/modules"
+import { budgetViewEntries, budgetViewFromPath, moduleHref, moduleName, type AppModule } from "@/lib/modules"
 import { cn } from "@/lib/utils"
 
 export const moduleIcons = {
@@ -47,7 +39,7 @@ export const moduleIcons = {
 export function Sidebar({ brand, children, footer }: { brand: ReactNode; children: ReactNode; footer: ReactNode }) {
   return (
     <aside className="sticky top-0 hidden h-screen w-[248px] shrink-0 p-2 lg:block">
-      <div className="glass flex h-full flex-col rounded-xl px-2 py-3 shadow-[0_0_0_0.5px_var(--hairline)]">
+      <div className="glass-strong flex h-full flex-col rounded-xl px-2 py-3">
         <div className="mb-3 px-2">{brand}</div>
         <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto">{children}</nav>
         <div className="mt-3 space-y-px">{footer}</div>
@@ -60,8 +52,8 @@ const rowClass =
   "flex h-7 w-full items-center gap-2 rounded-md px-2.5 text-[13px] text-sidebar-foreground transition-colors"
 
 /** Nesting depth of a row; each level indents so children read as part of their group. */
-export type SidebarLevel = 0 | 1 | 2
-const levelClass: Record<SidebarLevel, string> = { 0: "", 1: "pl-8", 2: "pl-12" }
+export type SidebarLevel = 0 | 1
+const levelClass: Record<SidebarLevel, string> = { 0: "", 1: "pl-8" }
 
 /**
  * A collapsible group. Open by default; the header only folds and unfolds, it
@@ -98,7 +90,7 @@ export function SidebarGroup({
         )}
       >
         {icon ? <span className="shrink-0">{icon}</span> : null}
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{label}</span>
         <IconChevronRight
           className={cn("size-3.5 shrink-0 text-muted-foreground/60 transition-transform", open && "rotate-90")}
           strokeWidth={2}
@@ -110,8 +102,8 @@ export function SidebarGroup({
 }
 
 /**
- * One active module in the sidebar. Budget is a group with the monthly views
- * and the old Budget folded into one nested row; other modules are single pages.
+ * One active module in the sidebar. Modules with several pages are a collapsible
+ * group; modules with a single page are a plain link.
  */
 export function SidebarModuleNav(props: { locale: Locale; module: AppModule; pathname: string; t: Translator }) {
   const Icon = moduleIcons[props.module.key as keyof typeof moduleIcons] ?? IconSettings
@@ -129,27 +121,15 @@ export function SidebarModuleNav(props: { locale: Locale; module: AppModule; pat
   }
 
   const current = budgetViewFromPath(props.pathname)
-  const inLegacy = inModule && budgetViews[current].family === "legacy"
   return (
     <SidebarGroup icon={icon} label={label} containsActive={inModule}>
-      {budgetViewsFor("monthly").map(([key, view]) => (
+      {budgetViewEntries.map(([key, view]) => (
         <li key={key}>
           <SidebarLink href={view.route} level={1} active={inModule && current === key}>
             {props.t(view.labelKey)}
           </SidebarLink>
         </li>
       ))}
-      <li>
-        <SidebarGroup label={props.t("budget.nav.legacy")} level={1} defaultOpen={inLegacy} containsActive={inLegacy}>
-          {budgetViewsFor("legacy").map(([key, view]) => (
-            <li key={key}>
-              <SidebarLink href={view.route} level={2} active={inModule && current === key}>
-                {props.t(view.labelKey)}
-              </SidebarLink>
-            </li>
-          ))}
-        </SidebarGroup>
-      </li>
     </SidebarGroup>
   )
 }
@@ -219,7 +199,7 @@ export function MobileTabBar(props: {
   return (
     <nav
       aria-label={props.t("nav.main")}
-      className="glass fixed inset-x-4 bottom-4 z-20 mx-auto flex w-fit max-w-full items-center gap-0.5 rounded-full p-1 shadow-[0_0_0_0.5px_var(--hairline),0_8px_24px_-8px_rgb(0_0_0/0.25)] lg:hidden"
+      className="glass-strong fixed inset-x-4 bottom-4 z-20 mx-auto flex w-fit max-w-full items-center gap-0.5 rounded-full p-1 lg:hidden"
     >
       {items.map((item) => (
         <Link
@@ -244,7 +224,7 @@ export function BudgetSubnav({ pathname, t }: { pathname: string; t: Translator 
   const current = budgetViewFromPath(pathname)
   return (
     <div className="seg flex w-fit max-w-full gap-0.5 overflow-x-auto lg:hidden">
-      {visibleBudgetViews(pathname).map(([key, view]) => (
+      {budgetViewEntries.map(([key, view]) => (
         <Link
           key={key}
           href={view.route}

@@ -4,24 +4,31 @@ import { useEffect, useMemo, useState } from "react"
 import { IconPlus, IconX } from "@tabler/icons-react"
 
 import { FormSelect } from "@/components/app/form-select"
+import { Segmented } from "@/components/app/segmented"
 import { Block, FormRow, Group, Row } from "@/components/app/grouped"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { Locale } from "@/lib/i18n"
+import { uuid } from "@/lib/uuid"
 import { cn } from "@/lib/utils"
 
+import type { Merchant } from "../merchants"
+import { MerchantDirectory } from "../merchant-directory"
 import { cancelMonthlyPlan, previewMonthlyPlan, saveMonthlyCategory, saveMonthlyPlan } from "./api"
 import { formatters, moneyInput, parseMoney } from "./controller"
 import { monthlyCopy, monthlyError } from "./copy"
 import type { MonthlyCost, MonthlyForecast, MonthlyPlan, MonthlyState, SavePlan } from "./types"
 
 type CostDraft = { id: string; name: string; amount: string; kind: MonthlyCost["kind"]; month: string; day: string }
-type Props = { state: MonthlyState; accessToken: string; locale: Locale; busy: boolean; run: (action: () => Promise<unknown>) => Promise<boolean> }
+type Props = { state: MonthlyState; accessToken: string; locale: Locale; busy: boolean; isAdmin: boolean
+  merchants: Merchant[]
+  saveMerchant: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<void>
+  run: (action: () => Promise<unknown>) => Promise<boolean> }
 const emptyPlan: MonthlyPlan = { incomeCents: 0, bufferCents: 0, savingsCents: 0, costs: [], reserves: [] }
 
-export function MonthlyPlanEditor({ state, accessToken, locale, busy, run }: Props) {
+export function MonthlyPlanEditor({ state, accessToken, locale, busy, isAdmin, merchants, saveMerchant, run }: Props) {
   const copy = monthlyCopy(locale)
   const fmt = useMemo(() => formatters(locale, state.currency), [locale, state.currency])
   const base = state.nextPlan ?? state.currentPlan ?? emptyPlan
@@ -36,6 +43,7 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, run }: Pro
   const [editingCategory, setEditingCategory] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [forecast, setForecast] = useState<MonthlyForecast[]>([])
+  const [scope, setScope] = useState<"next" | "current">("next")
   const [previewing, setPreviewing] = useState(false)
 
   const payload = useMemo<SavePlan | null>(() => {
@@ -60,15 +68,17 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, run }: Pro
     }
     return { revision: state.revision, openingSavingsCents,
       timeZoneId: state.currentPlan ? state.timeZoneId : Intl.DateTimeFormat().resolvedOptions().timeZone,
+      applyToCurrentPeriod: scope === "current",
       plan: { incomeCents, bufferCents, savingsCents, costs: parsedCosts, reserves: parsedReserves } }
-  }, [income, buffer, savings, opening, costs, reserves, state])
+  }, [income, buffer, savings, opening, costs, reserves, scope, state])
   const [previewPayload, setPreviewPayload] = useState("")
   const payloadKey = JSON.stringify(payload)
   const previewCurrent = payloadKey === previewPayload
+  const effectiveStart = scope === "current" ? state.summary?.start ?? state.today : state.nextStart
   const comparison = useMemo(() => ({ current: fmt.money(state.forecast[0]?.funCents ?? 0),
     next: previewCurrent && forecast[0] ? fmt.money(forecast[0].funCents) : null,
-    effectiveDate: fmt.date(state.nextStart),
-  }), [fmt, state.forecast, state.nextStart, previewCurrent, forecast])
+    effectiveDate: fmt.date(effectiveStart),
+  }), [fmt, state.forecast, effectiveStart, previewCurrent, forecast])
   const updateCost = (id: string, update: Partial<CostDraft>) => setCosts(current => current.map(cost => cost.id === id ? { ...cost, ...update } : cost))
   useEffect(() => {
     let active = true
@@ -96,13 +106,24 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, run }: Pro
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-bold tracking-[-0.02em] lg:text-[34px]">{state.currentPlan ? copy.plan : copy.setupTitle}</h1>
-          <p className="mt-0.5 text-muted-foreground">{state.currentPlan ? `${copy.effective} ${fmt.date(state.nextStart)}` : copy.setupNote}</p>
+          <p className="mt-0.5 text-muted-foreground">{state.currentPlan ? `${copy.effective} ${fmt.date(effectiveStart)}` : copy.setupNote}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {state.currentPlan ? (
+            <Segmented
+              ariaLabel={copy.appliesFrom}
+              value={scope}
+              options={[{ value: "next", label: copy.applyNext }, { value: "current", label: copy.applyCurrent }]}
+              onChange={setScope}
+            />
+          ) : null}
           {!previewCurrent ? <p className="text-muted-foreground" role="status">{payload ? copy.loading : copy.invalid_input}</p> : null}
-          <Button onClick={() => void save()} disabled={busy || !payload || !previewCurrent || previewing}>{state.currentPlan ? copy.savePlan : copy.startPlan}</Button>
+          <Button onClick={() => void save()} disabled={busy || !payload || !previewCurrent || previewing}>
+            {!state.currentPlan ? copy.startPlan : scope === "current" ? copy.saveCurrentPlan : copy.savePlan}
+          </Button>
         </div>
       </div>
+      {scope === "current" ? <p className="text-[11px] text-muted-foreground">{copy.applyCurrentNote}</p> : null}
 
       {state.nextPlan ? (
         <Alert>
@@ -121,7 +142,7 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, run }: Pro
             <p className="mt-1 text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{comparison.current}</p>
           </div>
           <div className="p-4">
-            <p className="text-[11px] text-muted-foreground">{copy.next} · {comparison.effectiveDate}</p>
+            <p className="text-[11px] text-muted-foreground">{scope === "current" ? copy.current : copy.next} · {comparison.effectiveDate}</p>
             <p className="mt-1 text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums" aria-live="polite">{comparison.next ?? "…"}</p>
           </div>
         </section>
@@ -156,7 +177,7 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, run }: Pro
                 </Button>
               </div>
             ))}
-            <Row onClick={() => setCosts(current => [...current, { id: crypto.randomUUID(), name: "", amount: "0.00", kind: group.kind, month: "1", day: "1" }])}>
+            <Row onClick={() => setCosts(current => [...current, { id: uuid(), name: "", amount: "0.00", kind: group.kind, month: "1", day: "1" }])}>
               <IconPlus className="size-4 text-primary" />
               <span className="text-primary">{copy.add}</span>
             </Row>
@@ -188,6 +209,13 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, run }: Pro
             {editingCategory ? <Button variant="ghost" onClick={() => { setCategoryName(""); setEditingCategory(null) }}>{copy.cancel}</Button> : null}
           </Block>
         </Group>
+        <MerchantDirectory
+          copy={copy}
+          merchants={merchants}
+          isAdmin={isAdmin}
+          busy={busy}
+          save={(name, options) => void run(() => saveMerchant(name, options))}
+        />
       </fieldset>
 
       {previewCurrent && forecast.length > 0 ? <Forecast forecast={forecast} locale={locale} currency={state.currency} /> : null}

@@ -46,6 +46,7 @@ public sealed partial class BudgetDbContext(DbContextOptions<BudgetDbContext> op
     {
         modelBuilder.HasDefaultSchema("budget");
         ConfigureMonthlyBudget(modelBuilder);
+        ConfigureMerchants(modelBuilder);
         ConfigurePeriod(modelBuilder.Entity<BudgetPeriod>());
         ConfigureSettings(modelBuilder.Entity<BudgetSettings>());
         ConfigurePeriodClose(modelBuilder.Entity<BudgetPeriodClose>());

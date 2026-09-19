@@ -52,7 +52,7 @@ intended Budget behavior.
 | Budget impact | How much a transaction or reservation changes availability. Separate from its amount so reserved expenses are not charged twice. |
 | Allocation | Money moved from availability to a savings goal or investment. A change of purpose, not consumption. |
 | Income variance | Expected minus actual income for a period. Positive variance is routed by configurable rules. |
-| Monthly plan | The simplified single-plan model in `Features/Budget/Monthly` that everyday budgeting follows. See `docs/budget/monthly-budget-preview.md`. |
+| Monthly plan | The simplified single-plan model in `Features/Budget/Monthly` that everyday budgeting follows. See `docs/budget/monthly-budget.md`. |
 | Worktree stack | This checkout's own Compose project (`household-dev-<folder>-<hash>`) with its own API, web, database, and volume. |
 
 ## The ways to hurt yourself

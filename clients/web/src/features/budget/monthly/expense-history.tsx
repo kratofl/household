@@ -11,6 +11,8 @@ import type { Locale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 import { categoryVisual } from "./category-visuals"
+import type { Merchant } from "../merchants"
+import { MerchantTile } from "../merchant-tile"
 import { type ExpenseRowModel, formatters, groupRowsByDay } from "./controller"
 import { type MonthlyCopy, monthlyCopy } from "./copy"
 import type { ExpenseIntent } from "./expense-editor"
@@ -20,6 +22,7 @@ export function MonthlyExpenseHistory({
   state,
   through,
   locale,
+  merchantById,
   savingsOnly = false,
   busy,
   open,
@@ -28,6 +31,7 @@ export function MonthlyExpenseHistory({
   state: MonthlyState
   through: string
   locale: Locale
+  merchantById: Map<string, Merchant>
   savingsOnly?: boolean
   busy: boolean
   open: (intent: ExpenseIntent) => void
@@ -46,7 +50,9 @@ export function MonthlyExpenseHistory({
           (savingsOnly ? expense.funding.some((part) => part.source === "savings") : !state.summary || expense.occurredOn >= state.summary.start) &&
           (category === "all" || expense.categoryId === category) &&
           (source === "all" || expense.funding.some((part) => part.source === source)) &&
-          `${expense.description} ${expense.categoryName}`.toLocaleLowerCase(locale).includes(search.toLocaleLowerCase(locale)),
+          `${expense.description} ${expense.categoryName} ${merchantName(expense.merchantId, merchantById)}`
+            .toLocaleLowerCase(locale)
+            .includes(search.toLocaleLowerCase(locale)),
       )
       .map(({ expense, voided }) => ({
         expense,
@@ -54,9 +60,10 @@ export function MonthlyExpenseHistory({
         date: fmt.date(expense.occurredOn),
         amount: fmt.money(expense.amountCents),
         sources: expense.funding.map((part) => sourceName(part.source, copy)).join(" · "),
+        merchant: expense.merchantId ? merchantById.get(expense.merchantId) ?? null : null,
       }))
     return groupRowsByDay(rows, fmt)
-  }, [state.entries, state.currency, state.summary, through, savingsOnly, category, source, search, locale, copy])
+  }, [state.entries, state.currency, state.summary, through, savingsOnly, category, source, search, locale, copy, merchantById])
 
   return (
     <div className="space-y-5">
@@ -115,7 +122,7 @@ export function ExpenseRow({ row, copy, showDate = false, children }: { row: Exp
   const refund = row.expense.kind === "refund"
   return (
     <Row className={cn("group/row flex-wrap", row.voided && "opacity-60")}>
-      <IconTile icon={visual.icon} color={visual.color} />
+      {row.merchant ? <MerchantTile merchant={row.merchant} /> : <IconTile icon={visual.icon} color={visual.color} />}
       <div className="min-w-0 flex-1">
         <p className={cn("flex items-center gap-2 truncate font-medium", row.voided && "line-through")}>
           {row.expense.description || row.expense.categoryName}
@@ -124,6 +131,7 @@ export function ExpenseRow({ row, copy, showDate = false, children }: { row: Exp
         </p>
         <p className="truncate text-[11px] text-muted-foreground">
           {showDate ? `${row.date} · ` : ""}
+          {row.merchant ? `${row.merchant.name} · ` : ""}
           {row.expense.categoryName}
           {row.sources ? ` · ${row.sources}` : ""}
         </p>
@@ -139,4 +147,8 @@ export function ExpenseRow({ row, copy, showDate = false, children }: { row: Exp
 
 function sourceName(source: MonthlyExpense["funding"][number]["source"], copy: MonthlyCopy) {
   return source === "category" ? copy.categorySource : source === "savings" ? copy.savingsSource : source === "buffer" ? copy.bufferSource : copy.fun
+}
+
+function merchantName(id: string | null, merchants: Map<string, Merchant>) {
+  return id ? merchants.get(id)?.name ?? "" : ""
 }

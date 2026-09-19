@@ -1,27 +1,24 @@
 "use client"
 
-// Routes an active module to its panel. Budget has the legacy panel and the monthly preview.
+// Routes an active module to its panel.
 
 import type { Locale, Translator } from "@/lib/i18n"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MonthlyBudget } from "@/features/budget/monthly/monthly-budget"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
 
-import { BudgetPanel } from "@/features/budget/legacy/budget-panel"
-
 export function DashboardPanel(props: {
   accessToken?: string
   locale: Locale
   pathname: string
   selectedModule: AppModule
+  isAdmin?: boolean
   t: Translator
 }) {
   return (
     <div className="space-y-5">
       {props.selectedModule.key === "budget" ? (
-        props.pathname === "/budget/preview" || props.pathname.startsWith("/budget/preview/") ? (
-          <MonthlyBudget accessToken={props.accessToken} locale={props.locale} pathname={props.pathname} />
-        ) : <BudgetPanel accessToken={props.accessToken} locale={props.locale} pathname={props.pathname} t={props.t} />
+        <MonthlyBudget accessToken={props.accessToken} locale={props.locale} pathname={props.pathname} isAdmin={props.isAdmin} t={props.t} />
       ) : (
         <Card>
           <CardHeader>

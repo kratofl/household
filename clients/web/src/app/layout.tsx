@@ -3,6 +3,7 @@ import { Geist_Mono, Inter } from "next/font/google"
 
 import { AppShell } from "@/components/app/app-shell"
 import { ThemeProvider } from "@/components/theme-provider"
+import { appearanceInitScript } from "@/lib/appearance"
 import { defaultThemeId, themeInitScript } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
@@ -38,8 +39,10 @@ export default function RootLayout({
       className={cn("h-full antialiased", inter.variable, geistMono.variable, "font-sans")}
     >
       <head>
-        {/* Applies the stored accent theme before first paint, like next-themes does for dark mode. */}
+        {/* Applies the stored accent theme and look-and-feel settings before the
+            first paint, like next-themes does for dark mode. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: appearanceInitScript }} />
       </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

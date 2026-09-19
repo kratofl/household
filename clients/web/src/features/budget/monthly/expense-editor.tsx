@@ -11,7 +11,9 @@ import { Label } from "@/components/ui/label"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import type { Locale } from "@/lib/i18n"
+import { uuid } from "@/lib/uuid"
 
+import type { Merchant } from "../merchants"
 import { addMonthlyExpense, loadMonthlyBudget, refundMonthlyExpense } from "./api"
 import { formatters, moneyInput, parseMoney } from "./controller"
 import { monthlyCopy, monthlyError } from "./copy"
@@ -22,7 +24,7 @@ export type ExpenseIntent =
   | { kind: "edit"; expense: MonthlyExpense }
   | { kind: "refund"; expense: MonthlyExpense }
 type Source = "auto" | "fun" | "savings" | "category" | "buffer"
-type Props = { intent: ExpenseIntent; state: MonthlyState; accessToken: string; locale: Locale; busy: boolean;
+type Props = { intent: ExpenseIntent; state: MonthlyState; accessToken: string; locale: Locale; busy: boolean; merchants: Merchant[];
   serverError: string | null; run: (action: () => Promise<unknown>) => Promise<boolean>; close: () => void; restoreFocus: () => void }
 
 function useExpenseEditor(props: Props) {
@@ -33,9 +35,10 @@ function useExpenseEditor(props: Props) {
   const [category, setCategory] = useState(original?.categoryId ?? (intent.kind === "add" ? intent.categoryId : undefined) ?? state.categories.find(item => !item.archived)?.id ?? "")
   const [date, setDate] = useState(intent.kind === "edit" ? intent.expense.occurredOn : state.today)
   const [description, setDescription] = useState(original?.description ?? "")
+  const [merchant, setMerchant] = useState(original?.merchantId ?? "")
   const [source, setSource] = useState<Source>(intent.kind === "edit" ? intent.expense.funding[0]?.source ?? "auto" : intent.kind === "add" ? intent.source ?? "auto" : "auto")
   const [cover, setCover] = useState(intent.kind === "edit" && intent.expense.funding.length > 1)
-  const [requestKey, setRequestKey] = useState(() => crypto.randomUUID())
+  const [requestKey, setRequestKey] = useState(() => uuid())
   const [error, setError] = useState<string | null>(null)
   const [context, setContext] = useState<{ date: string; data: MonthlyState } | null>(null)
   useEffect(() => {
@@ -65,9 +68,11 @@ function useExpenseEditor(props: Props) {
       if (shortage > 0 && cover) funding.push({ source: "fun", categoryId: null, amountCents: shortage })
     }
     const categories = state.categories.filter(item => !item.archived || item.id === original?.categoryId).map(item => ({ value: item.id, label: item.name }))
-    return { cents, shortage, funding, available: fmt.money(available), shortfall: fmt.money(shortage), categories,
+    const merchants = [{ value: "", label: copy.noMerchant },
+      ...props.merchants.filter(item => !item.archived || item.id === original?.merchantId).map(item => ({ value: item.id, label: item.name }))]
+    return { cents, shortage, funding, available: fmt.money(available), shortfall: fmt.money(shortage), categories, merchants,
       sourceLabel: defaultSourceLabel, ready: intent.kind === "refund" || summary !== null }
-  }, [amount, category, context, copy, cover, date, intent, locale, original, source, state.categories, state.currency])
+  }, [amount, category, context, copy, cover, date, intent, locale, original, props.merchants, source, state.categories, state.currency])
 
   const submit = async (another: boolean) => {
     setError(null)
@@ -76,16 +81,16 @@ function useExpenseEditor(props: Props) {
     const cents = calculated.cents
     const saved = await run(() => intent.kind === "refund" ? refundMonthlyExpense(accessToken, intent.expense.id, { requestKey, occurredOn: date, amountCents: cents }) :
       addMonthlyExpense(accessToken, { requestKey, occurredOn: date, description, categoryId: category, amountCents: cents,
-        funding: calculated.funding, correctsId: intent.kind === "edit" ? intent.expense.id : null }))
+        funding: calculated.funding, correctsId: intent.kind === "edit" ? intent.expense.id : null, merchantId: merchant || null }))
     if (saved) {
       if (another) {
-        setAmount(""); setDescription(""); setCover(false); setRequestKey(crypto.randomUUID())
+        setAmount(""); setDescription(""); setCover(false); setRequestKey(uuid())
         try { setContext({ date, data: await loadMonthlyBudget(accessToken, date) }) }
         catch (reason: unknown) { setError(monthlyError(reason, copy)) }
       } else close()
     }
   }
-  return { copy, amount, setAmount, category, setCategory, date, setDate, description, setDescription,
+  return { copy, amount, setAmount, category, setCategory, date, setDate, description, setDescription, merchant, setMerchant,
     source, setSource: (value: string) => { if (value === "auto" || value === "fun" || value === "category" || value === "savings" || value === "buffer") { setSource(value); setCover(false) } },
     cover, setCover, error, calculated, submit }
 }
@@ -145,6 +150,9 @@ export function MonthlyExpenseEditor(props: Props) {
               </FormRow>
               {props.intent.kind !== "refund" ? (
                 <>
+                  <FormRow label={copy.merchant} htmlFor="expense-merchant">
+                    <FormSelect id="expense-merchant" className="w-auto min-w-40" value={editor.merchant} onValueChange={editor.setMerchant} options={editor.calculated.merchants} />
+                  </FormRow>
                   <FormRow label={copy.description} htmlFor="expense-description">
                     <Input id="expense-description" className="w-48 text-right" maxLength={300} value={editor.description} onChange={event => editor.setDescription(event.target.value)} />
                   </FormRow>

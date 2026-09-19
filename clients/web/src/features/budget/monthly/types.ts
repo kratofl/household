@@ -27,6 +27,8 @@ export type MonthlyExpense = {
   funding: Funding[]
   kind: "expense" | "refund"
   relatedId: string | null
+  /** Where the money went. Null for expenses booked before merchants existed, or without one. */
+  merchantId: string | null
 }
 export type CostDue = Pick<MonthlyCost, "id" | "name" | "kind" | "amountCents">
 export type MonthlyForecast = { start: string; end: string; funCents: number; costs: CostDue[] }
@@ -60,7 +62,14 @@ export type MonthlyState = {
   categories: MonthlyCategory[]
   entries: { expense: MonthlyExpense; voided: boolean }[]
 }
-export type SavePlan = { revision: number; plan: MonthlyPlan; openingSavingsCents: number; timeZoneId: string }
+/** applyToCurrentPeriod rewrites the running period instead of starting the next one. */
+export type SavePlan = {
+  revision: number
+  plan: MonthlyPlan
+  openingSavingsCents: number
+  timeZoneId: string
+  applyToCurrentPeriod: boolean
+}
 export type ExpenseInput = {
   requestKey: string
   occurredOn: string
@@ -69,4 +78,5 @@ export type ExpenseInput = {
   amountCents: number
   funding: Funding[] | null
   correctsId: string | null
+  merchantId: string | null
 }

@@ -5,10 +5,17 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Household.Api.Features.Budget;
 
-public sealed record SaveMonthlyPlan(long Revision, MonthlyPlan Plan, long OpeningSavingsCents, string TimeZoneId);
+// ApplyToCurrentPeriod rewrites the running period instead of starting next period.
+// Past periods keep the plan version that produced them either way.
+public sealed record SaveMonthlyPlan(long Revision, MonthlyPlan Plan, long OpeningSavingsCents,
+    string TimeZoneId, bool ApplyToCurrentPeriod = false);
 public sealed record SaveMonthlyCategory(string Name, bool Archived = false);
 public sealed record AddMonthlyExpense(string RequestKey, DateOnly OccurredOn, string Description,
-    Guid CategoryId, long AmountCents, IReadOnlyList<MonthlyFunding>? Funding, Guid? CorrectsId = null);
+    Guid CategoryId, long AmountCents, IReadOnlyList<MonthlyFunding>? Funding, Guid? CorrectsId = null)
+{
+    /// A catalog merchant or one of the user's own. Optional, and never affects the money.
+    public Guid? MerchantId { get; init; }
+}
 public sealed record RefundMonthlyExpense(string RequestKey, DateOnly OccurredOn, long AmountCents);
 public sealed record VoidMonthlyExpense(string RequestKey);
 
@@ -53,7 +60,7 @@ public static class MonthlyBudgetEndpoints
         if (user is null) return Results.Unauthorized();
         MonthlyBudgetState state = await new MonthlyBudgetStore(database, clock).StateAsync(user.Id, null, cancellationToken);
         if (!MonthlyBudgetValidation.Plan(request.Plan, state.Categories)) return Invalid();
-        DateOnly effective = state.CurrentPlan is null ? BudgetPeriodCalendar.ForDate(state.Today, state.StartDay).Start : state.NextStart;
+        DateOnly effective = EffectiveFrom(request, state);
         MonthlyPlanRow row = new() { EffectiveFrom = effective, PlanJson = MonthlyBudgetStore.Serialize(request.Plan) };
         return Results.Ok(MonthlyBudgetStore.Forecast([row], effective, state.StartDay));
     }
@@ -74,7 +81,8 @@ public static class MonthlyBudgetEndpoints
         if (state.CurrentPlan is not null && (request.OpeningSavingsCents != state.OpeningSavingsCents || request.TimeZoneId != state.TimeZoneId))
             return Invalid("opening_balance_locked");
         DateOnly today = store.Today(zone.Id);
-        DateOnly effective = state.CurrentPlan is null ? BudgetPeriodCalendar.ForDate(today, state.StartDay).Start : state.NextStart;
+        DateOnly currentStart = BudgetPeriodCalendar.ForDate(today, state.StartDay).Start;
+        DateOnly effective = EffectiveFrom(request, state with { Today = today });
         MonthlyPlanRow row = new()
         {
             Id = Guid.NewGuid(), OwnerUserId = user.Id, Revision = state.Revision + 1, EffectiveFrom = effective,
@@ -83,6 +91,14 @@ public static class MonthlyBudgetEndpoints
         };
         if (MonthlyBudgetStore.Forecast([row], effective, state.StartDay).Any(period => period.FunCents < 0))
             return Invalid("plan_unaffordable");
+        // Rewriting the running period changes what already-recorded expenses were funded from,
+        // so replay the history against the new plan before accepting it.
+        if (effective <= currentStart && state.CurrentPlan is not null)
+        {
+            List<MonthlyPlanRow> plans = await store.PlansAsync(user.Id, cancellationToken);
+            plans.Add(row);
+            VerifyHistory(plans, await store.EntriesAsync(user.Id, cancellationToken), store);
+        }
         database.MonthlyPlans.Add(row);
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -172,6 +188,9 @@ public static class MonthlyBudgetEndpoints
         MonthlyCategoryRow? category = await database.MonthlyCategories.AsNoTracking().SingleOrDefaultAsync(
             row => row.OwnerUserId == user.Id && row.Id == request.CategoryId && !row.Archived, cancellationToken);
         if (category is null) return Invalid("invalid_category");
+        if (request.MerchantId is Guid merchantId && !await database.Merchants.AnyAsync(
+            row => row.Id == merchantId && (row.OwnerUserId == null || row.OwnerUserId == user.Id), cancellationToken))
+            return Invalid("invalid_merchant");
         BudgetPeriodRange period = BudgetPeriodCalendar.ForDate(request.OccurredOn, plans[0].StartDay);
         MonthlyPlan plan = MonthlyBudgetStore.ActivePlan(plans, period.Start);
         bool reserved = plan.Reserves.Any(reserve => reserve.CategoryId == category.Id && reserve.AmountCents > 0);
@@ -188,7 +207,7 @@ public static class MonthlyBudgetEndpoints
             database.MonthlyEntries.Add(reversal);
         }
         MonthlyExpense expense = new(Guid.NewGuid(), request.OccurredOn, request.Description.Trim(), category.Id,
-            category.Name, request.AmountCents, funding, "expense", request.CorrectsId);
+            category.Name, request.AmountCents, funding, "expense", request.CorrectsId) { MerchantId = request.MerchantId };
         MonthlyEntryRow row = Row(user.Id, request.RequestKey, requestJson, expense, clock);
         rows.Add(row);
         VerifyHistory(plans, rows, store);
@@ -227,7 +246,7 @@ public static class MonthlyBudgetEndpoints
             remainder -= amount;
         }
         MonthlyExpense expense = new(Guid.NewGuid(), request.OccurredOn, original.Description, original.CategoryId,
-            original.CategoryName, request.AmountCents, funding, "refund", id);
+            original.CategoryName, request.AmountCents, funding, "refund", id) { MerchantId = original.MerchantId };
         MonthlyEntryRow row = Row(user.Id, request.RequestKey, requestJson, expense, clock);
         rows.Add(row);
         VerifyHistory(plans, rows, store);
@@ -261,6 +280,11 @@ public static class MonthlyBudgetEndpoints
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok(new { id });
     }
+
+    private static DateOnly EffectiveFrom(SaveMonthlyPlan request, MonthlyBudgetState state) =>
+        state.CurrentPlan is null || request.ApplyToCurrentPeriod
+            ? BudgetPeriodCalendar.ForDate(state.Today, state.StartDay).Start
+            : state.NextStart;
 
     private static bool ValidKey(string? key) => !string.IsNullOrWhiteSpace(key) && key.Length <= 100;
     private static bool ValidDate(IReadOnlyList<MonthlyPlanRow> plans, MonthlyBudgetStore store, DateOnly date) =>

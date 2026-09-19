@@ -38,6 +38,8 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public const string CsvImportAccessToken = "csv-import-access-token";
     public const string CsvSourceAccessToken = "csv-source-access-token";
     public const string CsvTargetAccessToken = "csv-target-access-token";
+    public const string MerchantAccessToken = "merchant-access-token";
+    public const string MerchantIntruderAccessToken = "merchant-intruder-access-token";
     public static readonly Guid AdminId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b3f");
     public static readonly Guid BudgetModuleId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b40");
     public static readonly Guid PeriodId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b42");
@@ -123,6 +125,8 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         command.Parameters.AddWithValue("csvImportAccessHash", HashToken(CsvImportAccessToken));
         command.Parameters.AddWithValue("csvSourceAccessHash", HashToken(CsvSourceAccessToken));
         command.Parameters.AddWithValue("csvTargetAccessHash", HashToken(CsvTargetAccessToken));
+        command.Parameters.AddWithValue("merchantAccessHash", HashToken(MerchantAccessToken));
+        command.Parameters.AddWithValue("merchantIntruderAccessHash", HashToken(MerchantIntruderAccessToken));
         await command.ExecuteNonQueryAsync();
     }
 
@@ -321,6 +325,16 @@ public sealed class LegacyParityFixture : IAsyncLifetime
         INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
         VALUES ('019bd5e4-6c31-7c48-8471-a42157389b76', '019bd5e4-6c31-7c48-8471-a42157389b75', @csvTargetAccessHash,
                 'csv-target-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b77', 'merchant', 'merchant@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b78', '019bd5e4-6c31-7c48-8471-a42157389b77', @merchantAccessHash,
+                'merchant-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
+        INSERT INTO identity.users (id, name, email, password_hash, role, status)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b79', 'merchant-intruder', 'merchant-intruder@household.local', @passwordHash, 'user', 'active');
+        INSERT INTO identity.sessions (id, user_id, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at)
+        VALUES ('019bd5e4-6c31-7c48-8471-a42157389b7a', '019bd5e4-6c31-7c48-8471-a42157389b79', @merchantIntruderAccessHash,
+                'merchant-intruder-refresh-placeholder-hash', CURRENT_TIMESTAMP + interval '1 day', CURRENT_TIMESTAMP + interval '30 days');
 
         CREATE SCHEMA budget;
         CREATE TABLE budget.periods (

@@ -1,9 +1,12 @@
-# Monthly Budget preview
+# Monthly Budget
 
-The simplified workflow is available at `/budget/preview`, with Expenses,
-Monthly plan, and Savings below it. The existing Budget remains available at
-`/budget`. This is an implementation for UI review before replacing the old
-screens or converting existing financial data.
+This is the Budget. The module has four pages: Overview at `/budget`, plus
+Expenses, Planning, and Savings below it. The Overview is a widget board the
+user arranges; the global dashboard draws from the same widgets.
+
+The older Budget screens were removed from the web client. Their tables and
+endpoints are untouched, and that data has never been converted into this
+model, so it is no longer reachable through the UI.
 
 The proposal and spreadsheet examples are in [simplification-proposal.md](simplification-proposal.md).
 
@@ -13,10 +16,12 @@ The proposal and spreadsheet examples are in [simplification-proposal.md](simpli
   monthly subscriptions, and yearly subscriptions.
 - Yearly bills reduce the allowance only in the period containing their due
   date. Missing dates clamp to the last day of the due month.
-- Immediate plan previews and a twelve-period outlook. After setup, additions,
-  edits, removals, saving-rate changes, and category reservations start next
-  period. Pending changes can be replaced or cancelled. Setting a rate to zero
-  pauses that allocation; setting it above zero resumes it next period.
+- Immediate plan previews and a twelve-period outlook. Plan changes start next
+  period by default, or overwrite the running period when the user picks "this
+  period" before saving. Either way, periods that have already closed keep the
+  plan version that produced them. Pending next-period changes can be replaced
+  or cancelled. Setting a rate to zero pauses that allocation; setting it above
+  zero resumes it.
 - Categories can be created, renamed, archived, and restored. A category with
   a current or pending reserve must have that reserve removed before archival.
   Expense records retain their historical category names.
@@ -62,7 +67,7 @@ The calculator replays elapsed periods from the first plan. There is no timer
 or background posting job to duplicate contributions, and opening the app after
 several months requires no manual close-period action. Future periods remain
 forecasts. The existing period start day and currency are retained at setup;
-the preview stores a timezone for its date boundaries.
+the plan stores a timezone for its date boundaries.
 
 ## Storage and HTTP
 
@@ -84,7 +89,7 @@ existing bearer session. Errors use problem JSON with a stable error code in
 | --- | --- |
 | `GET /?date=YYYY-MM-DD` | Current or historical state, categories, history, pending plan, outlook |
 | `POST /plan/preview` | Validate and calculate an unsaved plan's next twelve periods |
-| `PUT /plan` | First setup or a new next-period version |
+| `PUT /plan` | First setup, a new next-period version, or with `applyToCurrentPeriod` a version that replaces the running period |
 | `DELETE /plan/pending?revision=N` | Append a version retaining the current plan next period |
 | `POST /categories` | Create a category immediately |
 | `PATCH /categories/{id}` | Rename, archive, or restore |
@@ -96,19 +101,19 @@ Requests and responses are defined by `MonthlyBudgetModels.cs` and
 `MonthlyBudgetEndpoints.cs`. Browser access uses the Budget API wrapper, shared
 API client, and existing Next proxy. All money is represented as integer cents.
 
-## Review boundary
+## Boundary
 
-Existing transactions, categories, savings, investments, and custom recurring
-plans have not been imported into the preview. The old reports and CSV endpoints
-continue to describe the old Budget; they do not include preview entries.
+Transactions, categories, savings, investments, and custom recurring plans from
+the older Budget were never imported. The old reports and CSV endpoints still
+describe the old tables and contain none of these entries. The two are separate
+financial histories and must not be added together.
+
+Rewriting the running period is refused when a recorded expense would lose the
+source it was paid from; the request replays the whole history first and returns
+a conflict instead. Closed periods are never rewritten.
+
 Additional savings pots, merchant suggestions, and reconciliation of scheduled
-bills with actual payments are not part of this preview. Do not use both
-versions as one combined financial history.
-
-The rollover defaults are visible in the Monthly plan screen. Confirm those
-defaults and the UI before the cutover. Data mapping and updates to the old
-product ADRs belong to that cutover; the existing historical records must remain
-readable with their original rules.
+bills with actual payments are not implemented.
 
 ## Verification
 
@@ -119,8 +124,11 @@ deficit netting, protected balances, and effective-dated plan changes.
 including competing withdrawals, duplicate retries, source restoration,
 corrections, plan conflicts and cancellation, and owner isolation.
 
-The repository check passed on 2026-09-14 with 113 backend tests, backend and web
-builds, web lint, and all Compose configurations. An isolated browser walkthrough
-also exercised setup, ordinary/category/savings purchases, explicit shortfall
-coverage, English and German, mobile layout, plan save/cancel, corrections,
-refunds, and keyboard operation. Test artifacts belong under ignored `tmp/`.
+`Plan_can_overwrite_the_running_period_unless_it_unfunds_recorded_expenses`
+covers the current-period option and its refusal case.
+
+The repository check passed on 2026-09-16 with 115 backend tests, backend and web
+builds, and web lint. An isolated browser walkthrough also exercised setup,
+ordinary/category/savings purchases, explicit shortfall coverage, English and
+German, mobile layout, plan save/cancel, corrections, refunds, widget
+rearrangement, and keyboard operation. Test artifacts belong under ignored `tmp/`.

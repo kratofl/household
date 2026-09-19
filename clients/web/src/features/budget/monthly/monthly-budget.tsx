@@ -1,33 +1,47 @@
 "use client"
 
 import Link from "next/link"
-import { useRef, useState } from "react"
-import { IconChartBar, IconPigMoney, IconPlus, IconShieldCheck } from "@tabler/icons-react"
+import { useState } from "react"
+import { IconPigMoney, IconPlus } from "@tabler/icons-react"
 
-import { Block, Disclosure, Group, IconTile, Row, ThinBar } from "@/components/app/grouped"
+import { IconTile } from "@/components/app/grouped"
+import { boardElements } from "@/components/app/board-elements"
+import { WidgetBoard } from "@/components/app/widget-board"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { Locale } from "@/lib/i18n"
-import { cn } from "@/lib/utils"
+import type { Locale, Translator } from "@/lib/i18n"
+import { budgetViewFromPath, budgetViews } from "@/lib/modules"
+import { uuid } from "@/lib/uuid"
 
 import { voidMonthlyExpense } from "./api"
-import { categoryVisual } from "./category-visuals"
 import { useMonthlyBudget } from "./controller"
 import { MonthlyExpenseEditor, type ExpenseIntent } from "./expense-editor"
-import { ExpenseRow, MonthlyExpenseHistory } from "./expense-history"
+import { MonthlyExpenseHistory } from "./expense-history"
 import { MonthlyPlanEditor } from "./plan-editor"
+import { budgetOverviewWidgets, budgetWidgets } from "./widgets"
 
-export function MonthlyBudget({ accessToken, locale, pathname }: { accessToken?: string; locale: Locale; pathname: string }) {
+export function MonthlyBudget({
+  accessToken,
+  locale,
+  pathname,
+  isAdmin = false,
+  t,
+}: {
+  accessToken?: string
+  locale: Locale
+  pathname: string
+  /** Admins may publish a merchant to every user; everyone else only adds their own. */
+  isAdmin?: boolean
+  t: Translator
+}) {
   const controller = useMonthlyBudget(accessToken, locale)
   const { resource, presentation: view, copy, busy, run } = controller
-  const [intent, setIntent] = useState<ExpenseIntent | null>(null)
-  const expenseTrigger = useRef<HTMLElement | null>(null)
-  const openExpense = (next: ExpenseIntent) => {
-    expenseTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    setIntent(next)
-  }
+  // The editor is a dialog; remember what opened it so focus can go back there.
+  const [intent, setIntent] = useState<{ expense: ExpenseIntent; trigger: HTMLElement | null } | null>(null)
+  const openExpense = (next: ExpenseIntent) =>
+    setIntent({ expense: next, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null })
   if (resource.status === "loading") return <p role="status" className="text-muted-foreground">{copy.loading}</p>
   if (resource.status === "failed") {
     return (
@@ -41,16 +55,13 @@ export function MonthlyBudget({ accessToken, locale, pathname }: { accessToken?:
   }
   if (!view || !accessToken) return null
   const state = resource.data
-  const page = !state.currentPlan || pathname.endsWith("/plan") ? "plan" : pathname.endsWith("/expenses") ? "expenses" : pathname.endsWith("/savings") ? "savings" : "overview"
+  // Without a plan there is nothing to show but the setup form.
+  const page = !state.currentPlan ? "plan" : budgetViewFromPath(pathname)
   const allArchived = state.categories.every((category) => category.archived)
   const title = page === "plan" ? null : page === "savings" ? copy.savings : page === "expenses" ? copy.expenses : copy.overview
 
   return (
     <div className="space-y-7">
-      <p className="text-[11px] text-muted-foreground">
-        <span className="font-semibold">{copy.preview}</span> · {copy.previewNote}
-      </p>
-
       {title ? (
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -72,14 +83,21 @@ export function MonthlyBudget({ accessToken, locale, pathname }: { accessToken?:
                 }}
               />
             </div>
-            {state.currentPlan ? (
-              <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })}>
-                <IconPlus />
-                {copy.addExpense}
-              </Button>
-            ) : null}
+            <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })}>
+              <IconPlus />
+              {copy.addExpense}
+            </Button>
           </div>
         </div>
+      ) : null}
+
+      {page !== "plan" && allArchived ? (
+        <p className="text-muted-foreground">
+          {copy.emptyCategories}{" "}
+          <Link className="text-primary hover:underline" href={budgetViews.plan.route}>
+            {copy.plan}
+          </Link>
+        </p>
       ) : null}
 
       {controller.error ? <Alert variant="destructive"><AlertDescription>{controller.error}</AlertDescription></Alert> : null}
@@ -93,85 +111,17 @@ export function MonthlyBudget({ accessToken, locale, pathname }: { accessToken?:
       ) : null}
 
       {page === "plan" ? (
-        <MonthlyPlanEditor key={state.revision} state={state} accessToken={accessToken} locale={locale} busy={busy} run={run} />
+        <MonthlyPlanEditor key={state.revision} state={state} accessToken={accessToken} locale={locale} busy={busy}
+          isAdmin={isAdmin} merchants={controller.merchants} saveMerchant={controller.saveMerchant} run={run} />
       ) : null}
 
-      {page === "overview" && state.summary ? (
-        <>
-          <section className="surface-group p-5">
-            <div className="flex flex-wrap items-end justify-between gap-6">
-              <div>
-                <p className="font-medium text-muted-foreground">{copy.remaining}</p>
-                <p
-                  className={cn(
-                    "mt-0.5 text-[44px] font-semibold leading-none tracking-[-0.03em] tabular-nums lg:text-[52px]",
-                    state.summary.funRemainingCents < 0 && "text-destructive",
-                  )}
-                >
-                  {view.fun}
-                </p>
-                {state.summary.deficitCarryoverCents > 0 ? (
-                  <p className="mt-2 text-muted-foreground">{copy.deficit}: {view.deficit}</p>
-                ) : null}
-              </div>
-              <dl className="grid grid-cols-2 gap-x-8">
-                <Stat label={copy.starting} value={view.starting} />
-                <Stat label={copy.spent} value={view.spent} />
-              </dl>
-            </div>
-            <ThinBar className="mt-5" fraction={view.usedFraction} marker={view.pace} />
-            <p className="mt-1.5 text-[11px] text-muted-foreground">{copy.paceNote}</p>
-          </section>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <MiniCard icon={IconPigMoney} color="var(--sys-green)" label={copy.totalSaved} value={view.savings} note={`${copy.plannedSavings}: ${view.contribution}`}>
-              <Button size="xs" variant="outline" disabled={busy || allArchived} onClick={() => openExpense({ kind: "add", source: "savings" })}>
-                {copy.spendSavings}
-              </Button>
-            </MiniCard>
-            <MiniCard icon={IconShieldCheck} color="var(--sys-blue)" label={copy.buffer} value={view.buffer} note={copy.bufferNote} />
-            <MiniCard icon={IconChartBar} color="var(--sys-gray)" label={copy.next} value={view.nextFun} note={`${copy.from} ${view.nextStart}`} />
-          </div>
-
-          <Group title={copy.reserved} action={{ label: copy.openPlan, href: "/budget/preview/plan" }} footer={view.reserveCards.length === 0 ? copy.emptyReserves : undefined}>
-            {view.reserveCards.map((category) => {
-              const visual = categoryVisual(category.name)
-              return (
-                <Row key={category.id} onClick={category.archived || busy ? undefined : () => openExpense({ kind: "add", categoryId: category.id, source: "category" })}>
-                  <IconTile icon={visual.icon} color={visual.color} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-4">
-                      <span className="font-medium">{category.name}</span>
-                      <span className="tabular-nums">
-                        {category.remaining} <span className="text-muted-foreground">{copy.left}</span>
-                      </span>
-                    </div>
-                    <ThinBar className="mt-1.5 h-1" fraction={category.reservedCents > 0 ? 1 - category.remainingCents / category.reservedCents : 0} color={visual.color} />
-                  </div>
-                  <Disclosure />
-                </Row>
-              )
-            })}
-            {view.reserveCards.length === 0 ? <Block className="text-muted-foreground">{copy.emptyReserves}</Block> : null}
-          </Group>
-
-          <Group title={copy.recent} action={{ label: copy.showAll, href: "/budget/preview/expenses" }}>
-            {view.recent.length === 0 ? <Block className="text-muted-foreground">{copy.emptyExpenses}</Block> : null}
-            {view.recent.map((row) => (
-              <ExpenseRow key={row.expense.id} row={row} copy={copy} showDate />
-            ))}
-          </Group>
-
-          <Group title={copy.automaticCosts} footer={copy.automaticNote}>
-            {state.summary.costs.map((cost) => (
-              <Row key={cost.id}>
-                <span className="flex-1">{cost.name}</span>
-                <span className="tabular-nums text-muted-foreground">{view.fmt.money(cost.amountCents)}</span>
-              </Row>
-            ))}
-            {state.summary.costs.length === 0 ? <Block className="text-muted-foreground">–</Block> : null}
-          </Group>
-        </>
+      {page === "overview" ? (
+        <WidgetBoard
+          boardId="budget-overview"
+          widgets={[...boardElements(t), ...budgetWidgets({ state, view, copy, locale, busy, openExpense })]}
+          defaultIds={budgetOverviewWidgets}
+          t={t}
+        />
       ) : null}
 
       {page === "savings" ? (
@@ -196,76 +146,30 @@ export function MonthlyBudget({ accessToken, locale, pathname }: { accessToken?:
           state={state}
           through={controller.selectedDate || state.today}
           locale={locale}
+          merchantById={controller.merchantById}
           savingsOnly={page === "savings"}
           busy={busy}
           open={openExpense}
           voidEntry={(expense) => {
-            if (window.confirm(copy.confirmVoid)) void run(() => voidMonthlyExpense(accessToken, expense.id, crypto.randomUUID()))
+            if (window.confirm(copy.confirmVoid)) void run(() => voidMonthlyExpense(accessToken, expense.id, uuid()))
           }}
         />
       ) : null}
 
-      {page !== "plan" && state.categories.length === 0 ? (
-        <p className="text-muted-foreground">
-          {copy.emptyCategories}{" "}
-          <Link className="text-primary hover:underline" href="/budget/preview/plan">
-            {copy.plan}
-          </Link>
-        </p>
-      ) : null}
-
       {intent ? (
         <MonthlyExpenseEditor
-          intent={intent}
+          intent={intent.expense}
           state={state}
           accessToken={accessToken}
           locale={locale}
           busy={busy}
+          merchants={controller.merchants}
           serverError={controller.error}
           run={run}
           close={() => setIntent(null)}
-          restoreFocus={() => expenseTrigger.current?.focus()}
+          restoreFocus={() => intent.trigger?.focus()}
         />
       ) : null}
-    </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[11px] text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-medium tabular-nums">{value}</dd>
-    </div>
-  )
-}
-
-function MiniCard({
-  icon,
-  color,
-  label,
-  value,
-  note,
-  children,
-}: {
-  icon: typeof IconPigMoney
-  color: string
-  label: string
-  value: string
-  note: string
-  children?: React.ReactNode
-}) {
-  return (
-    <div className="surface-group p-4">
-      <div className="flex items-center gap-2">
-        <IconTile icon={icon} color={color} size={22} />
-        <span className="font-medium">{label}</span>
-      </div>
-      <p className="mt-3 text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{value}</p>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">{note}</p>
-        {children}
-      </div>
     </div>
   )
 }

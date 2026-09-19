@@ -1,0 +1,353 @@
+[
+  {
+    "key": "rewe",
+    "name": "REWE",
+    "domain": "rewe.de"
+  },
+  {
+    "key": "edeka",
+    "name": "EDEKA",
+    "domain": "edeka.de"
+  },
+  {
+    "key": "aldisued",
+    "name": "ALDI SÜD",
+    "domains": [
+      "aldi-sued.de",
+      "aldi.de"
+    ]
+  },
+  {
+    "key": "aldinord",
+    "name": "ALDI Nord",
+    "domains": [
+      "aldi-nord.de",
+      "aldi.de"
+    ]
+  },
+  {
+    "key": "lidl",
+    "name": "Lidl",
+    "domain": "lidl.de"
+  },
+  {
+    "key": "kaufland",
+    "name": "Kaufland",
+    "domain": "kaufland.de"
+  },
+  {
+    "key": "penny",
+    "name": "Penny",
+    "domain": "penny.de"
+  },
+  {
+    "key": "netto",
+    "name": "Netto",
+    "domain": "netto-online.de"
+  },
+  {
+    "key": "norma",
+    "name": "Norma",
+    "domain": "norma-online.de"
+  },
+  {
+    "key": "alnatura",
+    "name": "Alnatura",
+    "domain": "alnatura.de"
+  },
+  {
+    "key": "biocompany",
+    "name": "Bio Company",
+    "domain": "biocompany.de"
+  },
+  {
+    "key": "dm",
+    "name": "dm",
+    "domain": "dm.de"
+  },
+  {
+    "key": "rossmann",
+    "name": "Rossmann",
+    "domain": "rossmann.de"
+  },
+  {
+    "key": "mueller",
+    "name": "Müller",
+    "domain": "mueller.de"
+  },
+  {
+    "key": "douglas",
+    "name": "Douglas",
+    "wikidata": "Q570747",
+    "domains": [
+      "douglas.eu",
+      "douglas.de"
+    ]
+  },
+  {
+    "key": "amazon",
+    "name": "Amazon",
+    "domain": "amazon.com"
+  },
+  {
+    "key": "ebay",
+    "name": "eBay",
+    "domain": "ebay.com"
+  },
+  {
+    "key": "otto",
+    "name": "Otto",
+    "domain": "otto.de"
+  },
+  {
+    "key": "zalando",
+    "name": "Zalando",
+    "domain": "zalando.de"
+  },
+  {
+    "key": "aboutyou",
+    "name": "About You",
+    "domain": "aboutyou.de"
+  },
+  {
+    "key": "mediamarkt",
+    "name": "MediaMarkt",
+    "domain": "mediamarkt.de"
+  },
+  {
+    "key": "saturn",
+    "name": "Saturn",
+    "domain": "saturn.de"
+  },
+  {
+    "key": "conrad",
+    "name": "Conrad",
+    "wikidata": "Q467136",
+    "domains": [
+      "conrad.de"
+    ]
+  },
+  {
+    "key": "cyberport",
+    "name": "Cyberport",
+    "domain": "cyberport.de"
+  },
+  {
+    "key": "ikea",
+    "name": "IKEA",
+    "domain": "ikea.com"
+  },
+  {
+    "key": "obi",
+    "name": "OBI",
+    "domain": "obi.de"
+  },
+  {
+    "key": "bauhaus",
+    "name": "Bauhaus",
+    "domain": "bauhaus.info"
+  },
+  {
+    "key": "hornbach",
+    "name": "Hornbach",
+    "domain": "hornbach.de"
+  },
+  {
+    "key": "toom",
+    "name": "toom",
+    "wikidata": "Q2442970",
+    "domains": [
+      "toom-baumarkt.de",
+      "toom.de"
+    ]
+  },
+  {
+    "key": "action",
+    "name": "Action",
+    "domain": "action.com"
+  },
+  {
+    "key": "tedi",
+    "name": "TEDi",
+    "domain": "tedi.com"
+  },
+  {
+    "key": "hm",
+    "name": "H&M",
+    "domain": "hm.com"
+  },
+  {
+    "key": "ca",
+    "name": "C&A",
+    "domain": "c-and-a.com"
+  },
+  {
+    "key": "deichmann",
+    "name": "Deichmann",
+    "domain": "deichmann.com"
+  },
+  {
+    "key": "kik",
+    "name": "KiK",
+    "domain": "kik.de"
+  },
+  {
+    "key": "snipes",
+    "name": "Snipes",
+    "domain": "snipes.com"
+  },
+  {
+    "key": "aral",
+    "name": "Aral",
+    "domain": "aral.de"
+  },
+  {
+    "key": "shell",
+    "name": "Shell",
+    "domain": "shell.com"
+  },
+  {
+    "key": "esso",
+    "name": "Esso",
+    "domain": "esso.de"
+  },
+  {
+    "key": "total",
+    "name": "TotalEnergies",
+    "domain": "totalenergies.com"
+  },
+  {
+    "key": "jet",
+    "name": "JET",
+    "domain": "jet.de"
+  },
+  {
+    "key": "lieferando",
+    "name": "Lieferando",
+    "domain": "lieferando.de"
+  },
+  {
+    "key": "mcdonalds",
+    "name": "McDonald's",
+    "domain": "mcdonalds.com"
+  },
+  {
+    "key": "burgerking",
+    "name": "Burger King",
+    "domain": "bk.com"
+  },
+  {
+    "key": "subway",
+    "name": "Subway",
+    "domain": "subway.com"
+  },
+  {
+    "key": "starbucks",
+    "name": "Starbucks",
+    "domain": "starbucks.com"
+  },
+  {
+    "key": "netflix",
+    "name": "Netflix",
+    "domain": "netflix.com"
+  },
+  {
+    "key": "spotify",
+    "name": "Spotify",
+    "domain": "spotify.com"
+  },
+  {
+    "key": "disneyplus",
+    "name": "Disney+",
+    "domain": "disneyplus.com"
+  },
+  {
+    "key": "steam",
+    "name": "Steam",
+    "domain": "steampowered.com"
+  },
+  {
+    "key": "apple",
+    "name": "Apple",
+    "domain": "apple.com"
+  },
+  {
+    "key": "google",
+    "name": "Google",
+    "domain": "google.com"
+  },
+  {
+    "key": "microsoft",
+    "name": "Microsoft",
+    "domain": "microsoft.com"
+  },
+  {
+    "key": "telekom",
+    "name": "Telekom",
+    "domain": "telekom.de"
+  },
+  {
+    "key": "vodafone",
+    "name": "Vodafone",
+    "domain": "vodafone.com"
+  },
+  {
+    "key": "o2",
+    "name": "o2",
+    "domain": "o2online.de"
+  },
+  {
+    "key": "1und1",
+    "name": "1&1",
+    "domain": "1und1.de"
+  },
+  {
+    "key": "bahn",
+    "name": "Deutsche Bahn",
+    "domain": "bahn.de"
+  },
+  {
+    "key": "flixbus",
+    "name": "FlixBus",
+    "domain": "flixbus.com"
+  },
+  {
+    "key": "dhl",
+    "name": "DHL",
+    "domain": "dhl.com"
+  },
+  {
+    "key": "hermes",
+    "name": "Hermes",
+    "wikidata": "Q1613532",
+    "domains": [
+      "hermesworld.com",
+      "myhermes.de"
+    ]
+  },
+  {
+    "key": "docmorris",
+    "name": "DocMorris",
+    "domain": "docmorris.de"
+  },
+  {
+    "key": "shopapotheke",
+    "name": "Shop Apotheke",
+    "domain": "shop-apotheke.com"
+  },
+  {
+    "key": "fressnapf",
+    "name": "Fressnapf",
+    "domain": "fressnapf.de"
+  },
+  {
+    "key": "thalia",
+    "name": "Thalia",
+    "domain": "thalia.de"
+  },
+  {
+    "key": "decathlon",
+    "name": "Decathlon",
+    "domain": "decathlon.com"
+  }
+]

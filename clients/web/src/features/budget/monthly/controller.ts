@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Locale } from "@/lib/i18n"
+import { createMerchant, loadMerchants, updateMerchant, type Merchant } from "../merchants"
 import { loadMonthlyBudget } from "./api"
 import { monthlyCopy, monthlyError } from "./copy"
 import type { MonthlyExpense, MonthlyState } from "./types"
@@ -25,8 +26,9 @@ export function formatters(locale: Locale, currency: string) {
 }
 export type Formatters = ReturnType<typeof formatters>
 
-/** One expense prepared for a list row. */
-export type ExpenseRowModel = { expense: MonthlyExpense; voided: boolean; date: string; amount: string; sources: string }
+/** One expense prepared for a list row, merchant already looked up. */
+export type ExpenseRowModel = { expense: MonthlyExpense; voided: boolean; date: string; amount: string; sources: string
+  merchant: Merchant | null }
 
 /** Groups prepared rows by calendar day, newest first, with a signed day total (refunds count negative). */
 export function groupRowsByDay(rows: ExpenseRowModel[], fmt: Formatters) {
@@ -66,6 +68,22 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
     return () => { active = false }
   }, [accessToken, copy, reload, selectedDate])
 
+  // A failing catalog leaves tiles on the monogram instead of breaking the budget page.
+  const [merchants, setMerchants] = useState<Merchant[]>([])
+  useEffect(() => {
+    let active = true
+    if (!accessToken) return
+    loadMerchants(accessToken).then(list => { if (active) setMerchants(list) }).catch(() => undefined)
+    return () => { active = false }
+  }, [accessToken])
+  const merchantById = useMemo(() => new Map(merchants.map(merchant => [merchant.id, merchant])), [merchants])
+  /** Creates or renames, then replaces the list so the picker and the tiles agree again. */
+  const saveMerchant = useCallback(async (name: string, options: { id?: string; archived?: boolean; global?: boolean } = {}) => {
+    if (!accessToken) return
+    if (options.id) await updateMerchant(accessToken, options.id, { name, archived: options.archived ?? false })
+    else await createMerchant(accessToken, name, options.global ?? false)
+    setMerchants(await loadMerchants(accessToken))
+  }, [accessToken])
   const run = useCallback(async (action: () => Promise<unknown>) => {
     if (busy || !accessToken) return false
     setBusy(true); setError(null); setMessage(null)
@@ -99,6 +117,7 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
       .sort((a, b) => b.expense.occurredOn.localeCompare(a.expense.occurredOn))
       .slice(0, 5)
       .map(({ expense, voided }) => ({ expense, voided, date: fmt.date(expense.occurredOn), amount: fmt.money(expense.amountCents),
+        merchant: expense.merchantId ? merchantById.get(expense.merchantId) ?? null : null,
         sources: expense.funding.some(part => part.source !== "fun") ? expense.funding.map(part => part.source === "category" ? copy.categorySource : part.source === "savings" ? copy.savingsSource : part.source === "buffer" ? copy.bufferSource : copy.fun).join(" · ") : "" }))
     return { fmt, categories, reserveCards: categories.filter(category => category.reservedCents > 0),
       period: summary ? `${fmt.date(summary.start)} – ${fmt.date(summary.end)}` : "",
@@ -108,6 +127,7 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
       savings: fmt.money(state.summary?.savingsBalanceCents ?? 0), buffer: fmt.money(state.summary?.bufferBalanceCents ?? 0),
       contribution: fmt.money(state.summary?.savingsContributionCents ?? 0),
       deficit: fmt.money(state.summary?.deficitCarryoverCents ?? 0), shortfall: fmt.money(state.summary?.fundingShortfallCents ?? 0) }
-  }, [resource, locale, selectedDate, copy])
-  return { resource, presentation, copy, busy, error, message, run, selectedDate, setSelectedDate, retry: () => setReload(value => value + 1) }
+  }, [resource, locale, selectedDate, copy, merchantById])
+  return { resource, presentation, copy, busy, error, message, run, selectedDate, setSelectedDate,
+    merchants, merchantById, saveMerchant, retry: () => setReload(value => value + 1) }
 }

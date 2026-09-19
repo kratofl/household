@@ -7,7 +7,8 @@
 /*
   Design tokens. The neutral system follows Apple's grouped backgrounds and
   hairline separators; the accent comes from the user's theme (see lib/theme.ts).
-  Glass is reserved for the navigation layer, content stays on opaque surfaces.
+  The page carries a soft accent wash and surfaces are translucent over it, so
+  glass reads as depth rather than as a flat tint.
 */
 
 @theme inline {
@@ -49,6 +50,7 @@
   --color-fill-2: var(--fill-2);
   --color-fill-3: var(--fill-3);
   --color-hairline: var(--hairline);
+  --color-glass-panel: var(--glass-panel);
   --color-separator: var(--separator);
   --color-positive: var(--sys-green);
   --color-warning: var(--sys-orange);
@@ -72,6 +74,14 @@
 }
 
 :root {
+  /* Set from the Settings page; see lib/appearance.ts. These are the defaults. */
+  --glass-opacity: 0.62;
+  --contrast: 1;
+  --motion-panel: 225ms;
+
+  --glass: rgb(var(--glass-rgb) / var(--glass-opacity));
+  --glass-panel: rgb(var(--glass-panel-rgb) / calc(var(--glass-opacity) * 0.92));
+
   --radius: 0.625rem;
   --background: #f2f2f7;
   --foreground: #1d1d1f;
@@ -88,7 +98,7 @@
   --accent: rgb(118 118 128 / 0.12);
   --accent-foreground: #1d1d1f;
   --destructive: #ff3b30;
-  --border: rgb(0 0 0 / 0.1);
+  --border: rgb(0 0 0 / calc(0.1 * var(--contrast)));
   --input: rgb(120 120 128 / 0.16);
   --ring: #ff6a00;
   --chart-1: #007aff;
@@ -104,12 +114,14 @@
   --sidebar-accent-foreground: #1d1d1f;
   --sidebar-border: rgb(0 0 0 / 0.08);
   --sidebar-ring: #ff6a00;
-  --separator: rgb(60 60 67 / 0.29);
-  --hairline: rgb(0 0 0 / 0.1);
+  --separator: rgb(60 60 67 / calc(0.29 * var(--contrast)));
+  --hairline: rgb(0 0 0 / calc(0.1 * var(--contrast)));
   --fill: rgb(120 120 128 / 0.2);
   --fill-2: rgb(120 120 128 / 0.16);
   --fill-3: rgb(118 118 128 / 0.12);
-  --glass: rgb(255 255 255 / 0.72);
+  --glass-rgb: 255 255 255;
+  --glass-panel-rgb: 255 255 255;
+  --glass-edge: rgb(255 255 255 / 0.5);
   --sys-blue: #007aff;
   --sys-green: #34c759;
   --sys-orange: #ff9500;
@@ -138,7 +150,7 @@
   --accent: rgb(118 118 128 / 0.24);
   --accent-foreground: #f5f5f7;
   --destructive: #ff453a;
-  --border: rgb(255 255 255 / 0.12);
+  --border: rgb(255 255 255 / calc(0.12 * var(--contrast)));
   --input: rgb(120 120 128 / 0.32);
   --ring: #ff7d1f;
   --chart-1: #0a84ff;
@@ -154,12 +166,14 @@
   --sidebar-accent-foreground: #f5f5f7;
   --sidebar-border: rgb(255 255 255 / 0.1);
   --sidebar-ring: #ff7d1f;
-  --separator: rgb(84 84 88 / 0.6);
-  --hairline: rgb(255 255 255 / 0.12);
+  --separator: rgb(84 84 88 / calc(0.6 * var(--contrast)));
+  --hairline: rgb(255 255 255 / calc(0.12 * var(--contrast)));
   --fill: rgb(120 120 128 / 0.36);
   --fill-2: rgb(120 120 128 / 0.32);
   --fill-3: rgb(118 118 128 / 0.24);
-  --glass: rgb(28 28 30 / 0.72);
+  --glass-rgb: 28 28 30;
+  --glass-panel-rgb: 62 62 66;
+  --glass-edge: rgb(255 255 255 / 0.16);
   --sys-blue: #0a84ff;
   --sys-green: #30d158;
   --sys-orange: #ff9f0a;
@@ -198,6 +212,14 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* A soft wash in the user's accent, so translucent surfaces have something
+       to pick up. Scrolls with the page: a fixed attachment forces a repaint of
+       every blurred surface on every scroll frame. */
+    background-image:
+      radial-gradient(900px 520px at 6% -10%, color-mix(in oklab, var(--primary) 26%, transparent), transparent 60%),
+      radial-gradient(760px 460px at 98% 6%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 58%),
+      radial-gradient(680px 420px at 52% 96%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 62%);
+    background-repeat: no-repeat;
     font-size: 13px;
     line-height: 1.35;
     font-feature-settings: "cv11", "ss01", "ss03", "tnum";
@@ -210,11 +232,16 @@
   light edges are easier to read here than as twenty utility classes.
 */
 @layer components {
-  /* Inset grouped container: opaque, 10px radius, hairline. No shadow on content. */
+  /* Content surface: frosted over the page wash, with a lit top edge so the
+     panel reads as a pane of glass rather than as a tinted rectangle. */
   .surface-group {
-    background: var(--card);
+    background: var(--glass-panel);
+    -webkit-backdrop-filter: saturate(180%) blur(18px);
+    backdrop-filter: saturate(180%) blur(18px);
     border-radius: 10px;
-    box-shadow: 0 0 0 0.5px var(--hairline);
+    box-shadow:
+      inset 0 0.5px 0 var(--glass-edge),
+      0 0 0 0.5px var(--hairline);
   }
 
   /* Rows inside a group are separated by 0.5px hairlines. */
@@ -225,8 +252,19 @@
   /* Glass: navigation layer only (sidebar, toolbar, tab bar, sheets). */
   .glass {
     background: var(--glass);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
-    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    backdrop-filter: saturate(180%) blur(24px);
+  }
+
+  /* The floating panels that sit over content: heavier blur and a lit top edge. */
+  .glass-strong {
+    background: var(--glass);
+    -webkit-backdrop-filter: saturate(200%) blur(40px);
+    backdrop-filter: saturate(200%) blur(40px);
+    box-shadow:
+      inset 0 0.5px 0 var(--glass-edge),
+      0 0 0 0.5px var(--hairline),
+      0 18px 44px -16px rgb(0 0 0 / 0.4);
   }
 
   /* macOS push button: hairline, subtle vertical gradient, inner light edge. */
@@ -313,7 +351,7 @@
 
   /* Finite entrance for freshly mounted screens. */
   .rise {
-    animation: rise 260ms ease-out both;
+    animation: rise var(--motion-panel) ease-out both;
   }
   @keyframes rise {
     from { opacity: 0; transform: translateY(6px); }

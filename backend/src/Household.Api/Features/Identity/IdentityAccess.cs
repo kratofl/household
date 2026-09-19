@@ -34,7 +34,7 @@ public static class TokenFactory
 {
     public static TokenPair Create(DateTime now)
     {
-        return new TokenPair(Random(), Random(), now.AddMinutes(15), now.AddDays(30));
+        return new TokenPair(Random(), Random(), now.AddMinutes(5), now.AddDays(14));
     }
 
     public static string Hash(string token) =>
