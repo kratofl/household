@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  devIndicators: {
+    position: "bottom-right",
+  },
   // The dev stack is published on all interfaces so other machines on the LAN
   // can open it. Next blocks cross-origin requests to /_next dev resources by
   // default, which would serve the HTML but none of the chunks. Allow the

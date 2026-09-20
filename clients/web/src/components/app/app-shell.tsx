@@ -1,6 +1,6 @@
 "use client"
 
-import { IconChevronRight, IconHome, IconLogout, IconPigMoney, IconSettings, IconShield, IconUserCircle } from "@tabler/icons-react"
+import { IconHome, IconShield } from "@tabler/icons-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -19,8 +19,18 @@ import {
 } from "@/lib/modules"
 import { type Locale, isLocale, translate } from "@/lib/i18n"
 
-import { BudgetSubnav, MobileTabBar, Sidebar, SidebarButton, SidebarGroup, SidebarLink, SidebarModuleNav } from "@/components/app/sidebar"
-import { AppearanceToggle } from "@/components/app/switchers"
+import {
+  BudgetSubnav,
+  MobileTabBar,
+  Sidebar,
+  SidebarGroupLabel,
+  SidebarLink,
+  SidebarModuleNav,
+  moduleIcons,
+  useSidebarCollapsed,
+} from "@/components/app/sidebar"
+import { ProfileRow } from "@/components/app/profile-row"
+import { Topbar } from "@/components/app/topbar"
 import { AccountPanel } from "@/features/account/account-panel"
 import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
 import { SettingsPanel } from "@/features/settings/settings-panel"
@@ -37,6 +47,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
 
   const pathname = usePathname()
   const router = useRouter()
+  const { collapsed, toggle: toggleSidebar } = useSidebarCollapsed()
   const [locale, setLocale] = useState<Locale>("de")
   const [localeReady, setLocaleReady] = useState(false)
   const [tokens, setTokens] = useState<TokenPair | null>(null)
@@ -468,91 +479,69 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
 
   const isAdmin = currentUser.role === "admin"
   const inBudget = selectedModule?.key === "budget"
-  const crumb = selectedModule ? moduleName(selectedModule, locale) : t("app.subtitle")
-  const initials = currentUser.name.slice(0, 2).toUpperCase()
-  // Every panel renders its own large title; the shell only titles the dashboard.
-  const showTitle = isHome
+  const RouteIcon = selectedModule ? moduleIcons[selectedModule.key as keyof typeof moduleIcons] ?? IconHome : IconHome
+  // The topbar names the route, so panels no longer repeat it as a page title.
+  const routeParent = selectedModule && inBudget ? moduleName(selectedModule, locale) : undefined
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar
-        brand={
-          <div className="flex items-center gap-2">
-            <span className="icon-tile bg-primary text-primary-foreground">
-              <IconPigMoney className="size-4" strokeWidth={2} />
-            </span>
-            <span className="font-semibold">{t("app.name")}</span>
-          </div>
-        }
-        footer={
-          <>
-            <SidebarLink href="/account" active={isAccount} icon={<IconUserCircle className="size-4" strokeWidth={1.8} />}>
-              {t("nav.account")}
-            </SidebarLink>
-            <SidebarLink href="/settings" active={isSettings} icon={<IconSettings className="size-4" strokeWidth={1.8} />}>
-              {t("nav.settings")}
-            </SidebarLink>
-            <SidebarButton icon={<IconLogout className="size-4" strokeWidth={1.8} />} onClick={logout}>
-              {t("nav.logout")}
-            </SidebarButton>
-            <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5">
-              <span className="flex size-5 items-center justify-center rounded-full bg-fill text-[9px] font-semibold">{initials}</span>
-              <span className="min-w-0 flex-1 truncate">{currentUser.name}</span>
-              <span className="text-[11px] text-muted-foreground">{currentUser.role}</span>
-            </div>
-          </>
-        }
-      >
-        <div>
-          <SidebarLink href="/" active={isHome} icon={<IconHome className="size-4" strokeWidth={1.8} />}>
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <Topbar
+        appName={t("app.name")}
+        collapsed={collapsed}
+        toggleSidebar={toggleSidebar}
+        collapseLabel={t("nav.collapseSidebar")}
+        expandLabel={t("nav.expandSidebar")}
+        routeIcon={<RouteIcon />}
+        routeLabel={selectedTitle}
+        routeParent={routeParent}
+      />
+
+      <div className="flex min-h-0 flex-1">
+        <Sidebar
+          collapsed={collapsed}
+          footer={
+            <ProfileRow
+              collapsed={collapsed}
+              name={currentUser.name}
+              subtitle={t("nav.account")}
+              logout={logout}
+              t={t}
+            />
+          }
+        >
+          <SidebarGroupLabel collapsed={collapsed}>{t("nav.main")}</SidebarGroupLabel>
+          <SidebarLink collapsed={collapsed} href="/" active={isHome} icon={<IconHome />}>
             {t("dashboard.title")}
           </SidebarLink>
-        </div>
-        <div className="space-y-px">
           {activeModules.map((module) => (
-            <SidebarModuleNav key={module.id} locale={locale} module={module} pathname={pathname} t={t} />
+            <SidebarModuleNav
+              key={module.id}
+              collapsed={collapsed}
+              locale={locale}
+              module={module}
+              pathname={pathname}
+              t={t}
+            />
           ))}
-        </div>
-        {isAdmin ? (
-          <SidebarGroup icon={<IconShield className="size-4" strokeWidth={1.8} />} label={t("nav.admin")} containsActive={isAdminSettings}>
-            <li>
-              <SidebarLink href="/admin/settings" level={1} active={isAdminSettings}>
+          {isAdmin ? (
+            <>
+              <SidebarGroupLabel collapsed={collapsed}>{t("nav.admin")}</SidebarGroupLabel>
+              <SidebarLink
+                collapsed={collapsed}
+                href="/admin/settings"
+                level={1}
+                active={isAdminSettings}
+                icon={<IconShield />}
+              >
                 {t("nav.adminSettings")}
               </SidebarLink>
-            </li>
-          </SidebarGroup>
-        ) : null}
-      </Sidebar>
+            </>
+          ) : null}
+        </Sidebar>
 
-      <div className="min-w-0 flex-1">
-        <header className="glass sticky top-0 z-10 flex h-[52px] items-center justify-between gap-3 px-4 shadow-[inset_0_-0.5px_0_var(--hairline)] lg:px-8">
-          <div className="flex min-w-0 items-center gap-1">
-            <span className="hidden truncate text-muted-foreground sm:inline">{crumb}</span>
-            <IconChevronRight className="hidden size-3 shrink-0 text-muted-foreground/60 sm:inline" />
-            <span className="truncate font-semibold">{selectedTitle}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <AppearanceToggle t={t} />
-            <button
-              type="button"
-              onClick={logout}
-              aria-label={t("nav.logout")}
-              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-fill-3 hover:text-foreground lg:hidden"
-            >
-              <IconLogout className="size-4" />
-            </button>
-          </div>
-        </header>
-
-        <main className="w-full px-4 pb-32 pt-5 lg:px-8 lg:pb-12">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-canvas px-4 pt-5 pb-32 shadow-[inset_5px_5px_10px_rgb(0_0_0/0.02)] lg:rounded-tl-3xl lg:p-6">
           <div className="space-y-5">
             {inBudget ? <BudgetSubnav pathname={pathname} t={t} /> : null}
-            {showTitle ? (
-              <div>
-                <h1 className="text-[28px] font-bold tracking-[-0.02em] lg:text-[34px]">{selectedTitle}</h1>
-                <p className="mt-0.5 text-muted-foreground">{crumb}</p>
-              </div>
-            ) : null}
             {error ? (
               <Alert variant="destructive">
                 <AlertTitle>{t("error.title")}</AlertTitle>

@@ -98,14 +98,28 @@ function readLayout(boardId: string): Layout | null {
   }
 }
 
-/** Stacks the default widgets full width, in the order the module listed them. */
+/**
+ * Packs the default widgets left to right in the order the module listed them,
+ * wrapping to a new row when the next one no longer fits. Widgets carry their
+ * own width, so three quarter-width cards sit side by side instead of each
+ * taking a row of its own.
+ */
 function defaultLayout(widgets: WidgetDefinition[], defaultIds: string[]): Layout {
+  let x = 0
   let y = 0
+  let rowHeight = 0
   const items = defaultIds.flatMap((id) => {
     const widget = widgets.find((candidate) => candidate.id === id)
     if (!widget) return []
-    const placement: Placement = { key: widget.id, widget: widget.id, x: 0, y, w: widget.w, h: widget.h }
-    y += widget.h
+    const w = Math.min(widget.w, MIN_COLUMNS)
+    if (x + w > MIN_COLUMNS) {
+      x = 0
+      y += rowHeight
+      rowHeight = 0
+    }
+    const placement: Placement = { key: widget.id, widget: widget.id, x, y, w, h: widget.h }
+    x += w
+    rowHeight = Math.max(rowHeight, widget.h)
     return [placement]
   })
   return { columns: MIN_COLUMNS, items }

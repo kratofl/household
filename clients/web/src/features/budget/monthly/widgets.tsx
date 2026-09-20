@@ -130,11 +130,7 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
       h: 5,
       group,
       render: () => (
-        <Group
-          title={copy.reserved}
-          action={{ label: copy.openPlan, href: budgetViews.plan.route }}
-          footer={view.reserveCards.length === 0 ? copy.emptyReserves : undefined}
-        >
+        <Group title={copy.reserved} action={{ label: copy.openPlan, href: budgetViews.plan.route }}>
           {view.reserveCards.map((category) => {
             const visual = categoryVisual(category.name)
             return (
@@ -223,8 +219,18 @@ export const budgetOverviewWidgets = [
   "budget.costs",
 ]
 
-/** The global dashboard starts with the few numbers worth a glance. */
-export const budgetDashboardWidgets = ["budget.remaining", "budget.savings", "budget.buffer", "budget.recent"]
+/**
+ * The global dashboard starts with the numbers worth a glance: what is left, the
+ * three supporting figures side by side, then the reserves and the last expenses.
+ */
+export const budgetDashboardWidgets = [
+  "budget.remaining",
+  "budget.savings",
+  "budget.buffer",
+  "budget.next",
+  "budget.reserves",
+  "budget.recent",
+]
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (

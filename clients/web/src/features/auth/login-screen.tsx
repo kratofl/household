@@ -1,6 +1,6 @@
 "use client"
 
-import { IconLogin2, IconPigMoney, IconUserCheck } from "@tabler/icons-react"
+import { IconLogin2, IconUserCheck } from "@tabler/icons-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { Field } from "@/components/app/field"
+import { HouseholdLogo } from "@/components/app/household-logo"
 import type { Translator } from "@/lib/i18n"
 
 export function LoginScreen(props: {
@@ -33,9 +34,7 @@ export function LoginScreen(props: {
     <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
       <div className="w-full max-w-md space-y-5">
         <div className="text-center">
-          <span className="icon-tile mx-auto mb-4 size-14! rounded-2xl! bg-primary text-primary-foreground">
-            <IconPigMoney className="size-8" strokeWidth={1.8} />
-          </span>
+          <HouseholdLogo className="mx-auto mb-3 size-20" />
           <h1 className="text-[28px] font-bold tracking-[-0.02em]">{props.title}</h1>
           <p className="mt-0.5 text-muted-foreground">{props.subtitle}</p>
         </div>

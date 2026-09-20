@@ -24,6 +24,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Household",
   description: "Local household dashboard for modules, account settings, and updates.",
+  icons: {
+    icon: "/household-logo.svg",
+    apple: "/household-logo.svg",
+  },
 }
 
 export default function RootLayout({

@@ -5,10 +5,12 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  Design tokens. The neutral system follows Apple's grouped backgrounds and
-  hairline separators; the accent comes from the user's theme (see lib/theme.ts).
-  The page carries a soft accent wash and surfaces are translucent over it, so
-  glass reads as depth rather than as a flat tint.
+  Design tokens for the desktop shell. Neutral, opaque surfaces: the chrome
+  (topbar and sidebar) sits on --background, the working area on --canvas, and
+  cards are raised blocks with a lit top edge and a short bottom edge. The
+  accent comes from the user's theme (see lib/theme.ts) and only ever colours
+  selection, primary actions, focus and progress. Green, blue and red stay
+  reserved for semantic state and never follow the accent.
 */
 
 @theme inline {
@@ -51,6 +53,7 @@
   --color-fill-3: var(--fill-3);
   --color-hairline: var(--hairline);
   --color-glass-panel: var(--glass-panel);
+  --color-canvas: var(--canvas);
   --color-separator: var(--separator);
   --color-positive: var(--sys-green);
   --color-warning: var(--sys-orange);
@@ -82,10 +85,15 @@
   --glass: rgb(var(--glass-rgb) / var(--glass-opacity));
   --glass-panel: rgb(var(--glass-panel-rgb) / calc(var(--glass-opacity) * 0.92));
 
-  --radius: 0.625rem;
-  --background: #f2f2f7;
+  --radius: 0.75rem;
+  --background: #f8f8f8;
+  --canvas: #ebebeb;
+  /* Card depth: a white inner top edge, a short dense bottom edge, a diffuse shadow. */
+  --card-edge: #ffffff;
+  --card-foot: rgb(208 208 215 / 0.4);
+  --card-shadow: 0 5px 9px rgb(0 0 0 / 0.02);
   --foreground: #1d1d1f;
-  --card: #ffffff;
+  --card: #f8f8f8;
   --card-foreground: #1d1d1f;
   --popover: #ffffff;
   --popover-foreground: #1d1d1f;
@@ -98,30 +106,30 @@
   --accent: rgb(118 118 128 / 0.12);
   --accent-foreground: #1d1d1f;
   --destructive: #ff3b30;
-  --border: rgb(0 0 0 / calc(0.1 * var(--contrast)));
-  --input: rgb(120 120 128 / 0.16);
+  --border: rgb(0 0 0 / calc(0.12 * var(--contrast)));
+  --input: #ffffff;
   --ring: #ff6a00;
   --chart-1: #007aff;
   --chart-2: #34c759;
   --chart-3: #ff9500;
   --chart-4: #af52de;
   --chart-5: #30b0c7;
-  --sidebar: rgb(242 242 247 / 0.72);
+  --sidebar: #f8f8f8;
   --sidebar-foreground: #1d1d1f;
   --sidebar-primary: #ff6a00;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgb(0 0 0 / 0.07);
+  --sidebar-accent: color-mix(in srgb, var(--primary) 13%, var(--background));
   --sidebar-accent-foreground: #1d1d1f;
   --sidebar-border: rgb(0 0 0 / 0.08);
   --sidebar-ring: #ff6a00;
-  --separator: rgb(60 60 67 / calc(0.29 * var(--contrast)));
-  --hairline: rgb(0 0 0 / calc(0.1 * var(--contrast)));
+  --separator: rgb(0 0 0 / calc(0.1 * var(--contrast)));
+  --hairline: rgb(0 0 0 / calc(0.12 * var(--contrast)));
   --fill: rgb(120 120 128 / 0.2);
   --fill-2: rgb(120 120 128 / 0.16);
   --fill-3: rgb(118 118 128 / 0.12);
-  --glass-rgb: 255 255 255;
-  --glass-panel-rgb: 255 255 255;
-  --glass-edge: rgb(255 255 255 / 0.5);
+  --glass-rgb: 248 248 248;
+  --glass-panel-rgb: 248 248 248;
+  --glass-edge: rgb(255 255 255 / 0.9);
   --sys-blue: #007aff;
   --sys-green: #34c759;
   --sys-orange: #ff9500;
@@ -136,8 +144,12 @@
 
 .dark {
   --background: #1c1c1e;
+  --canvas: #161617;
+  --card-edge: rgb(255 255 255 / 0.07);
+  --card-foot: rgb(0 0 0 / 0.45);
+  --card-shadow: 0 5px 9px rgb(0 0 0 / 0.22);
   --foreground: #f5f5f7;
-  --card: #2c2c2e;
+  --card: #242426;
   --card-foreground: #f5f5f7;
   --popover: #2c2c2e;
   --popover-foreground: #f5f5f7;
@@ -151,29 +163,29 @@
   --accent-foreground: #f5f5f7;
   --destructive: #ff453a;
   --border: rgb(255 255 255 / calc(0.12 * var(--contrast)));
-  --input: rgb(120 120 128 / 0.32);
+  --input: rgb(255 255 255 / 0.06);
   --ring: #ff7d1f;
   --chart-1: #0a84ff;
   --chart-2: #30d158;
   --chart-3: #ff9f0a;
   --chart-4: #bf5af2;
   --chart-5: #40c8e0;
-  --sidebar: rgb(28 28 30 / 0.7);
+  --sidebar: #1c1c1e;
   --sidebar-foreground: #f5f5f7;
   --sidebar-primary: #ff7d1f;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgb(255 255 255 / 0.1);
+  --sidebar-accent: color-mix(in srgb, var(--primary) 22%, var(--background));
   --sidebar-accent-foreground: #f5f5f7;
   --sidebar-border: rgb(255 255 255 / 0.1);
   --sidebar-ring: #ff7d1f;
-  --separator: rgb(84 84 88 / calc(0.6 * var(--contrast)));
+  --separator: rgb(255 255 255 / calc(0.1 * var(--contrast)));
   --hairline: rgb(255 255 255 / calc(0.12 * var(--contrast)));
   --fill: rgb(120 120 128 / 0.36);
   --fill-2: rgb(120 120 128 / 0.32);
   --fill-3: rgb(118 118 128 / 0.24);
   --glass-rgb: 28 28 30;
-  --glass-panel-rgb: 62 62 66;
-  --glass-edge: rgb(255 255 255 / 0.16);
+  --glass-panel-rgb: 36 36 38;
+  --glass-edge: rgb(255 255 255 / 0.08);
   --sys-blue: #0a84ff;
   --sys-green: #30d158;
   --sys-orange: #ff9f0a;
@@ -211,15 +223,9 @@
     @apply h-full font-sans;
   }
   body {
+    /* The chrome colour. The working area paints itself with --canvas; there is
+       no page-wide wash, because nothing is translucent any more. */
     @apply bg-background text-foreground;
-    /* A soft wash in the user's accent, so translucent surfaces have something
-       to pick up. Scrolls with the page: a fixed attachment forces a repaint of
-       every blurred surface on every scroll frame. */
-    background-image:
-      radial-gradient(900px 520px at 6% -10%, color-mix(in oklab, var(--primary) 26%, transparent), transparent 60%),
-      radial-gradient(760px 460px at 98% 6%, color-mix(in oklab, var(--primary) 16%, transparent), transparent 58%),
-      radial-gradient(680px 420px at 52% 96%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 62%);
-    background-repeat: no-repeat;
     font-size: 13px;
     line-height: 1.35;
     font-feature-settings: "cv11", "ss01", "ss03", "tnum";
@@ -228,125 +234,118 @@
 }
 
 /*
-  Component surfaces. Kept as CSS because the gradients, hairlines and inner
-  light edges are easier to read here than as twenty utility classes.
+  Component surfaces. Kept as CSS because the edges, feet and inner light lines
+  are easier to read here than as twenty utility classes.
 */
 @layer components {
-  /* Content surface: frosted over the page wash, with a lit top edge so the
-     panel reads as a pane of glass rather than as a tinted rectangle. */
+  /* A card: a built block on the working area. Lit top edge, short dense foot,
+     weak diffuse shadow. Cards are not nested inside other cards. */
   .surface-group {
-    background: var(--glass-panel);
-    -webkit-backdrop-filter: saturate(180%) blur(18px);
-    backdrop-filter: saturate(180%) blur(18px);
-    border-radius: 10px;
+    background: var(--card);
+    border-radius: 14px;
     box-shadow:
-      inset 0 0.5px 0 var(--glass-edge),
-      0 0 0 0.5px var(--hairline);
+      inset 0 0 0 1px var(--card-edge),
+      0 0 0 1px var(--hairline),
+      0 3px 0 var(--card-foot),
+      var(--card-shadow);
   }
 
-  /* Rows inside a group are separated by 0.5px hairlines. */
+  /* Rows inside a group are separated by hairlines. */
   .hairline-rows > * + * {
-    border-top: 0.5px solid var(--separator);
+    border-top: 1px solid var(--separator);
   }
 
-  /* Glass: navigation layer only (sidebar, toolbar, tab bar, sheets). */
+  /* Chrome: topbar and sidebar. Opaque, no blur, hairline against the canvas. */
   .glass {
-    background: var(--glass);
-    -webkit-backdrop-filter: saturate(180%) blur(24px);
-    backdrop-filter: saturate(180%) blur(24px);
+    background: var(--background);
   }
 
-  /* The floating panels that sit over content: heavier blur and a lit top edge. */
+  /* Panels that float over content: menus, sheets, drag previews. */
   .glass-strong {
-    background: var(--glass);
-    -webkit-backdrop-filter: saturate(200%) blur(40px);
-    backdrop-filter: saturate(200%) blur(40px);
+    background: var(--card);
+    border-radius: 14px;
     box-shadow:
-      inset 0 0.5px 0 var(--glass-edge),
-      0 0 0 0.5px var(--hairline),
-      0 18px 44px -16px rgb(0 0 0 / 0.4);
+      0 0 0 1px var(--hairline),
+      0 4px 12px rgb(0 0 0 / 0.08),
+      0 12px 32px rgb(0 0 0 / 0.045);
   }
 
-  /* macOS push button: hairline, subtle vertical gradient, inner light edge. */
+  /*
+    Buttons. The geometry is fixed by the design: 36px tall, 12px radius, 600
+    weight. The default button is a single flat fill in the theme accent; its
+    depth comes from a 1px accent outline, four very weak staggered shadows and
+    a masked 1px light edge. There is no surface gradient.
+  */
   .push {
+    position: relative;
     color: var(--foreground);
-    background: linear-gradient(180deg, #ffffff 0%, #f6f6f8 100%);
+    background: var(--card);
     box-shadow:
-      0 0 0 0.5px rgb(0 0 0 / 0.2),
-      0 1px 1px rgb(0 0 0 / 0.08),
-      inset 0 1px 0 rgb(255 255 255 / 0.9);
+      inset 0 0 0 1px var(--border),
+      0 1px 1px rgb(0 0 0 / 0.12);
   }
-  .push:hover { background: linear-gradient(180deg, #ffffff 0%, #f0f0f3 100%); }
-  .push:active {
-    background: linear-gradient(180deg, #ececf0 0%, #e4e4e9 100%);
-    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25), inset 0 1px 2px rgb(0 0 0 / 0.08);
-  }
+  .push:not(:disabled):hover { filter: brightness(0.97); }
+  .push:not(:disabled):active { transform: scale(0.97); }
   .dark .push {
-    background: linear-gradient(180deg, rgb(255 255 255 / 0.16) 0%, rgb(255 255 255 / 0.1) 100%);
-    box-shadow:
-      0 0 0 0.5px rgb(255 255 255 / 0.14),
-      0 1px 1px rgb(0 0 0 / 0.4),
-      inset 0 1px 0 rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.08);
   }
-  .dark .push:hover { background: linear-gradient(180deg, rgb(255 255 255 / 0.2) 0%, rgb(255 255 255 / 0.13) 100%); }
-  .dark .push:active { background: rgb(255 255 255 / 0.08); }
+  .dark .push:not(:disabled):hover { filter: brightness(1.25); }
 
-  /* Default (tinted) push button. Slightly darkened bottom for contrast.
-     Doubled class so it outranks `.dark .push`, which would otherwise paint
-     the primary button grey in dark mode. */
+  /* Doubled class so it outranks `.dark .push`, which would otherwise paint the
+     primary button grey in dark mode. */
   .push.push-default {
     color: var(--primary-foreground);
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--primary) 86%, white) 0%,
-      var(--primary) 55%,
-      color-mix(in oklab, var(--primary) 90%, black) 100%
-    );
+    background: var(--primary);
     box-shadow:
-      0 0 0 0.5px color-mix(in oklab, var(--primary) 70%, black),
-      0 1px 1px rgb(0 0 0 / 0.15),
-      inset 0 1px 0 rgb(255 255 255 / 0.3);
-    text-shadow: 0 1px 0 rgb(0 0 0 / 0.12);
+      0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent),
+      0 2px 4px rgb(0 0 0 / 0.04),
+      0 5px 8px rgb(0 0 0 / 0.04),
+      0 10px 18px rgb(0 0 0 / 0.03),
+      0 24px 48px rgb(0 0 0 / 0.03);
   }
-  .push.push-default:hover {
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--primary) 80%, white) 0%,
-      color-mix(in oklab, var(--primary) 96%, black) 55%,
-      color-mix(in oklab, var(--primary) 86%, black) 100%
-    );
+  /* The 1px light edge. Draws only the border ring, never the fill. */
+  .push.push-default::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(rgb(255 255 255 / 0.3), rgb(255 255 255 / 0));
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    pointer-events: none;
   }
-  .push.push-default:active { background: color-mix(in oklab, var(--primary) 84%, black); }
-  .dark[data-theme="graphit"] .push-default { text-shadow: none; }
+  .push.push-default:not(:disabled):hover { filter: brightness(1.1); }
 
   /* Segmented control: recessed track, raised thumb. */
   .seg {
     background: var(--fill-3);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 2px;
   }
   .seg-on {
     background: var(--card);
-    border-radius: 6px;
+    border-radius: 8px;
     font-weight: 600;
-    box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.12);
+    box-shadow: 0 0 0 1px var(--hairline), 0 1px 2px rgb(0 0 0 / 0.1);
   }
   .dark .seg-on {
-    background: #636366;
+    background: #48484a;
     box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   }
 
-  /* Settings-app style icon tile: solid system color, white glyph. */
+  /* Small accent-tinted icon tile. Semantic variants override the background. */
   .icon-tile {
-    width: 28px;
-    height: 28px;
-    border-radius: 7px;
-    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 12%, var(--card));
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.08);
   }
 
   /* Finite entrance for freshly mounted screens. */
@@ -359,5 +358,6 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .rise { animation: none; }
+    .push:not(:disabled):active { transform: none; }
   }
 }
