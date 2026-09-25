@@ -1,11 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { IconPigMoney, IconPlus } from "@tabler/icons-react"
 
 import { IconTile } from "@/components/app/grouped"
 import { boardElements } from "@/components/app/board-elements"
+import { PageHeader } from "@/components/app/page-header"
 import { WidgetBoard } from "@/components/app/widget-board"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -60,37 +61,8 @@ export function MonthlyBudget({
   const allArchived = state.categories.every((category) => category.archived)
   const title = page === "plan" ? null : page === "savings" ? copy.savings : page === "expenses" ? copy.expenses : copy.overview
 
-  return (
-    <div className="space-y-7">
-      {title ? (
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] font-bold tracking-[-0.02em] lg:text-[34px]">{title}</h1>
-            <p className="mt-0.5 text-muted-foreground">{view.period}</p>
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-1">
-              <Label htmlFor="budget-period" className="text-[11px] text-muted-foreground">{copy.period}</Label>
-              <Input
-                id="budget-period"
-                type="date"
-                className="w-40"
-                min={state.firstDate ?? undefined}
-                max={state.today}
-                value={controller.selectedDate || state.today}
-                onChange={(event) => {
-                  if (event.target.value) controller.setSelectedDate(event.target.value)
-                }}
-              />
-            </div>
-            <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })}>
-              <IconPlus />
-              {copy.addExpense}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
+  const notices = (
+    <>
       {page !== "plan" && allArchived ? (
         <p className="text-muted-foreground">
           {copy.emptyCategories}{" "}
@@ -109,6 +81,48 @@ export function MonthlyBudget({
           </AlertDescription>
         </Alert>
       ) : null}
+    </>
+  )
+
+  // The title row and the notices under it. The overview hands this to its widget
+  // board, so Customize sits among the actions instead of on a row of its own.
+  const top = (customize?: ReactNode) => (
+    <>
+      {title ? (
+        <PageHeader
+          title={title}
+          subtitle={view.period}
+          actions={
+            <>
+              <Label htmlFor="budget-period" className="sr-only">{copy.period}</Label>
+              <Input
+                id="budget-period"
+                type="date"
+                className="w-32 flex-1 sm:w-40 sm:flex-none"
+                title={copy.period}
+                min={state.firstDate ?? undefined}
+                max={state.today}
+                value={controller.selectedDate || state.today}
+                onChange={(event) => {
+                  if (event.target.value) controller.setSelectedDate(event.target.value)
+                }}
+              />
+              {customize}
+              <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })}>
+                <IconPlus />
+                {copy.addExpense}
+              </Button>
+            </>
+          }
+        />
+      ) : null}
+      {notices}
+    </>
+  )
+
+  return (
+    <div className="space-y-7">
+      {page === "overview" ? null : top()}
 
       {page === "plan" ? (
         <MonthlyPlanEditor key={state.revision} state={state} accessToken={accessToken} locale={locale} busy={busy}
@@ -120,6 +134,7 @@ export function MonthlyBudget({
           boardId="budget-overview"
           widgets={[...boardElements(t), ...budgetWidgets({ state, view, copy, locale, busy, openExpense })]}
           defaultIds={budgetOverviewWidgets}
+          header={top}
           t={t}
         />
       ) : null}

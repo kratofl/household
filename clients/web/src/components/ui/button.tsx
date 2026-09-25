@@ -5,8 +5,8 @@ import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 // Desktop push buttons. The normal button is 36px tall with a 12px radius and
-// semibold text; larger primary actions use `lg` (48px, 16px radius). The fill,
-// outline, light edge and shadows live in globals.css (.push / .push-default).
+// semibold text; larger primary actions use `lg` (48px, 16px radius). The flat
+// fills and their hover and pressed tones live in globals.css (.push / .push-default).
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-[background,filter,color,box-shadow,transform] outline-none select-none focus-visible:ring-4 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50 aria-invalid:ring-2 aria-invalid:ring-destructive/30 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {

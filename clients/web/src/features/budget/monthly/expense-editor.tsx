@@ -111,7 +111,7 @@ export function MonthlyExpenseEditor(props: Props) {
         onCloseAutoFocus={event => { event.preventDefault(); props.restoreFocus() }}
         className="overflow-y-auto border-l-0 bg-background p-0 shadow-[0_0_0_0.5px_var(--hairline),0_24px_60px_-20px_rgb(0_0_0/0.4)] data-[side=right]:w-full sm:data-[side=right]:max-w-md"
       >
-        <div className="glass sticky top-0 z-10 flex h-[52px] items-center justify-between px-4 shadow-[inset_0_-0.5px_0_var(--hairline)]">
+        <div className="glass-bar sticky top-0 z-10 flex h-[52px] items-center justify-between px-4">
           <Button type="button" variant="outline" disabled={props.busy} onClick={props.close}>{copy.cancel}</Button>
           <SheetTitle className="text-[13px] font-semibold">{title}</SheetTitle>
           <SheetDescription className="sr-only">{props.intent.kind === "refund" ? copy.refundAmount : copy.source}</SheetDescription>

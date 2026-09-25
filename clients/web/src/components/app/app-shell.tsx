@@ -1,6 +1,6 @@
 "use client"
 
-import { IconHome, IconShield } from "@tabler/icons-react"
+import { IconHome, IconSettings, IconShield, IconUserCircle } from "@tabler/icons-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -10,9 +10,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError, apiRequest } from "@/lib/api"
 import {
   fallbackModules,
-  budgetViewFromPath,
+  budgetViewEntries,
   budgetViews,
   moduleCatalog,
+  moduleHref,
   moduleKeyFromSection,
   moduleName,
   type AppModule,
@@ -29,7 +30,9 @@ import {
   moduleIcons,
   useSidebarCollapsed,
 } from "@/components/app/sidebar"
-import { ProfileRow } from "@/components/app/profile-row"
+import { GlobalSearch, type SearchDestination } from "@/components/app/global-search"
+import { ProfileMenu } from "@/components/app/profile-menu"
+import { AppearanceToggle } from "@/components/app/switchers"
 import { Topbar } from "@/components/app/topbar"
 import { AccountPanel } from "@/features/account/account-panel"
 import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
@@ -42,9 +45,7 @@ import { LOCALE_STORAGE_KEY, TOKENS_STORAGE_KEY, registerSession } from "@/lib/s
 import { applyTheme, isThemeId, type ThemeId } from "@/lib/theme"
 import type { CurrentUser, TokenPair } from "@/lib/session"
 
-export function AppShell({ children: _children }: { children: React.ReactNode }) {
-  void _children
-
+export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { collapsed, toggle: toggleSidebar } = useSidebarCollapsed()
@@ -92,15 +93,6 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
   const selectedModule = selectedModuleKey
     ? activeModules.find((module) => module.key === selectedModuleKey)
     : undefined
-  const selectedTitle = selectedTitleFor({
-    isHome,
-    isAccount,
-    isSettings,
-    isAdminSettings,
-    budgetViewLabel: selectedModule?.key === "budget" ? t(budgetViews[budgetViewFromPath(pathname)].labelKey) : undefined,
-    moduleLabel: selectedModule ? moduleName(selectedModule, locale) : undefined,
-    t,
-  })
 
   const staticRoutes = useMemo(
     () => [
@@ -227,7 +219,8 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
     })
   }, [currentUser, router, staticRoutes])
 
-  const checkUpdates = useCallback(async () => {
+  // The admin page loads candidates on its own; only a click on "check" earns a banner.
+  const checkUpdates = useCallback(async (showMessage = true) => {
     if (!tokens) return
 
     setError(null)
@@ -242,7 +235,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
       })
       setUpdateCandidates(candidates)
       setUpdateStatus(status)
-      setMessage(t("updates.checked"))
+      if (showMessage) setMessage(t("updates.checked"))
     } catch (err) {
       setError(errorMessage(err, t))
     }
@@ -270,7 +263,7 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
 
     const timer = window.setTimeout(() => {
       if (updateCandidates == null) {
-        void checkUpdates()
+        void checkUpdates(false)
       }
       if (auditEvents.length === 0) {
         void loadAuditEvents(false)
@@ -436,6 +429,9 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
     }
   }
 
+  // Throwaway prototype routes render on their own, without session or chrome.
+  if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype")) return children
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
@@ -479,9 +475,8 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
 
   const isAdmin = currentUser.role === "admin"
   const inBudget = selectedModule?.key === "budget"
-  const RouteIcon = selectedModule ? moduleIcons[selectedModule.key as keyof typeof moduleIcons] ?? IconHome : IconHome
-  // The topbar names the route, so panels no longer repeat it as a page title.
-  const routeParent = selectedModule && inBudget ? moduleName(selectedModule, locale) : undefined
+  const budgetActive = activeModules.some((module) => module.key === "budget")
+  const searchDestinations = destinationsFor({ activeModules, isAdmin, locale, t })
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -491,24 +486,23 @@ export function AppShell({ children: _children }: { children: React.ReactNode })
         toggleSidebar={toggleSidebar}
         collapseLabel={t("nav.collapseSidebar")}
         expandLabel={t("nav.expandSidebar")}
-        routeIcon={<RouteIcon />}
-        routeLabel={selectedTitle}
-        routeParent={routeParent}
+        search={
+          <GlobalSearch
+            destinations={searchDestinations}
+            expensesHref={budgetActive ? budgetViews.expenses.route : undefined}
+            t={t}
+          />
+        }
+        actions={
+          <>
+            <AppearanceToggle t={t} />
+            <ProfileMenu name={currentUser.name} logout={logout} t={t} />
+          </>
+        }
       />
 
       <div className="flex min-h-0 flex-1">
-        <Sidebar
-          collapsed={collapsed}
-          footer={
-            <ProfileRow
-              collapsed={collapsed}
-              name={currentUser.name}
-              subtitle={t("nav.account")}
-              logout={logout}
-              t={t}
-            />
-          }
-        >
+        <Sidebar collapsed={collapsed}>
           <SidebarGroupLabel collapsed={collapsed}>{t("nav.main")}</SidebarGroupLabel>
           <SidebarLink collapsed={collapsed} href="/" active={isHome} icon={<IconHome />}>
             {t("dashboard.title")}
@@ -630,19 +624,30 @@ function selectedSectionFromPath(pathname: string) {
   return pathname.split("/").filter(Boolean)[0] ?? ""
 }
 
-/** Toolbar and page title for the current route; one place instead of a ternary ladder. */
-function selectedTitleFor(input: {
-  isHome: boolean
-  isAccount: boolean
-  isSettings: boolean
-  isAdminSettings: boolean
-  budgetViewLabel: string | undefined
-  moduleLabel: string | undefined
-  t: (key: "dashboard.title" | "account.title" | "settings.title" | "admin.title" | "app.name") => string
-}) {
-  if (input.isHome) return input.t("dashboard.title")
-  if (input.isAccount) return input.t("account.title")
-  if (input.isSettings) return input.t("settings.title")
-  if (input.isAdminSettings) return input.t("admin.title")
-  return input.budgetViewLabel ?? input.moduleLabel ?? input.t("app.name")
+/**
+ * Everything the topbar search can jump to, in sidebar order: the dashboard,
+ * each active module and its pages, then the personal and admin places.
+ */
+function destinationsFor(input: {
+  activeModules: AppModule[]
+  isAdmin: boolean
+  locale: Locale
+  t: (key: Parameters<typeof translate>[1]) => string
+}): SearchDestination[] {
+  const { t } = input
+  const modules = input.activeModules.flatMap((module): SearchDestination[] => {
+    const name = moduleName(module, input.locale)
+    const icon = moduleIcons[module.key as keyof typeof moduleIcons] ?? IconHome
+    if (module.key !== "budget") return [{ key: module.key, label: name, href: moduleHref(module), icon }]
+    return budgetViewEntries.map(([key, view]) => ({ key: `budget.${key}`, label: t(view.labelKey), group: name, href: view.route, icon }))
+  })
+  return [
+    { key: "home", label: t("dashboard.title"), href: "/", icon: IconHome },
+    ...modules,
+    { key: "account", label: t("nav.account"), href: "/account", icon: IconUserCircle },
+    { key: "settings", label: t("nav.settings"), href: "/settings", icon: IconSettings },
+    ...(input.isAdmin
+      ? [{ key: "admin", label: t("nav.adminSettings"), group: t("nav.admin"), href: "/admin/settings", icon: IconShield }]
+      : []),
+  ]
 }

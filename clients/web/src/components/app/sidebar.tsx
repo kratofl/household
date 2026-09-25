@@ -65,26 +65,23 @@ export function useSidebarCollapsed() {
   return { collapsed, toggle }
 }
 
-/** The sidebar column. Children are the nav groups; footer is the profile row. */
+/** The sidebar column. Children are the nav groups; the profile lives in the topbar. */
 export function Sidebar({
   collapsed,
   children,
-  footer,
 }: {
   collapsed: boolean
   children: ReactNode
-  footer: ReactNode
 }) {
   return (
     <aside
       data-collapsed={collapsed}
       className={cn(
-        "hidden shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-sidebar pt-3 pb-2.5 lg:flex",
+        "hidden shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-sidebar pt-3 pb-2.5 transition-[width,padding] duration-[var(--motion-panel)] ease-out motion-reduce:transition-none lg:flex",
         collapsed ? "w-16 px-2" : "w-60 px-2.5",
       )}
     >
       <nav className="min-h-0 flex-1">{children}</nav>
-      <div className="relative mt-auto border-t border-hairline pt-2.5">{footer}</div>
     </aside>
   )
 }

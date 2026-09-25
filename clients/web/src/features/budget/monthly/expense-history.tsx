@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useMemo, useState } from "react"
 
 import { FormSelect } from "@/components/app/form-select"
 import { Block, Group, IconTile, Row } from "@/components/app/grouped"
@@ -67,6 +68,11 @@ export function MonthlyExpenseHistory({
 
   return (
     <div className="space-y-5">
+      {/* The topbar search lands here with ?q=. Reading the URL opts a subtree out of
+          static rendering, hence the boundary. */}
+      <Suspense fallback={null}>
+        <SearchFromUrl onSearch={setSearch} />
+      </Suspense>
       <div className="flex flex-wrap items-center gap-2">
         <Input className="sm:max-w-xs" aria-label={copy.search} placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
         <FormSelect
@@ -151,4 +157,13 @@ function sourceName(source: MonthlyExpense["funding"][number]["source"], copy: M
 
 function merchantName(id: string | null, merchants: Map<string, Merchant>) {
   return id ? merchants.get(id)?.name ?? "" : ""
+}
+
+/** Copies ?q= into the search field whenever it changes, including on the page itself. */
+function SearchFromUrl({ onSearch }: { onSearch: (value: string) => void }) {
+  const query = useSearchParams().get("q")
+  useEffect(() => {
+    if (query !== null) onSearch(query)
+  }, [query, onSearch])
+  return null
 }

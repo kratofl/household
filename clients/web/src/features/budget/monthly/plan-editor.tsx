@@ -6,6 +6,7 @@ import { IconPlus, IconX } from "@tabler/icons-react"
 import { FormSelect } from "@/components/app/form-select"
 import { Segmented } from "@/components/app/segmented"
 import { Block, FormRow, Group, Row } from "@/components/app/grouped"
+import { PageHeader } from "@/components/app/page-header"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -103,26 +104,26 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, isAdmin, m
 
   return (
     <div className="space-y-7">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] font-bold tracking-[-0.02em] lg:text-[34px]">{state.currentPlan ? copy.plan : copy.setupTitle}</h1>
-          <p className="mt-0.5 text-muted-foreground">{state.currentPlan ? `${copy.effective} ${fmt.date(effectiveStart)}` : copy.setupNote}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {state.currentPlan ? (
-            <Segmented
-              ariaLabel={copy.appliesFrom}
-              value={scope}
-              options={[{ value: "next", label: copy.applyNext }, { value: "current", label: copy.applyCurrent }]}
-              onChange={setScope}
-            />
-          ) : null}
-          {!previewCurrent ? <p className="text-muted-foreground" role="status">{payload ? copy.loading : copy.invalid_input}</p> : null}
-          <Button onClick={() => void save()} disabled={busy || !payload || !previewCurrent || previewing}>
-            {!state.currentPlan ? copy.startPlan : scope === "current" ? copy.saveCurrentPlan : copy.savePlan}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={state.currentPlan ? copy.plan : copy.setupTitle}
+        subtitle={state.currentPlan ? `${copy.effective} ${fmt.date(effectiveStart)}` : copy.setupNote}
+        actions={
+          <>
+            {state.currentPlan ? (
+              <Segmented
+                ariaLabel={copy.appliesFrom}
+                value={scope}
+                options={[{ value: "next", label: copy.applyNext }, { value: "current", label: copy.applyCurrent }]}
+                onChange={setScope}
+              />
+            ) : null}
+            {!previewCurrent ? <p className="text-muted-foreground" role="status">{payload ? copy.loading : copy.invalid_input}</p> : null}
+            <Button onClick={() => void save()} disabled={busy || !payload || !previewCurrent || previewing}>
+              {!state.currentPlan ? copy.startPlan : scope === "current" ? copy.saveCurrentPlan : copy.savePlan}
+            </Button>
+          </>
+        }
+      />
       {scope === "current" ? <p className="text-[11px] text-muted-foreground">{copy.applyCurrentNote}</p> : null}
 
       {state.nextPlan ? (

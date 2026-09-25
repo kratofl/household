@@ -27,12 +27,13 @@ export function AppearanceToggle({ t }: { t: Translator }) {
   return (
     <button
       type="button"
-      aria-label={t("nav.theme")}
+      aria-label={t("nav.toggleAppearance")}
+      title={t("nav.toggleAppearance")}
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-fill-3 hover:text-foreground"
+      className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-fill-3 hover:text-foreground"
     >
-      <IconSun className="hidden size-4 dark:block" />
-      <IconMoon className="size-4 dark:hidden" />
+      <IconSun className="hidden size-5 dark:block" />
+      <IconMoon className="size-5 dark:hidden" />
     </button>
   )
 }

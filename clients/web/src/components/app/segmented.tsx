@@ -1,7 +1,9 @@
 "use client"
 
-// The iOS/macOS segmented control: a pill of mutually exclusive options.
+// The macOS segmented control: mutually exclusive options on a recessed track.
 // Used for appearance, language, and any small either/or choice in a toolbar.
+// Segments share one width, so the selected thumb is a single element that
+// slides by whole segments when the choice changes (.seg-slide in globals.css).
 
 import { cn } from "@/lib/utils"
 
@@ -18,8 +20,21 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void
   className?: string
 }) {
+  const index = options.findIndex((option) => option.value === value)
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className={cn("seg flex text-xs", className)}>
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className={cn("seg relative grid w-fit rounded-full text-xs", className)}
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+    >
+      {index >= 0 ? (
+        <span
+          aria-hidden
+          className="seg-on seg-slide absolute inset-y-0.5 left-0.5 rounded-full"
+          style={{ width: `calc((100% - 4px) / ${options.length})`, transform: `translateX(${index * 100}%)` }}
+        />
+      ) : null}
       {options.map((option) => {
         const selected = option.value === value
         return (
@@ -29,7 +44,10 @@ export function Segmented<T extends string>({
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(option.value)}
-            className={cn("h-6 whitespace-nowrap px-2.5 leading-6", selected ? "seg-on" : "text-muted-foreground")}
+            className={cn(
+              "relative h-6 whitespace-nowrap rounded-full px-2.5 leading-6 transition-colors",
+              selected ? "font-semibold" : "text-muted-foreground hover:text-foreground",
+            )}
           >
             {option.label}
           </button>

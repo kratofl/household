@@ -10,6 +10,10 @@
 //
 // Below the `sm` breakpoint there is no room for a 12-column grid, so tiles stack
 // in reading order at their natural height and only add/remove stays available.
+//
+// Outside editing, rows take the height of their content, so an empty list or a
+// short card leaves no gap under it. Editing switches to fixed-height rows,
+// because that is the grid the user drags on.
 
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
@@ -143,11 +147,14 @@ export function WidgetBoard({
   boardId,
   widgets,
   defaultIds,
+  header,
   t,
 }: {
   boardId: string
   widgets: WidgetDefinition[]
   defaultIds: string[]
+  /** The page's title row. Receives the Customize button (null while editing) to place among its actions. */
+  header: (customize: ReactNode) => ReactNode
   t: Translator
 }) {
   const [stored, setStored] = useState<{ boardId: string; layout: Layout } | null>(null)
@@ -328,7 +335,7 @@ export function WidgetBoard({
     : {
         display: "grid",
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-        gridAutoRows: `${ROW_HEIGHT}px`,
+        gridAutoRows: editing ? `${ROW_HEIGHT}px` : "minmax(0, auto)",
         gap: GRID_GAP,
       }
 
@@ -337,15 +344,15 @@ export function WidgetBoard({
     : layout.items
 
   return (
-    <div className={cn("space-y-4", editing && "pb-[46vh] lg:pb-0 lg:pr-[272px]")}>
-      {!editing ? (
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={() => setEditing(true)}>
+    <div className={cn("space-y-6", editing && "pb-[46vh] lg:pb-0 lg:pr-[272px]")}>
+      {header(
+        editing ? null : (
+          <Button variant="outline" aria-label={t("widgets.customize")} title={t("widgets.customize")} onClick={() => setEditing(true)}>
             <IconLayoutGrid />
-            {t("widgets.customize")}
+            <span className="hidden sm:inline">{t("widgets.customize")}</span>
           </Button>
-        </div>
-      ) : null}
+        ),
+      )}
 
       <div ref={board} className="relative" onPointerMove={onPointerMove}>
         {editing && !compact ? (
@@ -523,7 +530,7 @@ function WidgetTray({
   return createPortal(
     <aside
       aria-label={t("widgets.add")}
-      className="glass-strong fixed inset-x-2 bottom-20 z-30 flex max-h-[44vh] flex-col rounded-2xl lg:inset-x-auto lg:bottom-3 lg:right-3 lg:top-[64px] lg:max-h-none lg:w-[272px]"
+      className="glass-strong fixed inset-x-2 bottom-20 z-30 flex max-h-[44vh] flex-col rounded-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-[var(--motion-panel)] motion-reduce:animate-none lg:inset-x-auto lg:bottom-3 lg:right-3 lg:top-[64px] lg:max-h-none lg:w-[272px] lg:slide-in-from-bottom-0 lg:slide-in-from-right-4"
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <IconLayoutGrid className="size-4 shrink-0 text-muted-foreground" />

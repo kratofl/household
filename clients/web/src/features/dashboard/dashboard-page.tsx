@@ -6,6 +6,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { boardElements } from "@/components/app/board-elements"
+import { PageHeader } from "@/components/app/page-header"
 import { WidgetBoard, type WidgetDefinition } from "@/components/app/widget-board"
 import { budgetDashboardWidgets, budgetWidgets } from "@/features/budget/monthly/widgets"
 import { useMonthlyBudget } from "@/features/budget/monthly/controller"
@@ -69,5 +70,13 @@ export function DashboardPage({
     )
   }
 
-  return <WidgetBoard boardId="dashboard" widgets={widgets} defaultIds={budgetDashboardWidgets} t={t} />
+  return (
+    <WidgetBoard
+      boardId="dashboard"
+      widgets={widgets}
+      defaultIds={budgetDashboardWidgets}
+      header={(customize) => <PageHeader title={t("dashboard.title")} actions={customize} />}
+      t={t}
+    />
+  )
 }

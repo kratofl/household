@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { IconRestore } from "@tabler/icons-react"
 
+import { PageHeader } from "@/components/app/page-header"
 import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
 
@@ -20,10 +21,7 @@ export function SettingsSurface({
 }) {
   return (
     <div className="space-y-7">
-      <div>
-        <h1 className="text-[28px] font-bold tracking-[-0.02em] lg:text-[34px]">{title}</h1>
-        <p className="mt-0.5 text-muted-foreground">{description}</p>
-      </div>
+      <PageHeader title={title} subtitle={description} />
       {children}
     </div>
   )

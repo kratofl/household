@@ -7,7 +7,9 @@
 /*
   Design tokens for the desktop shell. Neutral, opaque surfaces: the chrome
   (topbar and sidebar) sits on --background, the working area on --canvas, and
-  cards are raised blocks with a lit top edge and a short bottom edge. The
+  cards are raised blocks with a lit top edge and a short bottom edge. Only
+  layers that float over content (menus, the phone tab bar, sticky bars) are
+  glass, after macOS 27: see .glass-strong. The
   accent comes from the user's theme (see lib/theme.ts) and only ever colours
   selection, primary actions, focus and progress. Green, blue and red stay
   reserved for semantic state and never follow the accent.
@@ -129,7 +131,10 @@
   --fill-3: rgb(118 118 128 / 0.12);
   --glass-rgb: 248 248 248;
   --glass-panel-rgb: 248 248 248;
+  /* Glass: the light line along the top edge, the darkened rim, the short lift. */
   --glass-edge: rgb(255 255 255 / 0.9);
+  --glass-rim: rgb(0 0 0 / calc(0.16 * var(--contrast)));
+  --glass-lift: rgb(0 0 0 / 0.05);
   --sys-blue: #007aff;
   --sys-green: #34c759;
   --sys-orange: #ff9500;
@@ -185,7 +190,9 @@
   --fill-3: rgb(118 118 128 / 0.24);
   --glass-rgb: 28 28 30;
   --glass-panel-rgb: 36 36 38;
-  --glass-edge: rgb(255 255 255 / 0.08);
+  --glass-edge: rgb(255 255 255 / 0.3);
+  --glass-rim: rgb(0 0 0 / calc(0.55 * var(--contrast)));
+  --glass-lift: rgb(0 0 0 / 0.3);
   --sys-blue: #0a84ff;
   --sys-green: #30d158;
   --sys-orange: #ff9f0a;
@@ -224,7 +231,7 @@
   }
   body {
     /* The chrome colour. The working area paints itself with --canvas; there is
-       no page-wide wash, because nothing is translucent any more. */
+       no page-wide wash, because only floating layers are translucent. */
     @apply bg-background text-foreground;
     font-size: 13px;
     line-height: 1.35;
@@ -255,84 +262,87 @@
     border-top: 1px solid var(--separator);
   }
 
-  /* Chrome: topbar and sidebar. Opaque, no blur, hairline against the canvas. */
+  /* Chrome: topbar and sidebar. Opaque, no blur. Glass is only for what floats over content. */
   .glass {
     background: var(--background);
   }
 
-  /* Panels that float over content: menus, sheets, drag previews. */
+  /*
+    Liquid Glass after macOS 27: a thin sheet for anything that floats over
+    content (menus, the phone tab bar, widget-board overlays). A deep blur calms
+    busy content behind it, a 0.5px darkened rim separates it from what it
+    covers, one light line runs along the top edge, and the lift is short.
+    Depth comes from the edges, not from thickness. --glass follows the
+    translucency setting on the Settings page.
+  */
   .glass-strong {
-    background: var(--card);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
     border-radius: 14px;
     box-shadow:
-      0 0 0 1px var(--hairline),
-      0 4px 12px rgb(0 0 0 / 0.08),
-      0 12px 32px rgb(0 0 0 / 0.045);
+      inset 0 0.5px 0 var(--glass-edge),
+      0 0 0 0.5px var(--glass-rim),
+      0 1px 1px var(--glass-lift),
+      0 6px 18px var(--glass-lift);
+  }
+
+  /* A sticky bar across the top of a scrolling panel: the same glass, flush, rim along the bottom only. */
+  .glass-bar {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: 0 0.5px 0 var(--glass-rim);
   }
 
   /*
-    Buttons. The geometry is fixed by the design: 36px tall, 12px radius, 600
-    weight. The default button is a single flat fill in the theme accent; its
-    depth comes from a 1px accent outline, four very weak staggered shadows and
-    a masked 1px light edge. There is no surface gradient.
+    Push buttons after the macOS 27 kit: flat fills with no outline, shadow or
+    light edge. The geometry stays: 36px tall, 12px radius, 600 weight. The plain
+    button is a gray from the fill scale, one step deeper on hover and when
+    pressed. The default button is the flat accent, darker when pressed in light
+    mode and lighter in dark mode.
   */
   .push {
-    position: relative;
     color: var(--foreground);
-    background: var(--card);
-    box-shadow:
-      inset 0 0 0 1px var(--border),
-      0 1px 1px rgb(0 0 0 / 0.12);
+    background: var(--fill-3);
   }
-  .push:not(:disabled):hover { filter: brightness(0.97); }
-  .push:not(:disabled):active { transform: scale(0.97); }
-  .dark .push {
-    background: rgb(255 255 255 / 0.08);
-  }
-  .dark .push:not(:disabled):hover { filter: brightness(1.25); }
+  .push:not(:disabled):hover { background: var(--fill-2); }
+  .push:not(:disabled):active { background: var(--fill); transform: scale(0.97); }
 
-  /* Doubled class so it outranks `.dark .push`, which would otherwise paint the
-     primary button grey in dark mode. */
-  .push.push-default {
+  /* Repeats the state selectors so the accent outranks the gray fills above. */
+  .push.push-default,
+  .push.push-default:not(:disabled):hover,
+  .push.push-default:not(:disabled):active {
     color: var(--primary-foreground);
     background: var(--primary);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--primary) 30%, transparent),
-      0 2px 4px rgb(0 0 0 / 0.04),
-      0 5px 8px rgb(0 0 0 / 0.04),
-      0 10px 18px rgb(0 0 0 / 0.03),
-      0 24px 48px rgb(0 0 0 / 0.03);
   }
-  /* The 1px light edge. Draws only the border ring, never the fill. */
-  .push.push-default::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(rgb(255 255 255 / 0.3), rgb(255 255 255 / 0));
-    mask:
-      linear-gradient(#000 0 0) content-box exclude,
-      linear-gradient(#000 0 0);
-    pointer-events: none;
-  }
-  .push.push-default:not(:disabled):hover { filter: brightness(1.1); }
+  .push.push-default:not(:disabled):hover { filter: brightness(1.05); }
+  .push.push-default:not(:disabled):active { filter: brightness(0.9); }
+  .dark .push.push-default:not(:disabled):active { filter: brightness(1.15); }
 
-  /* Segmented control: recessed track, raised thumb. */
+  /* Segmented control after macOS 27: a recessed track and a flat thumb. The
+     thumb has no shadow; the recess gives it the contrast. */
   .seg {
-    background: var(--fill-3);
+    background: rgb(0 0 0 / 0.06);
+    box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.08);
     border-radius: 10px;
     padding: 2px;
   }
+  .dark .seg {
+    background: rgb(0 0 0 / 0.25);
+    box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.4);
+  }
   .seg-on {
-    background: var(--card);
+    background: rgb(255 255 255 / 0.92);
     border-radius: 8px;
     font-weight: 600;
-    box-shadow: 0 0 0 1px var(--hairline), 0 1px 2px rgb(0 0 0 / 0.1);
   }
   .dark .seg-on {
-    background: #48484a;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+    background: rgb(255 255 255 / 0.16);
+  }
+  /* The Segmented thumb sliding to a new selection. Finite, triggered by the change. */
+  .seg-slide {
+    transition: transform var(--motion-panel) cubic-bezier(0.3, 0.7, 0.2, 1);
   }
 
   /* Small accent-tinted icon tile. Semantic variants override the background. */
@@ -358,6 +368,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .rise { animation: none; }
+    .seg-slide { transition: none; }
     .push:not(:disabled):active { transform: none; }
   }
 }

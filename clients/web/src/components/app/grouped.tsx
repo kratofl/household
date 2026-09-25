@@ -114,7 +114,7 @@ export function IconTile({
   size?: number
 }) {
   return (
-    <span className="icon-tile" style={{ background: color, width: size, height: size, borderRadius: size * 0.25 }}>
+    <span className="icon-tile text-white" style={{ background: color, width: size, height: size, borderRadius: size * 0.25 }}>
       <Icon style={{ width: size * 0.6, height: size * 0.6 }} strokeWidth={2} />
     </span>
   )
