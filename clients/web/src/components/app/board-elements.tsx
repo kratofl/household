@@ -24,10 +24,10 @@ export function boardElements(t: Translator): WidgetDefinition[] {
             value={instance.text}
             maxLength={80}
             onChange={(event) => instance.setText(event.target.value)}
-            className="h-full border-0 bg-transparent text-[20px] font-semibold tracking-[-0.01em] shadow-none focus-visible:ring-0"
+            className="h-full rounded-sm border-0 bg-transparent px-0 text-title-3"
           />
         ) : (
-          <h2 className="flex h-full items-center text-[20px] font-semibold tracking-[-0.01em]">{instance.text}</h2>
+          <h2 className="flex h-full items-center text-title-3">{instance.text}</h2>
         ),
     },
     {
@@ -44,10 +44,10 @@ export function boardElements(t: Translator): WidgetDefinition[] {
             value={instance.text}
             maxLength={160}
             onChange={(event) => instance.setText(event.target.value)}
-            className="h-full border-0 bg-transparent text-muted-foreground shadow-none focus-visible:ring-0"
+            className="h-full rounded-sm border-0 bg-transparent px-0 text-label-secondary"
           />
         ) : (
-          <p className="flex h-full items-center text-muted-foreground">{instance.text}</p>
+          <p className="flex h-full items-center text-label-secondary">{instance.text}</p>
         ),
     },
     {

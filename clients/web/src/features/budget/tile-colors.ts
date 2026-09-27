@@ -1,19 +1,12 @@
-// One stable colour per name, so the same category or merchant always looks the same
-// without anybody picking a colour. Presentation only.
+// One stable tint per name, so the same category or merchant always looks the same
+// without anybody picking a colour. Red stays out: it means danger. Presentation only.
 
-const colors = [
-  "var(--sys-green)",
-  "var(--sys-blue)",
-  "var(--sys-indigo)",
-  "var(--sys-purple)",
-  "var(--sys-pink)",
-  "var(--sys-teal)",
-  "var(--sys-brown)",
-  "var(--sys-orange)",
-]
+import type { Tone } from "@/lib/tone"
 
-export function tileColor(name: string) {
+const tones: Tone[] = ["brand", "green", "blue", "purple", "yellow"]
+
+export function tileTone(name: string): Tone {
   let hash = 0
   for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return colors[hash % colors.length]
+  return tones[hash % tones.length]
 }

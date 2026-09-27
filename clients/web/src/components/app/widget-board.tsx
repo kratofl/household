@@ -8,8 +8,10 @@
 // the cells get narrower and the page never scrolls sideways. Dragging downward
 // adds rows and the page gets taller, which is what scrolling is for.
 //
-// Below the `sm` breakpoint there is no room for a 12-column grid, so tiles stack
-// in reading order at their natural height and only add/remove stays available.
+// Below the `sm` breakpoint there is no room for a 12-column grid, so tiles flow
+// in reading order on two columns at their natural height: quarter- and
+// third-width widgets (the KPI cards) take one column, so they sit 2×2, anything
+// wider takes both. Only add/remove stays available there.
 //
 // Outside editing, rows take the height of their content, so an empty list or a
 // short card leaves no gap under it. Editing switches to fixed-height rows,
@@ -27,6 +29,7 @@ import {
   IconX,
 } from "@tabler/icons-react"
 
+import { ToolbarButton } from "@/components/app/toolbar"
 import { Button } from "@/components/ui/button"
 import type { Translator } from "@/lib/i18n"
 import { uuid } from "@/lib/uuid"
@@ -68,7 +71,7 @@ type Gesture =
 const MIN_COLUMNS = 12
 const MAX_COLUMNS = 24
 const ROW_HEIGHT = 44
-const GRID_GAP = 12
+const GRID_GAP = 16
 
 function storageKey(boardId: string) {
   return `household.widgets.${boardId}`
@@ -153,7 +156,7 @@ export function WidgetBoard({
   boardId: string
   widgets: WidgetDefinition[]
   defaultIds: string[]
-  /** The page's title row. Receives the Customize button (null while editing) to place among its actions. */
+  /** The page's toolbar content. Receives the Customize icon action (null while editing) to place in its icon group. */
   header: (customize: ReactNode) => ReactNode
   t: Translator
 }) {
@@ -331,7 +334,7 @@ export function WidgetBoard({
   const dragged = gesture?.kind === "move" ? widgets.find((widget) => widget.id === gesture.widget) : undefined
   const rows = Math.max(1, ...layout.items.map((item) => item.y + item.h)) + (editing ? 2 : 0)
   const gridStyle: CSSProperties = compact
-    ? { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: GRID_GAP }
+    ? { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: GRID_GAP }
     : {
         display: "grid",
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
@@ -346,19 +349,14 @@ export function WidgetBoard({
   return (
     <div className={cn("space-y-6", editing && "pb-[46vh] lg:pb-0 lg:pr-[272px]")}>
       {header(
-        editing ? null : (
-          <Button variant="outline" aria-label={t("widgets.customize")} title={t("widgets.customize")} onClick={() => setEditing(true)}>
-            <IconLayoutGrid />
-            <span className="hidden sm:inline">{t("widgets.customize")}</span>
-          </Button>
-        ),
+        editing ? null : <ToolbarButton icon={<IconLayoutGrid />} label={t("widgets.customize")} onClick={() => setEditing(true)} />,
       )}
 
       <div ref={board} className="relative" onPointerMove={onPointerMove}>
         {editing && !compact ? (
           <div aria-hidden className="pointer-events-none absolute inset-0" style={gridStyle}>
             {Array.from({ length: columns * rows }, (_, index) => (
-              <div key={index} className="rounded-[4px] border border-dashed border-primary/25 bg-primary/[0.03]" />
+              <div key={index} className="rounded-xs border border-dashed border-brand-500/25 bg-brand-500/[0.03]" />
             ))}
           </div>
         ) : null}
@@ -369,7 +367,7 @@ export function WidgetBoard({
             if (!widget) return null
             const moving = gesture?.kind === "move" && gesture.key === item.key
             const cellStyle: CSSProperties = compact
-              ? {}
+              ? { gridColumn: item.w <= 4 ? "span 1" : "span 2" }
               : { gridColumn: `${item.x + 1} / span ${item.w}`, gridRow: `${item.y + 1} / span ${item.h}` }
             return (
               <div
@@ -378,13 +376,13 @@ export function WidgetBoard({
                 onPointerDown={editing && !widget.repeatable ? (event) => startMove(event, item) : undefined}
                 className={cn(
                   "relative min-w-0",
-                  editing && "rounded-[12px] ring-1 ring-primary/50",
+                  editing && "rounded-xl ring-1 ring-brand-500/50",
                   editing && !compact && !widget.repeatable && "cursor-grab active:cursor-grabbing",
-                  moving && "rounded-[12px] border-2 border-dashed border-primary bg-primary/10 ring-0",
+                  moving && "rounded-xl border-2 border-dashed border-brand-500 bg-brand-500/10 ring-0",
                 )}
               >
                 {editing ? (
-                  <div className="glass-strong absolute -top-3 right-2 z-10 flex items-center gap-0.5 rounded-full p-1">
+                  <div className="glass absolute -top-3 right-2 z-10 flex items-center gap-0.5 rounded-full p-1">
                     {!compact ? (
                       <button
                         type="button"
@@ -395,12 +393,13 @@ export function WidgetBoard({
                           startMove(event, item)
                         }}
                         onKeyDown={(event) => {
+                          if (event.key.startsWith("Arrow")) event.preventDefault()
                           if (event.key === "ArrowLeft") put(item.key, { ...item, x: Math.max(0, item.x - 1) })
                           if (event.key === "ArrowRight") put(item.key, { ...item, x: item.x + 1 })
                           if (event.key === "ArrowUp") put(item.key, { ...item, y: Math.max(0, item.y - 1) })
                           if (event.key === "ArrowDown") put(item.key, { ...item, y: item.y + 1 })
                         }}
-                        className="flex size-7 cursor-grab touch-none items-center justify-center rounded-full text-muted-foreground hover:bg-fill-3 hover:text-foreground"
+                        className="flex size-7 cursor-grab touch-none items-center justify-center rounded-full text-label-secondary hover:bg-fill hover:text-label"
                       >
                         <IconGripVertical className="size-4" />
                       </button>
@@ -411,7 +410,7 @@ export function WidgetBoard({
                       title={t("widgets.remove", { name: widget.title })}
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={() => remove(item.key)}
-                      className="flex size-7 items-center justify-center rounded-full text-destructive hover:bg-destructive/10"
+                      className="flex size-7 items-center justify-center rounded-full text-danger-text hover:bg-red-100 dark:hover:bg-red-500/20 max-sm:size-11"
                     >
                       <IconX className="size-4" />
                     </button>
@@ -431,15 +430,15 @@ export function WidgetBoard({
                       setGesture({ kind: "resize", key: item.key })
                     }}
                     onKeyDown={(event) => {
+                      if (event.key.startsWith("Arrow")) event.preventDefault()
                       if (event.key === "ArrowLeft") put(item.key, { ...item, w: Math.max(1, item.w - 1) })
                       if (event.key === "ArrowRight") put(item.key, { ...item, w: item.w + 1 })
                       if (event.key === "ArrowUp") put(item.key, { ...item, h: Math.max(1, item.h - 1) })
                       if (event.key === "ArrowDown") put(item.key, { ...item, h: item.h + 1 })
                     }}
                     className={cn(
-                      "absolute -right-1 -bottom-1 z-10 size-4 cursor-nwse-resize touch-none rounded-full bg-primary/70",
-                      "hover:bg-primary focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
-                      gesture?.kind === "resize" && gesture.key === item.key && "bg-primary",
+                      "absolute -right-1 -bottom-1 z-10 size-4 cursor-nwse-resize touch-none rounded-full bg-brand-500/70 hover:bg-brand-500",
+                      gesture?.kind === "resize" && gesture.key === item.key && "bg-brand-500",
                     )}
                   />
                 ) : null}
@@ -463,7 +462,7 @@ export function WidgetBoard({
         </div>
       </div>
 
-      {layout.items.length === 0 && !editing ? <p className="text-muted-foreground">{t("widgets.empty")}</p> : null}
+      {layout.items.length === 0 && !editing ? <p className="text-label-secondary">{t("widgets.empty")}</p> : null}
 
       {editing ? (
         <WidgetTray
@@ -484,9 +483,9 @@ export function WidgetBoard({
             <div
               ref={ghost}
               aria-hidden
-              className="glass-strong pointer-events-none fixed top-0 left-0 z-50 flex items-center gap-2 rounded-full px-3 py-1.5 font-medium"
+              className="glass pointer-events-none fixed top-0 left-0 z-50 flex items-center gap-2 rounded-full px-3 py-1.5 font-medium"
             >
-              <IconGripVertical className="size-4 text-muted-foreground" />
+              <IconGripVertical className="size-4 text-label-secondary" />
               {dragged.title}
             </div>,
             document.body,
@@ -530,12 +529,12 @@ function WidgetTray({
   return createPortal(
     <aside
       aria-label={t("widgets.add")}
-      className="glass-strong fixed inset-x-2 bottom-20 z-30 flex max-h-[44vh] flex-col rounded-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-[var(--motion-panel)] motion-reduce:animate-none lg:inset-x-auto lg:bottom-3 lg:right-3 lg:top-[64px] lg:max-h-none lg:w-[272px] lg:slide-in-from-bottom-0 lg:slide-in-from-right-4"
+      className="glass fixed inset-x-2 bottom-24 z-30 flex max-h-[44vh] flex-col rounded-xl animate-in fade-in-0 slide-in-from-bottom-4 duration-200 motion-reduce:animate-none lg:inset-x-auto lg:right-3 lg:bottom-3 lg:top-[76px] lg:max-h-none lg:w-[272px] lg:slide-in-from-bottom-0 lg:slide-in-from-right-4"
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
-        <IconLayoutGrid className="size-4 shrink-0 text-muted-foreground" />
+        <IconLayoutGrid className="size-[18px] shrink-0 text-brand-500" />
         <span className="min-w-0 flex-1 truncate font-semibold">{t("widgets.add")}</span>
-        <Button onClick={onDone}>
+        <Button size="sm" onClick={onDone}>
           <IconCheck />
           {t("widgets.done")}
         </Button>
@@ -552,7 +551,7 @@ function WidgetTray({
             onGrab={onGrab}
           />
         ))}
-        {widgets.length === 0 ? <p className="px-2 py-3 text-muted-foreground">{t("widgets.allAdded")}</p> : null}
+        {widgets.length === 0 ? <p className="px-2 py-3 text-label-secondary">{t("widgets.allAdded")}</p> : null}
       </div>
 
       <div className="p-2">
@@ -588,9 +587,9 @@ function TraySection({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase transition-colors hover:bg-fill-3"
+        className="flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-caption max-lg:min-h-11 text-label-secondary transition-colors hover:bg-fill"
       >
-        <IconChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} strokeWidth={2.2} />
+        <IconChevronRight className={cn("size-3.5 shrink-0 transition-transform [stroke-width:2]", open && "rotate-90")} />
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
         <span className="tabular-nums">{items.length}</span>
       </button>
@@ -608,14 +607,13 @@ function TraySection({
                 }}
                 onClick={() => onPick(widget)}
                 className={cn(
-                  "flex w-full cursor-grab touch-none items-start gap-2 rounded-[10px] bg-fill-3 p-2.5 text-left transition-colors select-none",
-                  "shadow-[0_0_0_0.5px_var(--hairline)] hover:bg-fill-2 active:cursor-grabbing",
-                  dragId === widget.id && "opacity-50 ring-2 ring-primary",
+                  "flex w-full cursor-grab touch-none items-start gap-2 rounded-md bg-fill p-2.5 text-left transition-colors select-none hover:bg-fill-strong active:cursor-grabbing",
+                  dragId === widget.id && "opacity-50 ring-2 ring-brand-500",
                 )}
               >
-                <IconGripVertical className="mt-px size-4 shrink-0 text-muted-foreground/70" />
+                <IconGripVertical className="mt-0.5 size-4 shrink-0 text-label-secondary" />
                 <span className="min-w-0 flex-1 font-medium">{widget.title}</span>
-                <IconPlus className="mt-px size-4 shrink-0 text-primary" />
+                <IconPlus className="mt-0.5 size-4 shrink-0 text-brand-500" />
               </button>
             </li>
           ))}

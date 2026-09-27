@@ -1,5 +1,5 @@
-// Icon and system colour for a category tile. Categories carry no visual
-// metadata yet, so the glyph comes from keywords in the name and the colour
+// Icon and tint for a category tile. Categories carry no visual
+// metadata yet, so the glyph comes from keywords in the name and the tint
 // from the shared tile hash. Both are presentation only.
 
 import {
@@ -20,7 +20,9 @@ import {
   IconToolsKitchen2,
 } from "@tabler/icons-react"
 
-import { tileColor } from "../tile-colors"
+import type { Tone } from "@/lib/tone"
+
+import { tileTone } from "../tile-colors"
 
 type Glyph = typeof IconTag
 
@@ -41,6 +43,6 @@ const glyphs: [RegExp, Glyph][] = [
   [/reise|urlaub|flug|hotel/i, IconPlane],
 ]
 
-export function categoryVisual(name: string): { icon: Glyph; color: string } {
-  return { icon: glyphs.find(([pattern]) => pattern.test(name))?.[1] ?? IconTag, color: tileColor(name) }
+export function categoryVisual(name: string): { icon: Glyph; tone: Tone } {
+  return { icon: glyphs.find(([pattern]) => pattern.test(name))?.[1] ?? IconTag, tone: tileTone(name) }
 }

@@ -1,13 +1,18 @@
 "use client"
 
-// Grouped-list building blocks (inset grouped lists as on iOS/macOS):
-// a titled group of hairline-separated rows, plus common row shapes.
+// List building blocks: a flat surface card with an optional headline, rows of
+// 48px separated by hairlines, and the common row shapes. Tables and lists in
+// the design system look like this.
 
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { IconChevronRight } from "@tabler/icons-react"
 
+import { toneTint, type Tone } from "@/lib/tone"
 import { cn } from "@/lib/utils"
+
+/** The card behind a list. Header and rows are its children. */
+export const listCardClass = "overflow-hidden rounded-xl bg-surface"
 
 export function Group({
   title,
@@ -24,33 +29,36 @@ export function Group({
   className?: string
   children: ReactNode
 }) {
+  const header = title || action || trailing
   return (
     <section className={className}>
-      {title || action || trailing ? (
-        <div className="mb-1.5 flex items-baseline justify-between gap-3 px-1">
-          {title ? <h2 className="font-semibold">{title}</h2> : <span />}
-          {action ? (
-            "href" in action ? (
-              <Link href={action.href} className="text-primary hover:underline">
-                {action.label}
-              </Link>
-            ) : (
-              <button type="button" onClick={action.onClick} className="text-primary hover:underline">
-                {action.label}
-              </button>
-            )
-          ) : trailing ? (
-            <span className="text-xs tabular-nums text-muted-foreground">{trailing}</span>
-          ) : null}
-        </div>
-      ) : null}
-      <div className="surface-group hairline-rows">{children}</div>
-      {footer ? <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">{footer}</p> : null}
+      <div className={listCardClass}>
+        {header ? (
+          <div className="flex min-h-12 items-center justify-between gap-3 px-4 pt-3 pb-2">
+            {title ? <h2 className="text-headline">{title}</h2> : <span />}
+            {action ? (
+              "href" in action ? (
+                <Link href={action.href} className="shrink-0 text-right font-medium text-link hover:underline">
+                  {action.label}
+                </Link>
+              ) : (
+                <button type="button" onClick={action.onClick} className="shrink-0 text-right font-medium text-link hover:underline">
+                  {action.label}
+                </button>
+              )
+            ) : trailing ? (
+              <span className="text-footnote tabular-nums text-label-secondary">{trailing}</span>
+            ) : null}
+          </div>
+        ) : null}
+        <div className={cn("hairline-rows", header && "border-t border-separator")}>{children}</div>
+      </div>
+      {footer ? <p className="mt-2 px-1 text-footnote text-label-secondary">{footer}</p> : null}
     </section>
   )
 }
 
-const rowClass = "flex min-h-[44px] w-full items-center gap-3 px-3 py-2 text-left first:rounded-t-[10px] last:rounded-b-[10px]"
+const rowClass = "flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-left"
 
 export function Row({
   children,
@@ -63,7 +71,8 @@ export function Row({
   onClick?: () => void
   className?: string
 }) {
-  const interactive = cn(rowClass, "transition-colors hover:bg-fill-3", className)
+  // Rows fill the clipped card, so their focus ring is drawn inside them.
+  const interactive = cn(rowClass, "transition-colors hover:bg-fill focus-visible:outline-offset-[-2px]", className)
   if (href) {
     return (
       <Link href={href} className={interactive}>
@@ -81,63 +90,65 @@ export function Row({
   return <div className={cn(rowClass, className)}>{children}</div>
 }
 
-/** Label left, control right; the form-row shape of Settings screens. */
+/** Label left, control right; the form-row shape of settings and editors. */
 export function FormRow({ label, htmlFor, hint, children }: { label: string; htmlFor?: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2">
+    <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
       <label htmlFor={htmlFor} className="min-w-0">
         <span className="block">{label}</span>
-        {hint ? <span className="block text-[11px] text-muted-foreground">{hint}</span> : null}
+        {hint ? <span className="block text-footnote text-label-secondary">{hint}</span> : null}
       </label>
       <div className="flex min-w-0 items-center justify-end gap-2 text-right">{children}</div>
     </div>
   )
 }
 
-/** A padded block inside a group for content that is not a row. */
+/** A padded block inside a list card for content that is not a row. */
 export function Block({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("px-4 py-3", className)}>{children}</div>
 }
 
 export function Disclosure() {
-  return <IconChevronRight className="size-3.5 shrink-0 text-muted-foreground/50" />
+  return <IconChevronRight className="size-4 shrink-0 text-label-secondary [stroke-width:2]" />
 }
 
-/** Settings-app style icon tile in a system color. */
+/** Tile corners keep the 10px-on-36px proportion of the design system's app tile. */
+export function tileRadius(size: number) {
+  return Math.round((size * 10) / 36)
+}
+
+/** A tinted icon tile for a category or a figure. */
 export function IconTile({
   icon: Icon,
-  color,
-  size = 28,
+  tone,
+  size = 32,
 }: {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number; style?: React.CSSProperties }>
-  color: string
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+  tone: Tone
   size?: number
 }) {
   return (
-    <span className="icon-tile text-white" style={{ background: color, width: size, height: size, borderRadius: size * 0.25 }}>
-      <Icon style={{ width: size * 0.6, height: size * 0.6 }} strokeWidth={2} />
+    <span
+      className={cn("inline-flex shrink-0 items-center justify-center", toneTint[tone])}
+      style={{ width: size, height: size, borderRadius: tileRadius(size) }}
+    >
+      <Icon style={{ width: size * 0.56, height: size * 0.56 }} />
     </span>
   )
 }
 
-/** Thin progress bar in the Apple Storage/Battery idiom, with an optional "today" marker. */
-export function ThinBar({
-  fraction,
-  marker,
-  color,
-  className,
-}: {
-  fraction: number
-  marker?: number
-  color?: string
-  className?: string
-}) {
+/**
+ * The 6px meter: a fill track with the value in brand-500, the budget colour.
+ * The optional marker is a hairline, e.g. how far the period has run; `label`
+ * explains the meter to screen readers and as a tooltip.
+ */
+export function Meter({ fraction, marker, label, className }: { fraction: number; marker?: number; label?: string; className?: string }) {
   const width = Math.min(100, Math.max(0, fraction * 100))
   return (
-    <div className={cn("relative h-1.5 w-full rounded-[3px] bg-fill-3", className)}>
-      <div className="h-full rounded-[3px] bg-primary" style={{ width: `${width}%`, background: color }} />
+    <div role={label ? "img" : undefined} aria-label={label} title={label} className={cn("relative h-1.5 w-full rounded-full bg-fill", className)}>
+      <div className="h-full rounded-full bg-brand-500" style={{ width: `${width}%` }} />
       {marker !== undefined ? (
-        <div className="absolute -top-1 h-3.5 w-px bg-foreground/60" style={{ left: `${Math.min(100, Math.max(0, marker * 100))}%` }} aria-hidden />
+        <div className="absolute -top-1 h-3.5 w-px bg-label" style={{ left: `${Math.min(100, Math.max(0, marker * 100))}%` }} aria-hidden />
       ) : null}
     </div>
   )

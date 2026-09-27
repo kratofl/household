@@ -1,7 +1,6 @@
 "use client"
 
 import { useTheme } from "next-themes"
-import { IconMoon, IconSun } from "@tabler/icons-react"
 
 import type { Locale, Translator } from "@/lib/i18n"
 import { isLocale } from "@/lib/i18n"
@@ -18,23 +17,6 @@ export function AppearanceControl({ t }: { t: Translator }) {
   ]
   return (
     <Segmented ariaLabel={t("nav.theme")} value={active} options={options} onChange={setTheme} />
-  )
-}
-
-/** One-tap light/dark toggle for the toolbar. Both icons render; CSS picks one (no hydration mismatch). */
-export function AppearanceToggle({ t }: { t: Translator }) {
-  const { resolvedTheme, setTheme } = useTheme()
-  return (
-    <button
-      type="button"
-      aria-label={t("nav.toggleAppearance")}
-      title={t("nav.toggleAppearance")}
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-fill-3 hover:text-foreground"
-    >
-      <IconSun className="hidden size-5 dark:block" />
-      <IconMoon className="size-5 dark:hidden" />
-    </button>
   )
 }
 

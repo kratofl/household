@@ -4,15 +4,12 @@
 // card, used both on the Budget overview and on the global dashboard. Widgets
 // render their own heading; the board adds the frame.
 
-import type { ReactNode } from "react"
-import { IconChartBar, IconPigMoney, IconShieldCheck } from "@tabler/icons-react"
-
 import type { WidgetDefinition } from "@/components/app/widget-board"
-import { Block, Disclosure, Group, IconTile, Row, ThinBar } from "@/components/app/grouped"
+import { Block, Disclosure, Group, IconTile, Meter, Row } from "@/components/app/grouped"
+import { KpiCard } from "@/components/app/kpi-card"
 import { Button } from "@/components/ui/button"
 import type { Locale } from "@/lib/i18n"
 import { budgetViews, moduleCatalog } from "@/lib/modules"
-import { cn } from "@/lib/utils"
 
 import { categoryVisual } from "./category-visuals"
 import type { useMonthlyBudget } from "./controller"
@@ -51,77 +48,60 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
     {
       id: "budget.remaining",
       title: copy.remaining,
-      w: 12,
-      h: 4,
+      w: 3,
+      h: 3,
       group,
       render: () => (
-        <section className="surface-group p-5">
-          <div className="flex flex-wrap items-end justify-between gap-6">
-            <div>
-              <p className="font-medium text-muted-foreground">{copy.remaining}</p>
-              <p
-                className={cn(
-                  "mt-0.5 text-[44px] font-semibold leading-none tracking-[-0.03em] tabular-nums lg:text-[52px]",
-                  summary.funRemainingCents < 0 && "text-destructive",
-                )}
-              >
-                {view.fun}
-              </p>
-              {summary.deficitCarryoverCents > 0 ? (
-                <p className="mt-2 text-muted-foreground">{copy.deficit}: {view.deficit}</p>
-              ) : null}
-            </div>
-            <dl className="grid grid-cols-2 gap-x-8">
-              <Stat label={copy.starting} value={view.starting} />
-              <Stat label={copy.spent} value={view.spent} />
-            </dl>
-          </div>
-          <ThinBar className="mt-5" fraction={view.usedFraction} marker={view.pace} />
-          <p className="mt-1.5 text-[11px] text-muted-foreground">{copy.paceNote}</p>
-        </section>
+        <KpiCard
+          label={copy.remaining}
+          value={view.fun}
+          negative={summary.funRemainingCents < 0}
+          meter={{ fraction: view.usedFraction, marker: view.pace, label: copy.paceNote }}
+          delta={{
+            text: summary.deficitCarryoverCents > 0
+              ? `${copy.deficit}: ${view.deficit}`
+              : `${copy.spent} ${view.spent} · ${copy.starting} ${view.starting}`,
+            tone: summary.deficitCarryoverCents > 0 ? "negative" : "neutral",
+          }}
+        />
       ),
     },
     {
       id: "budget.savings",
       title: copy.totalSaved,
-      w: 4,
+      w: 3,
       h: 3,
       group,
       render: () => (
-        <MiniCard
-          icon={IconPigMoney}
-          color="var(--sys-green)"
+        <KpiCard
           label={copy.totalSaved}
           value={view.savings}
-          note={`${copy.plannedSavings}: ${view.contribution}`}
-        >
-          {spendable ? (
-            <Button size="xs" variant="outline" onClick={() => spendable({ kind: "add", source: "savings" })}>
-              {copy.spendSavings}
-            </Button>
-          ) : null}
-        </MiniCard>
+          delta={{ text: `${copy.plannedSavings}: ${view.contribution}`, tone: "neutral" }}
+          action={
+            spendable ? (
+              <Button size="sm" variant="secondary" className="h-auto min-h-7 max-w-full py-1.5 whitespace-normal" onClick={() => spendable({ kind: "add", source: "savings" })}>
+                {copy.spendSavings}
+              </Button>
+            ) : null
+          }
+        />
       ),
     },
     {
       id: "budget.buffer",
       title: copy.buffer,
-      w: 4,
+      w: 3,
       h: 3,
       group,
-      render: () => (
-        <MiniCard icon={IconShieldCheck} color="var(--sys-blue)" label={copy.buffer} value={view.buffer} note={copy.bufferNote} />
-      ),
+      render: () => <KpiCard label={copy.buffer} value={view.buffer} delta={{ text: copy.bufferNote, tone: "neutral" }} />,
     },
     {
       id: "budget.next",
       title: copy.next,
-      w: 4,
+      w: 3,
       h: 3,
       group,
-      render: () => (
-        <MiniCard icon={IconChartBar} color="var(--sys-gray)" label={copy.next} value={view.nextFun} note={`${copy.from} ${view.nextStart}`} />
-      ),
+      render: () => <KpiCard label={copy.next} value={view.nextFun} delta={{ text: `${copy.from} ${view.nextStart}`, tone: "neutral" }} />,
     },
     {
       id: "budget.reserves",
@@ -142,25 +122,24 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
                     : undefined
                 }
               >
-                <IconTile icon={visual.icon} color={visual.color} />
+                <IconTile icon={visual.icon} tone={visual.tone} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-4">
                     <span className="font-medium">{category.name}</span>
                     <span className="tabular-nums">
-                      {category.remaining} <span className="text-muted-foreground">{copy.left}</span>
+                      {category.remaining} <span className="text-label-secondary">{copy.left}</span>
                     </span>
                   </div>
-                  <ThinBar
-                    className="mt-1.5 h-1"
+                  <Meter
+                    className="mt-2"
                     fraction={category.reservedCents > 0 ? 1 - category.remainingCents / category.reservedCents : 0}
-                    color={visual.color}
                   />
                 </div>
                 <Disclosure />
               </Row>
             )
           })}
-          {view.reserveCards.length === 0 ? <Block className="text-muted-foreground">{copy.emptyReserves}</Block> : null}
+          {view.reserveCards.length === 0 ? <Block className="text-label-secondary">{copy.emptyReserves}</Block> : null}
         </Group>
       ),
     },
@@ -172,7 +151,7 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
       group,
       render: () => (
         <Group title={copy.recent} action={{ label: copy.showAll, href: budgetViews.expenses.route }}>
-          {view.recent.length === 0 ? <Block className="text-muted-foreground">{copy.emptyExpenses}</Block> : null}
+          {view.recent.length === 0 ? <Block className="text-label-secondary">{copy.emptyExpenses}</Block> : null}
           {view.recent.map((row) => (
             <ExpenseRow key={row.expense.id} row={row} copy={copy} showDate />
           ))}
@@ -190,10 +169,10 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
           {summary.costs.map((cost) => (
             <Row key={cost.id}>
               <span className="flex-1">{cost.name}</span>
-              <span className="tabular-nums text-muted-foreground">{view.fmt.money(cost.amountCents)}</span>
+              <span className="tabular-nums text-label-secondary">{view.fmt.money(cost.amountCents)}</span>
             </Row>
           ))}
-          {summary.costs.length === 0 ? <Block className="text-muted-foreground">–</Block> : null}
+          {summary.costs.length === 0 ? <Block className="text-label-secondary">–</Block> : null}
         </Group>
       ),
     },
@@ -220,8 +199,9 @@ export const budgetOverviewWidgets = [
 ]
 
 /**
- * The global dashboard starts with the numbers worth a glance: what is left, the
- * three supporting figures side by side, then the reserves and the last expenses.
+ * The global dashboard starts with the numbers worth a glance, four KPIs in a
+ * row: what is left and the three supporting figures. Then the reserves and the
+ * last expenses.
  */
 export const budgetDashboardWidgets = [
   "budget.remaining",
@@ -231,42 +211,3 @@ export const budgetDashboardWidgets = [
   "budget.reserves",
   "budget.recent",
 ]
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[11px] text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-medium tabular-nums">{value}</dd>
-    </div>
-  )
-}
-
-function MiniCard({
-  icon,
-  color,
-  label,
-  value,
-  note,
-  children,
-}: {
-  icon: typeof IconPigMoney
-  color: string
-  label: string
-  value: string
-  note: string
-  children?: ReactNode
-}) {
-  return (
-    <div className="surface-group h-full p-4">
-      <div className="flex items-center gap-2">
-        <IconTile icon={icon} color={color} size={22} />
-        <span className="font-medium">{label}</span>
-      </div>
-      <p className="mt-3 text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{value}</p>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">{note}</p>
-        {children}
-      </div>
-    </div>
-  )
-}

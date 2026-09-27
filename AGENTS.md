@@ -208,6 +208,9 @@ Windows PowerShell uses `.\make.ps1 <target>` with the same names.
 - C#: records for data, classes for behavior, async all the way with
   `CancellationToken`, pattern matching over cast chains, `using` declarations. Public
   JSON is camelCase with language-neutral enum values; errors are problem JSON.
+- Web UI follows `docs/design-system/DESIGN.md` without exceptions. Its tokens live in
+  `clients/web/src/app/globals.css`, which clears Tailwind's default palette, radii and text
+  sizes, so a class outside the system compiles to nothing.
 - Web UI: use shadcn/ui primitives, do not rebuild common controls in feature pages.
   Dashboard subnavigation is nested sidebar navigation, not page-level tab rows. Do not
   render an "Active slices" card; active modules only control navigation. Keep Account

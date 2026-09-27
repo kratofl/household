@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { boardElements } from "@/components/app/board-elements"
 import { PageHeader } from "@/components/app/page-header"
+import { ToolbarContent, ToolbarGroup } from "@/components/app/toolbar"
 import { WidgetBoard, type WidgetDefinition } from "@/components/app/widget-board"
 import { budgetDashboardWidgets, budgetWidgets } from "@/features/budget/monthly/widgets"
 import { useMonthlyBudget } from "@/features/budget/monthly/controller"
@@ -27,23 +28,31 @@ export function DashboardPage({
   const budgetActive = modules.some((module) => module.key === "budget")
   const budget = useMonthlyBudget(budgetActive ? accessToken : undefined, locale)
 
+  const title = <ToolbarContent title={t("dashboard.title")} />
+
   if (modules.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("dashboard.noActiveSlicesTitle")}</CardTitle>
-          <CardDescription>{t("dashboard.noActiveSlicesDescription")}</CardDescription>
-        </CardHeader>
-      </Card>
+      <>
+        {title}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("dashboard.noActiveSlicesTitle")}</CardTitle>
+            <CardDescription>{t("dashboard.noActiveSlicesDescription")}</CardDescription>
+          </CardHeader>
+        </Card>
+      </>
     )
   }
 
   if (budgetActive && budget.resource.status === "failed") {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>{t("error.title")}</AlertTitle>
-        <AlertDescription>{budget.resource.message}</AlertDescription>
-      </Alert>
+      <>
+        {title}
+        <Alert variant="destructive">
+          <AlertTitle>{t("error.title")}</AlertTitle>
+          <AlertDescription>{budget.resource.message}</AlertDescription>
+        </Alert>
+      </>
     )
   }
 
@@ -61,12 +70,15 @@ export function DashboardPage({
 
   if (moduleWidgets.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("dashboard.budgetCardTitle")}</CardTitle>
-          <CardDescription>{t("dashboard.sliceUnavailable")}</CardDescription>
-        </CardHeader>
-      </Card>
+      <>
+        {title}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("dashboard.budgetCardTitle")}</CardTitle>
+            <CardDescription>{t("dashboard.sliceUnavailable")}</CardDescription>
+          </CardHeader>
+        </Card>
+      </>
     )
   }
 
@@ -75,7 +87,7 @@ export function DashboardPage({
       boardId="dashboard"
       widgets={widgets}
       defaultIds={budgetDashboardWidgets}
-      header={(customize) => <PageHeader title={t("dashboard.title")} actions={customize} />}
+      header={(customize) => <PageHeader title={t("dashboard.title")} actions={customize ? <ToolbarGroup>{customize}</ToolbarGroup> : null} />}
       t={t}
     />
   )

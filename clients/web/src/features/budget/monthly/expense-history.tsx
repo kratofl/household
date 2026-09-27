@@ -4,10 +4,10 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState } from "react"
 
 import { FormSelect } from "@/components/app/form-select"
-import { Block, Group, IconTile, Row } from "@/components/app/grouped"
+import { Block, Group, IconTile, listCardClass, Row } from "@/components/app/grouped"
+import { SearchInput } from "@/components/app/search-input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import type { Locale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
@@ -74,9 +74,9 @@ export function MonthlyExpenseHistory({
         <SearchFromUrl onSearch={setSearch} />
       </Suspense>
       <div className="flex flex-wrap items-center gap-2">
-        <Input className="sm:max-w-xs" aria-label={copy.search} placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
+        <SearchInput className="w-full sm:max-w-xs" aria-label={copy.search} placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
         <FormSelect
-          className="w-auto"
+          className="w-auto min-w-44 max-sm:flex-1"
           aria-label={copy.category}
           value={category}
           onValueChange={setCategory}
@@ -84,7 +84,7 @@ export function MonthlyExpenseHistory({
         />
         {!savingsOnly ? (
           <FormSelect
-            className="w-auto"
+            className="w-auto min-w-44 max-sm:flex-1"
             aria-label={copy.source}
             value={source}
             onValueChange={setSource}
@@ -98,20 +98,20 @@ export function MonthlyExpenseHistory({
           />
         ) : null}
       </div>
-      {groups.length === 0 ? <div className="surface-group"><Block className="text-muted-foreground">{copy.emptyExpenses}</Block></div> : null}
+      {groups.length === 0 ? <div className={listCardClass}><Block className="text-label-secondary">{copy.emptyExpenses}</Block></div> : null}
       {groups.map((group) => (
         <Group key={group.date} title={group.label} trailing={group.total}>
           {group.rows.map((row) => (
             <ExpenseRow key={row.expense.id} row={row} copy={copy}>
               {!row.voided ? (
-                <div className="flex basis-full items-center justify-end gap-1 sm:order-1 sm:basis-auto sm:opacity-0 sm:transition-opacity sm:focus-within:opacity-100 sm:group-hover/row:opacity-100">
+                <div className="flex basis-full items-center justify-end gap-1 sm:order-1 sm:basis-auto lg:opacity-0 lg:transition-opacity lg:focus-within:opacity-100 lg:group-hover/row:opacity-100">
                   {row.expense.kind === "expense" ? (
                     <>
-                      <Button size="xs" variant="outline" disabled={busy} onClick={() => open({ kind: "edit", expense: row.expense })}>{copy.edit}</Button>
-                      <Button size="xs" variant="outline" disabled={busy} onClick={() => open({ kind: "refund", expense: row.expense })}>{copy.refund}</Button>
+                      <Button size="sm" variant="secondary" disabled={busy} onClick={() => open({ kind: "edit", expense: row.expense })}>{copy.edit}</Button>
+                      <Button size="sm" variant="secondary" disabled={busy} onClick={() => open({ kind: "refund", expense: row.expense })}>{copy.refund}</Button>
                     </>
                   ) : null}
-                  <Button size="xs" variant="outline" disabled={busy} onClick={() => voidEntry(row.expense)}>{copy.void}</Button>
+                  <Button size="sm" variant="destructive" disabled={busy} onClick={() => voidEntry(row.expense)}>{copy.void}</Button>
                 </div>
               ) : null}
             </ExpenseRow>
@@ -127,22 +127,22 @@ export function ExpenseRow({ row, copy, showDate = false, children }: { row: Exp
   const visual = categoryVisual(row.expense.categoryName)
   const refund = row.expense.kind === "refund"
   return (
-    <Row className={cn("group/row flex-wrap", row.voided && "opacity-60")}>
-      {row.merchant ? <MerchantTile merchant={row.merchant} /> : <IconTile icon={visual.icon} color={visual.color} />}
+    <Row className="group/row flex-wrap">
+      {row.merchant ? <MerchantTile merchant={row.merchant} /> : <IconTile icon={visual.icon} tone={visual.tone} />}
       <div className="min-w-0 flex-1">
         <p className={cn("flex items-center gap-2 truncate font-medium", row.voided && "line-through")}>
           {row.expense.description || row.expense.categoryName}
-          {row.voided ? <Badge variant="secondary">{copy.voided}</Badge> : null}
-          {refund ? <Badge variant="secondary">{copy.refundLabel}</Badge> : null}
+          {row.voided ? <Badge>{copy.voided}</Badge> : null}
+          {refund ? <Badge tone="green">{copy.refundLabel}</Badge> : null}
         </p>
-        <p className="truncate text-[11px] text-muted-foreground">
+        <p className="truncate text-footnote text-label-secondary">
           {showDate ? `${row.date} · ` : ""}
           {row.merchant ? `${row.merchant.name} · ` : ""}
           {row.expense.categoryName}
           {row.sources ? ` · ${row.sources}` : ""}
         </p>
       </div>
-      <span className={cn("tabular-nums sm:order-2", refund && "font-medium text-positive")}>
+      <span className={cn("font-medium tabular-nums sm:order-2", refund && "text-success-text")}>
         {refund ? "+" : "−"}
         {row.amount}
       </span>

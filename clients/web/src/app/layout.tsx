@@ -1,24 +1,18 @@
 import type { Metadata } from "next"
-import { Geist_Mono, Inter } from "next/font/google"
+import { Figtree } from "next/font/google"
 
 import { AppShell } from "@/components/app/app-shell"
 import { ThemeProvider } from "@/components/theme-provider"
-import { appearanceInitScript } from "@/lib/appearance"
-import { defaultThemeId, themeInitScript } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
 import "./globals.css"
 
-// Inter is the closest open alternative to SF Pro; globals.css enables cv11/ss01/tnum.
-const inter = Inter({
-  variable: "--font-inter",
+// The design system's font is SF Pro on Apple devices and Figtree everywhere
+// else; globals.css puts the system font first in the stack.
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
   display: "swap",
-})
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
 })
 
 export const metadata: Metadata = {
@@ -36,18 +30,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      data-theme={defaultThemeId}
-      className={cn("h-full antialiased", inter.variable, geistMono.variable, "font-sans")}
-    >
-      <head>
-        {/* Applies the stored accent theme and look-and-feel settings before the
-            first paint, like next-themes does for dark mode. */}
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <script dangerouslySetInnerHTML={{ __html: appearanceInitScript }} />
-      </head>
+    <html lang="en" suppressHydrationWarning className={cn("h-full antialiased", figtree.variable, "font-sans")}>
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AppShell>{children}</AppShell>

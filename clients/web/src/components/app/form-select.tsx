@@ -1,12 +1,17 @@
 "use client"
 
-import { cn } from "@/lib/utils"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export type FormSelectOption = {
   value: string
   label: string
 }
 
+// Radix reserves the empty string for "no selection", but callers use it as a real
+// option ("no merchant"), so it travels under this key inside the control.
+const EMPTY = "__empty__"
+
+/** A labelled pick-one field over a fixed option list. `id` lets a <label htmlFor> name it. */
 export function FormSelect({
   id,
   value,
@@ -25,24 +30,21 @@ export function FormSelect({
   "aria-label"?: string
 }) {
   return (
-    <select
-      id={id}
-      className={cn(
-        "h-7 w-full rounded-md bg-input px-2.5 text-[13px] shadow-[inset_0_0_0_0.5px_var(--hairline)] transition-[box-shadow] outline-none",
-        "focus-visible:ring-2 focus-visible:ring-ring/40",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      )}
-      value={value}
+    <Select
+      value={value === "" ? EMPTY : value}
+      onValueChange={(next) => onValueChange(next === EMPTY ? "" : next)}
       disabled={disabled}
-      aria-label={ariaLabel}
-      onChange={(event) => onValueChange(event.target.value)}
     >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger id={id} aria-label={ariaLabel} className={className}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value || EMPTY} value={option.value === "" ? EMPTY : option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }

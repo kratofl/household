@@ -5,6 +5,7 @@ import { Label as LabelPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+// Field label above a control: 13px semibold.
 function Label({
   className,
   ...props
@@ -13,7 +14,7 @@ function Label({
     <LabelPrimitive.Root
       data-slot="label"
       className={cn(
-        "flex items-center gap-2 text-[13px] leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+        "flex items-center gap-2 text-footnote font-semibold select-none peer-disabled:cursor-not-allowed peer-disabled:text-label-disabled",
         className
       )}
       {...props}

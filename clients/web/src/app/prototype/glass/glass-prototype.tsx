@@ -32,7 +32,10 @@ import { HouseholdLogo } from "@/components/app/household-logo"
 import { PrototypeSwitcher, type PrototypeVariant } from "@/components/app/prototype-switcher"
 import { formatters } from "@/features/budget/monthly/controller"
 import { categoryVisual } from "@/features/budget/monthly/category-visuals"
-import { tileColor } from "@/features/budget/tile-colors"
+import { tileTone } from "@/features/budget/tile-colors"
+
+// The prototype predates the design system's tints and paints with a solid colour.
+const tileColor = (name: string) => `var(--${tileTone(name)}-500)`
 import { cn } from "@/lib/utils"
 
 import styles from "./glass.module.css"
@@ -436,7 +439,7 @@ function MonthContent({ radius, controls }: { radius: string; controls: ReactNod
           return (
             <div key={category.name} className={cn("surface-group p-4", radius)}>
               <div className="flex items-center gap-2.5">
-                <span className="icon-tile size-8 text-white" style={{ background: visual.color }}>
+                <span className="icon-tile size-8 text-white" style={{ background: `var(--${visual.tone}-500)` }}>
                   <Icon className="size-4.5" />
                 </span>
                 <span className="font-semibold">{category.name}</span>
@@ -448,7 +451,7 @@ function MonthContent({ radius, controls }: { radius: string; controls: ReactNod
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-fill-3">
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${Math.min(100, (category.spent / category.budget) * 100)}%`, background: over ? "var(--sys-red)" : visual.color }}
+                  style={{ width: `${Math.min(100, (category.spent / category.budget) * 100)}%`, background: over ? "var(--sys-red)" : `var(--${visual.tone}-500)` }}
                 />
               </div>
             </div>

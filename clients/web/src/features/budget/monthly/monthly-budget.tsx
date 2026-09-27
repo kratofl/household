@@ -2,16 +2,17 @@
 
 import Link from "next/link"
 import { useState, type ReactNode } from "react"
-import { IconPigMoney, IconPlus } from "@tabler/icons-react"
+import { IconPlus } from "@tabler/icons-react"
 
-import { IconTile } from "@/components/app/grouped"
 import { boardElements } from "@/components/app/board-elements"
+import { KpiCard } from "@/components/app/kpi-card"
 import { PageHeader } from "@/components/app/page-header"
+import { useToast } from "@/components/app/toast"
+import { ToolbarButton, ToolbarContent, ToolbarGroup } from "@/components/app/toolbar"
 import { WidgetBoard } from "@/components/app/widget-board"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import type { Locale, Translator } from "@/lib/i18n"
 import { budgetViewFromPath, budgetViews } from "@/lib/modules"
 import { uuid } from "@/lib/uuid"
@@ -37,21 +38,31 @@ export function MonthlyBudget({
   isAdmin?: boolean
   t: Translator
 }) {
-  const controller = useMonthlyBudget(accessToken, locale)
+  const controller = useMonthlyBudget(accessToken, locale, useToast())
   const { resource, presentation: view, copy, busy, run } = controller
   // The editor is a dialog; remember what opened it so focus can go back there.
   const [intent, setIntent] = useState<{ expense: ExpenseIntent; trigger: HTMLElement | null } | null>(null)
   const openExpense = (next: ExpenseIntent) =>
     setIntent({ expense: next, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null })
-  if (resource.status === "loading") return <p role="status" className="text-muted-foreground">{copy.loading}</p>
+  if (resource.status === "loading") {
+    return (
+      <>
+        <ToolbarContent title={copy.overview} />
+        <p role="status" className="text-label-secondary">{copy.loading}</p>
+      </>
+    )
+  }
   if (resource.status === "failed") {
     return (
-      <Alert variant="destructive">
-        <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-          {resource.message}
-          <Button variant="outline" onClick={controller.retry}>{copy.retry}</Button>
-        </AlertDescription>
-      </Alert>
+      <>
+        <ToolbarContent title={copy.overview} />
+        <Alert variant="destructive">
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            {resource.message}
+            <Button variant="secondary" size="sm" onClick={controller.retry}>{copy.retry}</Button>
+          </AlertDescription>
+        </Alert>
+      </>
     )
   }
   if (!view || !accessToken) return null
@@ -64,16 +75,15 @@ export function MonthlyBudget({
   const notices = (
     <>
       {page !== "plan" && allArchived ? (
-        <p className="text-muted-foreground">
+        <p className="text-label-secondary">
           {copy.emptyCategories}{" "}
-          <Link className="text-primary hover:underline" href={budgetViews.plan.route}>
+          <Link className="font-medium text-link hover:underline" href={budgetViews.plan.route}>
             {copy.plan}
           </Link>
         </p>
       ) : null}
 
       {controller.error ? <Alert variant="destructive"><AlertDescription>{controller.error}</AlertDescription></Alert> : null}
-      {controller.message ? <p role="status" className="text-muted-foreground">{controller.message}</p> : null}
       {(state.summary?.fundingShortfallCents ?? 0) > 0 ? (
         <Alert variant="destructive">
           <AlertDescription>
@@ -84,34 +94,42 @@ export function MonthlyBudget({
     </>
   )
 
-  // The title row and the notices under it. The overview hands this to its widget
-  // board, so Customize sits among the actions instead of on a row of its own.
+  // The toolbar content and the notices under it. The overview hands this to its
+  // widget board, so Customize sits in the toolbar's icon group with Add expense.
+  // The period picker sits in the toolbar; phones have no room there, so it moves
+  // next to the period line instead.
+  const periodPicker = (className: string) => (
+    <Input
+      type="date"
+      aria-label={copy.period}
+      className={className}
+      title={copy.period}
+      min={state.firstDate ?? undefined}
+      max={state.today}
+      value={controller.selectedDate || state.today}
+      onChange={(event) => {
+        if (event.target.value) controller.setSelectedDate(event.target.value)
+      }}
+    />
+  )
   const top = (customize?: ReactNode) => (
     <>
       {title ? (
         <PageHeader
           title={title}
-          subtitle={view.period}
+          subtitle={
+            <span className="flex flex-wrap items-center justify-between gap-3">
+              {view.period}
+              {periodPicker("w-44 sm:hidden")}
+            </span>
+          }
           actions={
             <>
-              <Label htmlFor="budget-period" className="sr-only">{copy.period}</Label>
-              <Input
-                id="budget-period"
-                type="date"
-                className="w-32 flex-1 sm:w-40 sm:flex-none"
-                title={copy.period}
-                min={state.firstDate ?? undefined}
-                max={state.today}
-                value={controller.selectedDate || state.today}
-                onChange={(event) => {
-                  if (event.target.value) controller.setSelectedDate(event.target.value)
-                }}
-              />
-              {customize}
-              <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })}>
-                <IconPlus />
-                {copy.addExpense}
-              </Button>
+              {periodPicker("w-40 max-sm:hidden")}
+              <ToolbarGroup>
+                {customize}
+                <ToolbarButton icon={<IconPlus />} label={copy.addExpense} disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })} />
+              </ToolbarGroup>
             </>
           }
         />
@@ -121,7 +139,7 @@ export function MonthlyBudget({
   )
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
       {page === "overview" ? null : top()}
 
       {page === "plan" ? (
@@ -140,20 +158,17 @@ export function MonthlyBudget({
       ) : null}
 
       {page === "savings" ? (
-        <section className="surface-group p-5">
-          <div className="flex items-center gap-2">
-            <IconTile icon={IconPigMoney} color="var(--sys-green)" size={22} />
-            <span className="font-medium">{copy.totalSaved}</span>
-          </div>
-          <p className="mt-3 text-[44px] font-semibold leading-none tracking-[-0.03em] tabular-nums">{view.savings}</p>
-          <p className="mt-2 text-muted-foreground">
-            {copy.plannedSavings}: {view.contribution}
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">{copy.savingsNote}</p>
-          <Button className="mt-4" disabled={busy || allArchived} onClick={() => openExpense({ kind: "add", source: "savings" })}>
-            {copy.spendSavings}
-          </Button>
-        </section>
+        <KpiCard
+          className="max-w-md"
+          label={copy.totalSaved}
+          value={view.savings}
+          delta={{ text: `${copy.plannedSavings}: ${view.contribution}. ${copy.savingsNote}`, tone: "neutral" }}
+          action={
+            <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add", source: "savings" })}>
+              {copy.spendSavings}
+            </Button>
+          }
+        />
       ) : null}
 
       {page === "expenses" || page === "savings" ? (

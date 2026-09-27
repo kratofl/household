@@ -13,7 +13,7 @@ export type CurrentUser = {
   email: string
   role: "admin" | "user"
   status: "pending" | "active" | "blocked"
-  /** Accent theme id; see lib/theme.ts. */
+  /** Accent theme id the profile still stores; the web UI has one brand colour and ignores it. */
   theme: string
 }
 

@@ -5,370 +5,259 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  Design tokens for the desktop shell. Neutral, opaque surfaces: the chrome
-  (topbar and sidebar) sits on --background, the working area on --canvas, and
-  cards are raised blocks with a lit top edge and a short bottom edge. Only
-  layers that float over content (menus, the phone tab bar, sticky bars) are
-  glass, after macOS 27: see .glass-strong. The
-  accent comes from the user's theme (see lib/theme.ts) and only ever colours
-  selection, primary actions, focus and progress. Green, blue and red stay
-  reserved for semantic state and never follow the accent.
+  The Household design system. docs/design-system/DESIGN.md is normative; the
+  values below are docs/design-system/tokens.css transcribed 1:1, with dark mode
+  on the .dark class that next-themes sets.
+
+  Flat first, glass on chrome: content (cards, lists, inputs, buttons, sidebar)
+  is flat with no shadow. Only the toolbar band and floating layers (menus,
+  toasts, dialogs, the phone tab bar) are Liquid Glass. brand-500 is the only
+  brand colour; text on it is always on-brand.
+
+  Tailwind's default palette, radii and text sizes are cleared on purpose, so a
+  class that is not part of the system does not compile to anything.
 */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-inter);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-figtree), system-ui, sans-serif;
+
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-brand-100: var(--brand-100);
+  --color-brand-300: var(--brand-300);
+  --color-brand-500: var(--brand-500);
+  --color-brand-700: var(--brand-700);
+  --color-brand-900: var(--brand-900);
+  --color-green-100: var(--green-100);
+  --color-green-300: var(--green-300);
+  --color-green-500: var(--green-500);
+  --color-green-700: var(--green-700);
+  --color-green-900: var(--green-900);
+  --color-red-100: var(--red-100);
+  --color-red-300: var(--red-300);
+  --color-red-500: var(--red-500);
+  --color-red-700: var(--red-700);
+  --color-red-900: var(--red-900);
+  --color-yellow-100: var(--yellow-100);
+  --color-yellow-300: var(--yellow-300);
+  --color-yellow-500: var(--yellow-500);
+  --color-yellow-700: var(--yellow-700);
+  --color-yellow-900: var(--yellow-900);
+  --color-blue-100: var(--blue-100);
+  --color-blue-300: var(--blue-300);
+  --color-blue-500: var(--blue-500);
+  --color-blue-700: var(--blue-700);
+  --color-blue-900: var(--blue-900);
+  --color-purple-100: var(--purple-100);
+  --color-purple-300: var(--purple-300);
+  --color-purple-500: var(--purple-500);
+  --color-purple-700: var(--purple-700);
+  --color-purple-900: var(--purple-900);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sidebar: var(--sidebar-bg);
   --color-fill: var(--fill);
-  --color-fill-2: var(--fill-2);
-  --color-fill-3: var(--fill-3);
-  --color-hairline: var(--hairline);
-  --color-glass-panel: var(--glass-panel);
-  --color-canvas: var(--canvas);
+  --color-fill-strong: var(--fill-strong);
   --color-separator: var(--separator);
-  --color-positive: var(--sys-green);
-  --color-warning: var(--sys-orange);
-  --color-sys-blue: var(--sys-blue);
-  --color-sys-green: var(--sys-green);
-  --color-sys-orange: var(--sys-orange);
-  --color-sys-red: var(--sys-red);
-  --color-sys-indigo: var(--sys-indigo);
-  --color-sys-purple: var(--sys-purple);
-  --color-sys-pink: var(--sys-pink);
-  --color-sys-teal: var(--sys-teal);
-  --color-sys-brown: var(--sys-brown);
-  --color-sys-gray: var(--sys-gray);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-border: var(--border);
+  --color-label: var(--label);
+  --color-label-secondary: var(--label-secondary);
+  --color-label-disabled: var(--label-disabled);
+  --color-on-brand: var(--on-brand);
+  --color-link: var(--link);
+  --color-success-text: var(--success-text);
+  --color-danger-text: var(--danger-text);
+  --color-segment-selected: var(--segment-selected);
+  --color-focus-ring: var(--focus-ring);
+  --color-toolbar-fill: var(--toolbar-fill);
+
+  --radius-*: initial;
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+
+  /* Type styles. `text-kpi` is the 32px bold KPI number from the KpiCard spec. */
+  --text-*: initial;
+  --text-large-title: 34px;
+  --text-large-title--line-height: 41px;
+  --text-large-title--font-weight: 700;
+  --text-large-title--letter-spacing: -0.03em;
+  --text-kpi: 32px;
+  --text-kpi--line-height: 38px;
+  --text-kpi--font-weight: 700;
+  --text-kpi--letter-spacing: -0.03em;
+  --text-title-1: 28px;
+  --text-title-1--line-height: 34px;
+  --text-title-1--font-weight: 700;
+  --text-title-1--letter-spacing: -0.02em;
+  --text-title-2: 22px;
+  --text-title-2--line-height: 28px;
+  --text-title-2--font-weight: 700;
+  --text-title-2--letter-spacing: -0.02em;
+  --text-title-3: 20px;
+  --text-title-3--line-height: 25px;
+  --text-title-3--font-weight: 600;
+  --text-headline: 17px;
+  --text-headline--line-height: 22px;
+  --text-headline--font-weight: 600;
+  --text-body: 15px;
+  --text-body--line-height: 21px;
+  --text-callout: 14px;
+  --text-callout--line-height: 20px;
+  --text-footnote: 13px;
+  --text-footnote--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 600;
 }
 
 :root {
-  /* Set from the Settings page; see lib/appearance.ts. These are the defaults. */
-  --glass-opacity: 0.62;
-  --contrast: 1;
-  --motion-panel: 225ms;
+  /* Brand + status scales (same in both themes) */
+  --brand-100: #ffe9d9; --brand-300: #ffb27f; --brand-500: #ff6a00; --brand-700: #b34a00; --brand-900: #5c2600;
+  --green-100: #dcf5e8; --green-300: #7fd9ab; --green-500: #16b566; --green-700: #0c7a43; --green-900: #06401f;
+  --red-100: #fde0e4; --red-300: #f78b9a; --red-500: #f02744; --red-700: #b3182f; --red-900: #5c0c18;
+  --yellow-100: #faefd2; --yellow-300: #eec766; --yellow-500: #e0a30c; --yellow-700: #8a6200; --yellow-900: #473300;
+  --blue-100: #dcebfc; --blue-300: #86b9f2; --blue-500: #1f7fe6; --blue-700: #154c8a; --blue-900: #0b2a4d;
+  --purple-100: #ece8ff; --purple-300: #c2b5ff; --purple-500: #8f76ff; --purple-700: #3d2fa3; --purple-900: #221a5c;
 
-  --glass: rgb(var(--glass-rgb) / var(--glass-opacity));
-  --glass-panel: rgb(var(--glass-panel-rgb) / calc(var(--glass-opacity) * 0.92));
+  /* Semantic */
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --sidebar-bg: #f5f5f7;
+  --fill: #f0f0f2;
+  --fill-strong: #e5e5ea;
+  --separator: #e5e5ea;
+  --border: #d2d2d7;
+  --label: #1d1d1f;
+  --label-secondary: #6e6e73;
+  --label-disabled: #aeaeb2;
+  --on-brand: #1d1d1f;
+  --link: #b34a00;
+  --success-text: #0c7a43;
+  --danger-text: #b3182f;
+  --segment-selected: #ffffff;
+  --focus-ring: #b34a00;
 
-  --radius: 0.75rem;
-  --background: #f8f8f8;
-  --canvas: #ebebeb;
-  /* Card depth: a white inner top edge, a short dense bottom edge, a diffuse shadow. */
-  --card-edge: #ffffff;
-  --card-foot: rgb(208 208 215 / 0.4);
-  --card-shadow: 0 5px 9px rgb(0 0 0 / 0.02);
-  --foreground: #1d1d1f;
-  --card: #f8f8f8;
-  --card-foreground: #1d1d1f;
-  --popover: #ffffff;
-  --popover-foreground: #1d1d1f;
-  --primary: #ff6a00;
-  --primary-foreground: #ffffff;
-  --secondary: #e5e5ea;
-  --secondary-foreground: #1d1d1f;
-  --muted: #e5e5ea;
-  --muted-foreground: rgb(60 60 67 / 0.6);
-  --accent: rgb(118 118 128 / 0.12);
-  --accent-foreground: #1d1d1f;
-  --destructive: #ff3b30;
-  --border: rgb(0 0 0 / calc(0.12 * var(--contrast)));
-  --input: #ffffff;
-  --ring: #ff6a00;
-  --chart-1: #007aff;
-  --chart-2: #34c759;
-  --chart-3: #ff9500;
-  --chart-4: #af52de;
-  --chart-5: #30b0c7;
-  --sidebar: #f8f8f8;
-  --sidebar-foreground: #1d1d1f;
-  --sidebar-primary: #ff6a00;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: color-mix(in srgb, var(--primary) 13%, var(--background));
-  --sidebar-accent-foreground: #1d1d1f;
-  --sidebar-border: rgb(0 0 0 / 0.08);
-  --sidebar-ring: #ff6a00;
-  --separator: rgb(0 0 0 / calc(0.1 * var(--contrast)));
-  --hairline: rgb(0 0 0 / calc(0.12 * var(--contrast)));
-  --fill: rgb(120 120 128 / 0.2);
-  --fill-2: rgb(120 120 128 / 0.16);
-  --fill-3: rgb(118 118 128 / 0.12);
-  --glass-rgb: 248 248 248;
-  --glass-panel-rgb: 248 248 248;
-  /* Glass: the light line along the top edge, the darkened rim, the short lift. */
-  --glass-edge: rgb(255 255 255 / 0.9);
-  --glass-rim: rgb(0 0 0 / calc(0.16 * var(--contrast)));
-  --glass-lift: rgb(0 0 0 / 0.05);
-  --sys-blue: #007aff;
-  --sys-green: #34c759;
-  --sys-orange: #ff9500;
-  --sys-red: #ff3b30;
-  --sys-indigo: #5856d6;
-  --sys-purple: #af52de;
-  --sys-pink: #ff2d55;
-  --sys-teal: #30b0c7;
-  --sys-brown: #a2845e;
-  --sys-gray: #8e8e93;
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(0, 0, 0, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.5);
+  --toolbar-bg: rgba(245, 245, 247, 0.72);
+  /* Controls inside the frosted toolbar sit on this fill (DESIGN.md, Toolbar). */
+  --toolbar-fill: rgba(0, 0, 0, 0.05);
+  --shadow-glass: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 16px 48px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --glass-blur: 22px;
+  --toolbar-blur: 20px;
+  /* Alpha of brand-500 for chart bars that are not highlighted. */
+  --track-tint: 0.25;
+  color-scheme: light;
 }
 
 .dark {
-  --background: #1c1c1e;
-  --canvas: #161617;
-  --card-edge: rgb(255 255 255 / 0.07);
-  --card-foot: rgb(0 0 0 / 0.45);
-  --card-shadow: 0 5px 9px rgb(0 0 0 / 0.22);
-  --foreground: #f5f5f7;
-  --card: #242426;
-  --card-foreground: #f5f5f7;
-  --popover: #2c2c2e;
-  --popover-foreground: #f5f5f7;
-  --primary: #ff7d1f;
-  --primary-foreground: #ffffff;
-  --secondary: #3a3a3c;
-  --secondary-foreground: #f5f5f7;
-  --muted: #3a3a3c;
-  --muted-foreground: rgb(235 235 245 / 0.6);
-  --accent: rgb(118 118 128 / 0.24);
-  --accent-foreground: #f5f5f7;
-  --destructive: #ff453a;
-  --border: rgb(255 255 255 / calc(0.12 * var(--contrast)));
-  --input: rgb(255 255 255 / 0.06);
-  --ring: #ff7d1f;
-  --chart-1: #0a84ff;
-  --chart-2: #30d158;
-  --chart-3: #ff9f0a;
-  --chart-4: #bf5af2;
-  --chart-5: #40c8e0;
-  --sidebar: #1c1c1e;
-  --sidebar-foreground: #f5f5f7;
-  --sidebar-primary: #ff7d1f;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: color-mix(in srgb, var(--primary) 22%, var(--background));
-  --sidebar-accent-foreground: #f5f5f7;
-  --sidebar-border: rgb(255 255 255 / 0.1);
-  --sidebar-ring: #ff7d1f;
-  --separator: rgb(255 255 255 / calc(0.1 * var(--contrast)));
-  --hairline: rgb(255 255 255 / calc(0.12 * var(--contrast)));
-  --fill: rgb(120 120 128 / 0.36);
-  --fill-2: rgb(120 120 128 / 0.32);
-  --fill-3: rgb(118 118 128 / 0.24);
-  --glass-rgb: 28 28 30;
-  --glass-panel-rgb: 36 36 38;
-  --glass-edge: rgb(255 255 255 / 0.3);
-  --glass-rim: rgb(0 0 0 / calc(0.55 * var(--contrast)));
-  --glass-lift: rgb(0 0 0 / 0.3);
-  --sys-blue: #0a84ff;
-  --sys-green: #30d158;
-  --sys-orange: #ff9f0a;
-  --sys-red: #ff453a;
-  --sys-indigo: #5e5ce6;
-  --sys-purple: #bf5af2;
-  --sys-pink: #ff375f;
-  --sys-teal: #40c8e0;
-  --sys-brown: #ac8e68;
-  --sys-gray: #8e8e93;
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --sidebar-bg: #161617;
+  --fill: #2c2c2e;
+  --fill-strong: #2c2c2e;
+  --separator: #2c2c2e;
+  --border: #3a3a3c;
+  --label: #f5f5f7;
+  --label-secondary: #98989d;
+  --label-disabled: #636366;
+  --on-brand: #1d1d1f;
+  --link: #ff9a4d;
+  --success-text: #4ade80;
+  --danger-text: #ff7a8a;
+  --segment-selected: #636366;
+  --focus-ring: #ff9a4d;
+  --glass-bg: rgba(44, 44, 46, 0.55);
+  --glass-border: rgba(0, 0, 0, 0.6);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --toolbar-bg: rgba(18, 18, 20, 0.72);
+  --toolbar-fill: rgba(255, 255, 255, 0.08);
+  --shadow-glass: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --track-tint: 0.32;
+  color-scheme: dark;
 }
-
-/* Accent themes (user setting). Every theme sets light and dark so the
-   attribute wins regardless of rule order. Ids match lib/theme.ts. */
-[data-theme="mandarine"] { --primary: #ff6a00; --ring: #ff6a00; --sidebar-primary: #ff6a00; --sidebar-ring: #ff6a00; }
-.dark[data-theme="mandarine"] { --primary: #ff7d1f; --ring: #ff7d1f; --sidebar-primary: #ff7d1f; --sidebar-ring: #ff7d1f; }
-[data-theme="lagune"] { --primary: #008d94; --ring: #008d94; --sidebar-primary: #008d94; --sidebar-ring: #008d94; }
-.dark[data-theme="lagune"] { --primary: #3ebfc6; --ring: #3ebfc6; --sidebar-primary: #3ebfc6; --sidebar-ring: #3ebfc6; }
-[data-theme="ozean"] { --primary: #007aff; --ring: #007aff; --sidebar-primary: #007aff; --sidebar-ring: #007aff; }
-.dark[data-theme="ozean"] { --primary: #0a84ff; --ring: #0a84ff; --sidebar-primary: #0a84ff; --sidebar-ring: #0a84ff; }
-[data-theme="farn"] { --primary: #2a904b; --ring: #2a904b; --sidebar-primary: #2a904b; --sidebar-ring: #2a904b; }
-.dark[data-theme="farn"] { --primary: #5ac576; --ring: #5ac576; --sidebar-primary: #5ac576; --sidebar-ring: #5ac576; }
-[data-theme="heidelbeere"] { --primary: #5856d6; --ring: #5856d6; --sidebar-primary: #5856d6; --sidebar-ring: #5856d6; }
-.dark[data-theme="heidelbeere"] { --primary: #7d7aff; --ring: #7d7aff; --sidebar-primary: #7d7aff; --sidebar-ring: #7d7aff; }
-[data-theme="himbeere"] { --primary: #da3870; --ring: #da3870; --sidebar-primary: #da3870; --sidebar-ring: #da3870; }
-.dark[data-theme="himbeere"] { --primary: #fd6c95; --ring: #fd6c95; --sidebar-primary: #fd6c95; --sidebar-ring: #fd6c95; }
-[data-theme="graphit"] { --primary: #1d1d1f; --ring: #1d1d1f; --sidebar-primary: #1d1d1f; --sidebar-ring: #1d1d1f; }
-.dark[data-theme="graphit"] { --primary: #f5f5f7; --primary-foreground: #1d1d1f; --ring: #f5f5f7; --sidebar-primary: #f5f5f7; --sidebar-ring: #f5f5f7; }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   html {
     @apply h-full font-sans;
   }
   body {
-    /* The chrome colour. The working area paints itself with --canvas; there is
-       no page-wide wash, because only floating layers are translucent. */
-    @apply bg-background text-foreground;
-    font-size: 13px;
-    line-height: 1.35;
-    font-feature-settings: "cv11", "ss01", "ss03", "tnum";
+    @apply bg-bg text-callout text-label;
     -webkit-font-smoothing: antialiased;
+  }
+  /* 2px focus ring, offset 2px, on every focusable control. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  /* Line icons: 1.8 stroke on the 24px grid. Controls that draw them at 16px set 2. */
+  svg.tabler-icon {
+    stroke-width: 1.8;
   }
 }
 
-/*
-  Component surfaces. Kept as CSS because the edges, feet and inner light lines
-  are easier to read here than as twenty utility classes.
-*/
 @layer components {
-  /* A card: a built block on the working area. Lit top edge, short dense foot,
-     weak diffuse shadow. Cards are not nested inside other cards. */
-  .surface-group {
-    background: var(--card);
-    border-radius: 14px;
-    box-shadow:
-      inset 0 0 0 1px var(--card-edge),
-      0 0 0 1px var(--hairline),
-      0 3px 0 var(--card-foot),
-      var(--card-shadow);
+  /*
+    Liquid Glass for floating layers: context menus, toasts, notifications,
+    popovers, dialogs and the phone tab bar. Never on content.
+  */
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
   }
 
-  /* Rows inside a group are separated by hairlines. */
+  /* The one uniform frosted band across the top of the content area. */
+  .toolbar-band {
+    background: var(--toolbar-bg);
+    -webkit-backdrop-filter: blur(var(--toolbar-blur)) saturate(180%);
+    backdrop-filter: blur(var(--toolbar-blur)) saturate(180%);
+    border-bottom: 1px solid var(--separator);
+  }
+
+  /* Hairlines between rows of a list card. */
   .hairline-rows > * + * {
     border-top: 1px solid var(--separator);
   }
 
-  /* Chrome: topbar and sidebar. Opaque, no blur. Glass is only for what floats over content. */
-  .glass {
-    background: var(--background);
-  }
-
-  /*
-    Liquid Glass after macOS 27: a thin sheet for anything that floats over
-    content (menus, the phone tab bar, widget-board overlays). A deep blur calms
-    busy content behind it, a 0.5px darkened rim separates it from what it
-    covers, one light line runs along the top edge, and the lift is short.
-    Depth comes from the edges, not from thickness. --glass follows the
-    translucency setting on the Settings page.
-  */
-  .glass-strong {
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6);
-    backdrop-filter: blur(24px) saturate(1.6);
-    border-radius: 14px;
-    box-shadow:
-      inset 0 0.5px 0 var(--glass-edge),
-      0 0 0 0.5px var(--glass-rim),
-      0 1px 1px var(--glass-lift),
-      0 6px 18px var(--glass-lift);
-  }
-
-  /* A sticky bar across the top of a scrolling panel: the same glass, flush, rim along the bottom only. */
-  .glass-bar {
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(24px) saturate(1.6);
-    backdrop-filter: blur(24px) saturate(1.6);
-    box-shadow: 0 0.5px 0 var(--glass-rim);
-  }
-
-  /*
-    Push buttons after the macOS 27 kit: flat fills with no outline, shadow or
-    light edge. The geometry stays: 36px tall, 12px radius, 600 weight. The plain
-    button is a gray from the fill scale, one step deeper on hover and when
-    pressed. The default button is the flat accent, darker when pressed in light
-    mode and lighter in dark mode.
-  */
-  .push {
-    color: var(--foreground);
-    background: var(--fill-3);
-  }
-  .push:not(:disabled):hover { background: var(--fill-2); }
-  .push:not(:disabled):active { background: var(--fill); transform: scale(0.97); }
-
-  /* Repeats the state selectors so the accent outranks the gray fills above. */
-  .push.push-default,
-  .push.push-default:not(:disabled):hover,
-  .push.push-default:not(:disabled):active {
-    color: var(--primary-foreground);
-    background: var(--primary);
-  }
-  .push.push-default:not(:disabled):hover { filter: brightness(1.05); }
-  .push.push-default:not(:disabled):active { filter: brightness(0.9); }
-  .dark .push.push-default:not(:disabled):active { filter: brightness(1.15); }
-
-  /* Segmented control after macOS 27: a recessed track and a flat thumb. The
-     thumb has no shadow; the recess gives it the contrast. */
-  .seg {
-    background: rgb(0 0 0 / 0.06);
-    box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.08);
-    border-radius: 10px;
-    padding: 2px;
-  }
-  .dark .seg {
-    background: rgb(0 0 0 / 0.25);
-    box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.4);
-  }
-  .seg-on {
-    background: rgb(255 255 255 / 0.92);
-    border-radius: 8px;
-    font-weight: 600;
-  }
-  .dark .seg-on {
-    background: rgb(255 255 255 / 0.16);
-  }
-  /* The Segmented thumb sliding to a new selection. Finite, triggered by the change. */
-  .seg-slide {
-    transition: transform var(--motion-panel) cubic-bezier(0.3, 0.7, 0.2, 1);
-  }
-
-  /* Small accent-tinted icon tile. Semantic variants override the background. */
-  .icon-tile {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    color: var(--primary);
-    background: color-mix(in srgb, var(--primary) 12%, var(--card));
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
   /* Finite entrance for freshly mounted screens. */
   .rise {
-    animation: rise var(--motion-panel) ease-out both;
+    animation: rise 200ms ease-out both;
   }
   @keyframes rise {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: none; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    .rise { animation: none; }
-    .seg-slide { transition: none; }
-    .push:not(:disabled):active { transform: none; }
-  }
+}
+
+/* Flat fallback: without backdrop-filter or with reduced transparency, glass
+   becomes surface + border and the toolbar a solid band. A complete variant. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background: var(--surface); border-color: var(--border); box-shadow: none; }
+  .glass.toast { background: var(--label); border-color: transparent; color: var(--bg); }
+  .toolbar-band { background: var(--bg); --toolbar-fill: var(--fill-strong); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--border); box-shadow: none; }
+  /* The toast's flat variant is a solid inverse pill. */
+  .glass.toast { background: var(--label); border-color: transparent; color: var(--bg); }
+  .toolbar-band { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; --toolbar-fill: var(--fill-strong); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: none; }
 }

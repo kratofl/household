@@ -31,13 +31,13 @@ export function AccountPanel(props: {
       <SettingsSection title={props.t("account.passwordTitle")} description={props.t("account.passwordDescription")}>
         <SettingsBlock>
           <form
-            className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+            className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
             onSubmit={(event) => {
               event.preventDefault()
               void props.changePassword()
             }}
           >
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="account-current-password">{props.t("account.currentPassword")}</Label>
               <Input
                 id="account-current-password"
@@ -47,7 +47,7 @@ export function AccountPanel(props: {
                 onChange={(event) => props.setCurrentPassword(event.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="account-new-password">{props.t("account.newPassword")}</Label>
               <Input
                 id="account-new-password"

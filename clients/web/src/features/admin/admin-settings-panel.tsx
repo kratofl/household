@@ -1,15 +1,15 @@
 "use client"
 
-import { IconCloudDownload, IconRefresh, IconSettings } from "@tabler/icons-react"
+import { IconCloudDownload, IconRefresh } from "@tabler/icons-react"
 import type { Locale, Translator } from "@/lib/i18n"
-import { Badge } from "@/components/ui/badge"
+import { Badge, StatusDot } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { SettingsRow, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
+import { SettingsBlock, SettingsRow, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
+import { ToolbarContent } from "@/components/app/toolbar"
 import { Switch } from "@/components/ui/switch"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
 
-import { moduleIcons } from "@/components/app/sidebar"
 import type { AuditEvent, UpdateCandidate, UpdateStatus } from "@/features/admin/types"
 import type { CurrentUser } from "@/lib/session"
 
@@ -31,12 +31,15 @@ export function AdminSettingsPanel(props: {
 }) {
   if (props.currentUser.role !== "admin") {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{props.t("admin.forbiddenTitle")}</CardTitle>
-          <CardDescription>{props.t("admin.forbiddenDescription")}</CardDescription>
-        </CardHeader>
-      </Card>
+      <>
+        <ToolbarContent title={props.t("admin.title")} />
+        <Card>
+          <CardHeader>
+            <CardTitle>{props.t("admin.forbiddenTitle")}</CardTitle>
+            <CardDescription>{props.t("admin.forbiddenDescription")}</CardDescription>
+          </CardHeader>
+        </Card>
+      </>
     )
   }
 
@@ -48,33 +51,25 @@ export function AdminSettingsPanel(props: {
   return (
     <SettingsSurface title={props.t("admin.title")} description={props.t("admin.description")}>
       <SettingsSection title={props.t("services.title")} description={props.t("services.description")}>
-        <div className="rounded-md border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">
-          {props.t("services.catalogHint")}
-        </div>
-        <div className="space-y-3">
-          {props.modules.map((module) => {
-            const Icon = moduleIcons[module.key as keyof typeof moduleIcons] ?? IconSettings
-            return (
-              <SettingsRow
-                key={module.id}
-                title={moduleName(module, props.locale)}
-                description={`${moduleDescription(module, props.locale)} - ${
-                  module.enabled ? props.t("services.available") : props.t("services.unavailable")
-                }`}
-              >
-                <Icon className="size-4 text-muted-foreground" />
-                <Switch
-                  checked={module.enabled && module.active}
-                  disabled={!module.enabled}
-                  onCheckedChange={(checked) => props.toggleModule(module, checked)}
-                  aria-label={props.t("services.switchLabel", {
-                    name: moduleName(module, props.locale),
-                  })}
-                />
-              </SettingsRow>
-            )
-          })}
-        </div>
+        <SettingsBlock className="text-footnote text-label-secondary">{props.t("services.catalogHint")}</SettingsBlock>
+        {props.modules.map((module) => (
+          <SettingsRow
+            key={module.id}
+            title={moduleName(module, props.locale)}
+            description={`${moduleDescription(module, props.locale)} · ${
+              module.enabled ? props.t("services.available") : props.t("services.unavailable")
+            }`}
+          >
+            <Switch
+              checked={module.enabled && module.active}
+              disabled={!module.enabled}
+              onCheckedChange={(checked) => props.toggleModule(module, checked)}
+              aria-label={props.t("services.switchLabel", {
+                name: moduleName(module, props.locale),
+              })}
+            />
+          </SettingsRow>
+        ))}
       </SettingsSection>
 
       <SettingsSection title={props.t("updates.title")} description={props.t("updates.description")}>
@@ -84,74 +79,63 @@ export function AdminSettingsPanel(props: {
             props.updateStatus?.message ? ` (${props.updateStatus.message})` : ""
           }`}
         >
-          <Button variant="outline" onClick={props.checkUpdates}>
-            <IconRefresh className="size-4" />
+          <Button variant="secondary" size="sm" onClick={props.checkUpdates}>
+            <IconRefresh />
             {props.t("updates.check")}
           </Button>
         </SettingsRow>
-        <div className="grid gap-3 md:grid-cols-2">
-          {updateEntries.map(([channel, candidate]) => (
-            <div key={channel} className="rounded-md border bg-card p-4">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="font-medium">
-                  {channel === "stable" ? props.t("updates.stable") : props.t("updates.unstable")}
-                </h3>
-                <Badge variant={channel === "stable" ? "default" : "secondary"}>
-                  {candidate?.version ?? props.t("updates.noRelease")}
-                </Badge>
-              </div>
-              <p className="mb-4 text-sm text-muted-foreground">
-                {candidate?.name || candidate?.releaseNotes || props.t("updates.notChecked")}
-              </p>
-              <Button
-                className="w-full"
-                disabled={!candidate || props.updateStatus?.state === "running"}
-                onClick={() => candidate && props.startUpdate(candidate)}
-              >
-                <IconCloudDownload className="size-4" />
-                {props.t("updates.install")}
-              </Button>
-            </div>
-          ))}
-        </div>
+        {updateEntries.map(([channel, candidate]) => (
+          <SettingsRow
+            key={channel}
+            title={channel === "stable" ? props.t("updates.stable") : props.t("updates.unstable")}
+            description={candidate?.name || candidate?.releaseNotes || props.t("updates.notChecked")}
+          >
+            <Badge tone={candidate ? (channel === "stable" ? "green" : "yellow") : "neutral"}>
+              {candidate?.version ?? props.t("updates.noRelease")}
+            </Badge>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!candidate || props.updateStatus?.state === "running"}
+              onClick={() => candidate && props.startUpdate(candidate)}
+            >
+              <IconCloudDownload />
+              {props.t("updates.install")}
+            </Button>
+          </SettingsRow>
+        ))}
       </SettingsSection>
 
       <SettingsSection
         title={props.t("audit.title")}
         description={props.t("audit.description")}
         aside={
-          <Button variant="outline" onClick={() => props.loadAuditEvents()}>
-            <IconRefresh className="size-4" />
+          <Button variant="secondary" size="sm" onClick={() => props.loadAuditEvents()}>
+            <IconRefresh />
             {props.t("audit.load")}
           </Button>
         }
       >
-        <div className="space-y-2">
-          {props.auditEvents.length === 0 ? (
-            <p className="rounded-md border border-dashed bg-muted/20 p-6 text-sm text-muted-foreground">
-              {props.t("audit.empty")}
-            </p>
-          ) : (
-            props.auditEvents.map((event) => (
-              <div key={event.id} className="rounded-md border bg-card p-4 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">{event.action}</span>
-                  <Badge variant={event.outcome === "success" ? "default" : "destructive"}>
-                    {event.outcome}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {event.module} -{" "}
-                  {new Date(event.occurredAt).toLocaleString(props.locale === "de" ? "de-DE" : "en-US")} -{" "}
+        {props.auditEvents.length === 0 ? (
+          <SettingsBlock className="text-label-secondary">{props.t("audit.empty")}</SettingsBlock>
+        ) : (
+          props.auditEvents.map((event) => (
+            <div key={event.id} className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
+              <div className="min-w-0">
+                <p className="font-medium">{event.action}</p>
+                <p className="text-footnote text-label-secondary">
+                  {event.module} ·{" "}
+                  {new Date(event.occurredAt).toLocaleString(props.locale === "de" ? "de-DE" : "en-US")} ·{" "}
                   {event.actorRole || props.t("audit.systemActor")}
                 </p>
-                {event.errorCode ? (
-                  <p className="mt-1 text-xs text-destructive">{event.errorCode}</p>
-                ) : null}
+                {event.errorCode ? <p className="text-footnote text-danger-text">{event.errorCode}</p> : null}
               </div>
-            ))
-          )}
-        </div>
+              <StatusDot status={event.outcome === "success" ? "green" : "red"} className="text-footnote">
+                {event.outcome}
+              </StatusDot>
+            </div>
+          ))
+        )}
       </SettingsSection>
     </SettingsSurface>
   )

@@ -11,5 +11,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Dashboard subnavigation belongs in the sidebar as proper nested dashboard navigation. Do not add slice subnavigation as loose page-level button rows or content tabs unless explicitly requested.
 - Do not render an "Active slices" section/card/list in the main UI. Active modules decide visibility and navigation only.
 - Do not duplicate Account and Admin Settings as competing controls in both header and sidebar. Keep a single clear navigation model.
-- Use a readable primary app font. Avoid decorative serif/display fonts as the global UI font.
+- Styling follows `docs/design-system/DESIGN.md`: tokens and type styles (`text-callout`, `bg-surface`, `text-label-secondary`, …) from `src/app/globals.css`, tints from `src/lib/tone.ts`. Page titles and actions go into the toolbar through `PageHeader`; confirmations are toasts via `useToast()`.
 - Account and Admin Settings must use the same dashboard/settings visual language as the rest of the app; avoid temporary-looking card piles.

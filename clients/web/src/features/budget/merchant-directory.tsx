@@ -7,11 +7,12 @@
 import { useMemo, useState } from "react"
 
 import { Block, Group } from "@/components/app/grouped"
+import { SearchInput } from "@/components/app/search-input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 
 import { MerchantTile } from "./merchant-tile"
@@ -78,25 +79,25 @@ export function MerchantDirectory({
       {editable.length > 8 ? (
         <Block>
           <Label htmlFor="merchant-search" className="sr-only">{copy.search}</Label>
-          <Input id="merchant-search" type="search" placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
+          <SearchInput id="merchant-search" placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
         </Block>
       ) : null}
 
       {shown.map((merchant) => (
-        <div key={merchant.id} className={cn("flex flex-wrap items-center gap-2 px-3 py-2", merchant.archived && "text-muted-foreground")}>
+        <div key={merchant.id} className={cn("flex min-h-12 flex-wrap items-center gap-3 px-4 py-2", merchant.archived && "text-label-secondary")}>
           <MerchantTile merchant={merchant} />
           <span className="min-w-0 flex-1 truncate">{merchant.name}</span>
-          {merchant.catalog ? <Badge variant="secondary">{copy.published}</Badge> : null}
-          {merchant.archived ? <Badge variant="secondary">{copy.archived}</Badge> : null}
-          <Button size="xs" variant="outline" disabled={busy} onClick={() => { setEditing(merchant); setName(merchant.name) }}>
+          {merchant.catalog ? <Badge tone="blue">{copy.published}</Badge> : null}
+          {merchant.archived ? <Badge>{copy.archived}</Badge> : null}
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setEditing(merchant); setName(merchant.name) }}>
             {copy.rename}
           </Button>
-          <Button size="xs" variant="outline" disabled={busy} onClick={() => save(merchant.name, { id: merchant.id, archived: !merchant.archived })}>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => save(merchant.name, { id: merchant.id, archived: !merchant.archived })}>
             {merchant.archived ? copy.restore : copy.archive}
           </Button>
         </div>
       ))}
-      {shown.length === 0 ? <Block className="text-muted-foreground">{copy.emptyMerchants}</Block> : null}
+      {shown.length === 0 ? <Block className="text-label-secondary">{copy.emptyMerchants}</Block> : null}
 
       <Block className="flex flex-wrap items-center gap-2">
         <Label htmlFor="merchant-name" className="sr-only">{copy.merchantName}</Label>
@@ -111,15 +112,15 @@ export function MerchantDirectory({
         />
         {isAdmin && !editing ? (
           <div className="flex items-center gap-2">
-            <Switch id="merchant-publish" checked={publish} onCheckedChange={setPublish} />
-            <Label htmlFor="merchant-publish" className="text-[13px] font-normal">{copy.publishMerchant}</Label>
+            <Checkbox id="merchant-publish" checked={publish} onCheckedChange={(checked) => setPublish(checked === true)} />
+            <Label htmlFor="merchant-publish" className="text-callout font-normal">{copy.publishMerchant}</Label>
           </div>
         ) : null}
-        <Button variant="outline" disabled={busy || !name.trim()} onClick={submit}>
+        <Button variant="secondary" disabled={busy || !name.trim()} onClick={submit}>
           {editing ? copy.rename : copy.addMerchant}
         </Button>
         {editing ? (
-          <Button variant="ghost" onClick={() => { setName(""); setEditing(null) }}>{copy.cancel}</Button>
+          <Button variant="text" onClick={() => { setName(""); setEditing(null) }}>{copy.cancel}</Button>
         ) : null}
       </Block>
     </Group>

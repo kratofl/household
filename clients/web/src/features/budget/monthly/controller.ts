@@ -49,14 +49,14 @@ function daysBetween(from: string, to: string) {
 }
 
 type Resource = { status: "loading" } | { status: "failed"; message: string } | { status: "ready"; data: MonthlyState }
-export function useMonthlyBudget(accessToken: string | undefined, locale: Locale) {
+/** `notify` receives the confirmation after a successful change, for a toast. */
+export function useMonthlyBudget(accessToken: string | undefined, locale: Locale, notify?: (message: string) => void) {
   const copy = monthlyCopy(locale)
   const [resource, setResource] = useState<Resource>({ status: "loading" })
   const [reload, setReload] = useState(0)
   const [selectedDate, setSelectedDate] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   useEffect(() => {
     let active = true
     if (!accessToken) return
@@ -86,17 +86,17 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
   }, [accessToken])
   const run = useCallback(async (action: () => Promise<unknown>) => {
     if (busy || !accessToken) return false
-    setBusy(true); setError(null); setMessage(null)
+    setBusy(true); setError(null)
     try {
       await action()
       setResource({ status: "ready", data: await loadMonthlyBudget(accessToken, selectedDate || undefined) })
-      setMessage(copy.saved)
+      notify?.(copy.saved)
       return true
     } catch (reason: unknown) {
       setError(monthlyError(reason, copy))
       return false
     } finally { setBusy(false) }
-  }, [accessToken, busy, copy, selectedDate])
+  }, [accessToken, busy, copy, notify, selectedDate])
 
   const presentation = useMemo(() => {
     if (resource.status !== "ready") return null
@@ -128,6 +128,6 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
       contribution: fmt.money(state.summary?.savingsContributionCents ?? 0),
       deficit: fmt.money(state.summary?.deficitCarryoverCents ?? 0), shortfall: fmt.money(state.summary?.fundingShortfallCents ?? 0) }
   }, [resource, locale, selectedDate, copy, merchantById])
-  return { resource, presentation, copy, busy, error, message, run, selectedDate, setSelectedDate,
+  return { resource, presentation, copy, busy, error, run, selectedDate, setSelectedDate,
     merchants, merchantById, saveMerchant, retry: () => setReload(value => value + 1) }
 }

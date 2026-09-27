@@ -4,14 +4,13 @@
 
 import { apiRequest } from "@/lib/api"
 
-import { tileColor } from "./tile-colors"
 
 export type Merchant = {
   id: string
   name: string
   /** Names a logo file shipped under `public/merchants`. Null means the monogram is used. */
   logoKey: string | null
-  /** The brand's own colour as #RRGGBB. Null falls back to the hashed tile colour. */
+  /** The brand's own colour as #RRGGBB. Null falls back to the hashed tile tint. */
   color: string | null
   /** Catalog merchants are ours, so the user can pick them but not edit them. */
   catalog: boolean
@@ -45,15 +44,9 @@ export function monogram(name: string) {
   return letters.toLocaleUpperCase()
 }
 
-/** The brand colour where we ship one, otherwise the same stable hash categories use. */
-export function merchantColor(merchant: Merchant) {
-  return merchant.color ?? tileColor(merchant.name)
-}
-
 /**
- * Monogram ink for a tile. Brand colours run from Starbucks green to DHL yellow, so the
- * white that icon tiles use would vanish on the bright ones. Picks by WCAG relative
- * luminance; the hashed colours are all dark and keep their white.
+ * Monogram ink for a tile. Brand colours run from Starbucks green to DHL yellow, so a
+ * fixed white would vanish on the bright ones. Picks by WCAG relative luminance.
  */
 export function monogramInk(background: string) {
   const hex = /^#([0-9a-f]{6})$/i.exec(background)

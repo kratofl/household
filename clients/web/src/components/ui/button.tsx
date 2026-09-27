@@ -4,32 +4,35 @@ import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
-// Desktop push buttons. The normal button is 36px tall with a 12px radius and
-// semibold text; larger primary actions use `lg` (48px, 16px radius). The flat
-// fills and their hover and pressed tones live in globals.css (.push / .push-default).
+// Flat buttons after DESIGN.md: Primär (default), Sekundär, Umrandet (outline),
+// Text, Löschen (destructive), plus a borderless ghost for icon actions. Sizes S
+// 28px, M 40px, L 48px, XL 56px pill. Buttons never glow: no shadows at all.
+// Below lg every button is a pill and at least 44px tall, as mobile controls are.
+// One primary button per view; icon-only buttons need an aria-label.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-[background,filter,color,box-shadow,transform] outline-none select-none focus-visible:ring-4 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-50 aria-invalid:ring-2 aria-invalid:ring-destructive/30 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center gap-2 font-semibold whitespace-nowrap transition-[background-color,color,filter] select-none disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-2 [&_svg:not([class*='size-'])]:size-4 max-lg:rounded-full",
   {
     variants: {
       variant: {
-        default: "push push-default",
-        outline: "push",
-        secondary: "push",
-        ghost: "text-foreground hover:bg-accent aria-expanded:bg-accent",
-        destructive: "push text-destructive",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: "bg-brand-500 text-on-brand hover:brightness-95 active:brightness-90 disabled:bg-fill disabled:text-label-disabled",
+        secondary: "bg-fill text-label hover:bg-fill-strong disabled:text-label-disabled",
+        outline: "border border-border bg-surface font-medium text-label hover:bg-fill disabled:bg-fill disabled:text-label-disabled",
+        text: "bg-transparent text-link hover:underline disabled:text-label-disabled",
+        ghost: "bg-transparent text-label hover:bg-fill aria-expanded:bg-fill disabled:text-label-disabled",
+        destructive:
+          "bg-red-100 text-red-700 hover:brightness-95 dark:bg-red-500/20 dark:text-danger-text disabled:bg-fill disabled:text-label-disabled",
       },
       size: {
-        default: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-md px-1.5 text-[11px] [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1 rounded-[10px] px-2 text-[13px] [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-12 rounded-2xl px-4 text-base",
-        icon: "size-9",
-        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8 rounded-[10px] [&_svg:not([class*='size-'])]:size-3.5",
-        "icon-lg": "size-12 rounded-2xl",
+        sm: "h-7 rounded-sm px-3 text-[12px] [&_svg:not([class*='size-'])]:size-3.5 max-lg:min-h-11",
+        default: "h-10 rounded-md px-[18px] text-[14px] max-lg:min-h-11",
+        lg: "h-12 rounded-md px-[22px] text-[15px]",
+        xl: "h-14 rounded-full px-7 text-[17px]",
+        "icon-sm": "size-7 rounded-sm max-lg:size-11",
+        icon: "size-10 rounded-md max-lg:size-11",
+        "icon-lg": "size-12 rounded-md",
       },
     },
+    compoundVariants: [{ variant: "text", className: "px-3" }],
     defaultVariants: {
       variant: "default",
       size: "default",

@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react"
 import { IconPlus, IconX } from "@tabler/icons-react"
 
 import { FormSelect } from "@/components/app/form-select"
+import { KpiCard } from "@/components/app/kpi-card"
 import { Segmented } from "@/components/app/segmented"
 import { Block, FormRow, Group, Row } from "@/components/app/grouped"
 import { PageHeader } from "@/components/app/page-header"
+import { ToolbarButton } from "@/components/app/toolbar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -103,53 +105,51 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, isAdmin, m
   const months = Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-4">
       <PageHeader
         title={state.currentPlan ? copy.plan : copy.setupTitle}
         subtitle={state.currentPlan ? `${copy.effective} ${fmt.date(effectiveStart)}` : copy.setupNote}
         actions={
-          <>
-            {state.currentPlan ? (
-              <Segmented
-                ariaLabel={copy.appliesFrom}
-                value={scope}
-                options={[{ value: "next", label: copy.applyNext }, { value: "current", label: copy.applyCurrent }]}
-                onChange={setScope}
-              />
-            ) : null}
-            {!previewCurrent ? <p className="text-muted-foreground" role="status">{payload ? copy.loading : copy.invalid_input}</p> : null}
-            <Button onClick={() => void save()} disabled={busy || !payload || !previewCurrent || previewing}>
-              {!state.currentPlan ? copy.startPlan : scope === "current" ? copy.saveCurrentPlan : copy.savePlan}
-            </Button>
-          </>
+          <ToolbarButton
+            label={!state.currentPlan ? copy.startPlan : scope === "current" ? copy.saveCurrentPlan : copy.savePlan}
+            onClick={() => void save()}
+            disabled={busy || !payload || !previewCurrent || previewing}
+          />
         }
       />
-      {scope === "current" ? <p className="text-[11px] text-muted-foreground">{copy.applyCurrentNote}</p> : null}
+      {state.currentPlan ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Segmented
+            ariaLabel={copy.appliesFrom}
+            value={scope}
+            options={[{ value: "next", label: copy.applyNext }, { value: "current", label: copy.applyCurrent }]}
+            onChange={setScope}
+          />
+          {scope === "current" ? <p className="text-footnote text-label-secondary">{copy.applyCurrentNote}</p> : null}
+        </div>
+      ) : null}
+      {!previewCurrent ? <p className="text-footnote text-label-secondary" role="status">{payload ? copy.loading : copy.invalid_input}</p> : null}
 
       {state.nextPlan ? (
         <Alert>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
             {copy.pending}
-            <Button variant="outline" disabled={busy} onClick={() => { if (window.confirm(copy.confirmCancel)) void run(() => cancelMonthlyPlan(accessToken, state.revision)) }}>{copy.cancelPending}</Button>
+            <Button variant="secondary" size="sm" disabled={busy} onClick={() => { if (window.confirm(copy.confirmCancel)) void run(() => cancelMonthlyPlan(accessToken, state.revision)) }}>{copy.cancelPending}</Button>
           </AlertDescription>
         </Alert>
       ) : null}
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
 
       {state.currentPlan ? (
-        <section className="surface-group grid grid-cols-2 divide-x divide-separator">
-          <div className="p-4">
-            <p className="text-[11px] text-muted-foreground">{copy.plannedFun} · {copy.current}</p>
-            <p className="mt-1 text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{comparison.current}</p>
+        <div className="grid grid-cols-2 gap-4">
+          <KpiCard label={`${copy.plannedFun} · ${copy.current}`} value={comparison.current} />
+          <div aria-live="polite">
+            <KpiCard label={`${scope === "current" ? copy.current : copy.next} · ${comparison.effectiveDate}`} value={comparison.next ?? "…"} />
           </div>
-          <div className="p-4">
-            <p className="text-[11px] text-muted-foreground">{scope === "current" ? copy.current : copy.next} · {comparison.effectiveDate}</p>
-            <p className="mt-1 text-[22px] font-semibold leading-none tracking-[-0.02em] tabular-nums" aria-live="polite">{comparison.next ?? "…"}</p>
-          </div>
-        </section>
+        </div>
       ) : null}
 
-      <fieldset disabled={busy} className="space-y-7">
+      <fieldset disabled={busy} className="space-y-4">
         <Group title={copy.income}>
           <FormRow label={copy.income} htmlFor="plan-income"><MoneyInput id="plan-income" value={income} onChange={setIncome} /></FormRow>
           <FormRow label={copy.bufferRate} htmlFor="plan-buffer"><MoneyInput id="plan-buffer" value={buffer} onChange={setBuffer} /></FormRow>
@@ -160,42 +160,42 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, isAdmin, m
         {groups.map(group => (
           <Group key={group.kind} title={group.title}>
             {costs.filter(cost => cost.kind === group.kind).map(cost => (
-              <div key={cost.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <div key={cost.id} className="flex min-h-12 flex-wrap items-center gap-2 px-4 py-2">
                 <Label htmlFor={`name-${cost.id}`} className="sr-only">{copy.name}</Label>
                 <Input id={`name-${cost.id}`} className="min-w-40 flex-1" placeholder={copy.name} value={cost.name} maxLength={100} onChange={event => updateCost(cost.id, { name: event.target.value })} />
                 {cost.kind === "yearly" ? (
                   <>
                     <Label htmlFor={`month-${cost.id}`} className="sr-only">{copy.dueMonth}</Label>
-                    <FormSelect id={`month-${cost.id}`} className="w-16" aria-label={copy.dueMonth} value={cost.month} onValueChange={month => updateCost(cost.id, { month })} options={months} />
+                    <FormSelect id={`month-${cost.id}`} className="w-20" aria-label={copy.dueMonth} value={cost.month} onValueChange={month => updateCost(cost.id, { month })} options={months} />
                     <Label htmlFor={`day-${cost.id}`} className="sr-only">{copy.dueDay}</Label>
                     <Input id={`day-${cost.id}`} className="w-16" type="number" min={1} max={31} aria-label={copy.dueDay} value={cost.day} onChange={event => updateCost(cost.id, { day: event.target.value })} />
                   </>
                 ) : null}
                 <Label htmlFor={`amount-${cost.id}`} className="sr-only">{copy.amount}</Label>
                 <MoneyInput id={`amount-${cost.id}`} value={cost.amount} onChange={amount => updateCost(cost.id, { amount })} />
-                <Button size="icon-sm" variant="ghost" onClick={() => setCosts(current => current.filter(item => item.id !== cost.id))} aria-label={`${copy.remove}: ${cost.name || group.title}`}>
+                <Button size="icon" variant="ghost" onClick={() => setCosts(current => current.filter(item => item.id !== cost.id))} aria-label={`${copy.remove}: ${cost.name || group.title}`}>
                   <IconX />
                 </Button>
               </div>
             ))}
             <Row onClick={() => setCosts(current => [...current, { id: uuid(), name: "", amount: "0.00", kind: group.kind, month: "1", day: "1" }])}>
-              <IconPlus className="size-4 text-primary" />
-              <span className="text-primary">{copy.add}</span>
+              <IconPlus className="size-[18px] text-brand-500" />
+              <span className="font-medium text-link">{copy.add}</span>
             </Row>
           </Group>
         ))}
 
         <Group title={copy.categories} footer={copy.noReserve}>
           {state.categories.map(category => (
-            <div key={category.id} className={cn("flex flex-wrap items-center gap-2 px-3 py-2", category.archived && "text-muted-foreground")}>
-              <Label className="min-w-0 flex-1 truncate" htmlFor={`reserve-${category.id}`}>
+            <div key={category.id} className={cn("flex min-h-12 flex-wrap items-center gap-2 px-4 py-2", category.archived && "text-label-secondary")}>
+              <Label className="min-w-0 flex-1 truncate text-callout font-normal" htmlFor={`reserve-${category.id}`}>
                 {category.name}{category.archived ? ` · ${copy.archived}` : ""}
               </Label>
               {!category.archived ? (
                 <MoneyInput id={`reserve-${category.id}`} ariaLabel={`${copy.reserve}: ${category.name}`} value={reserves[category.id] ?? "0.00"} onChange={value => setReserves(current => ({ ...current, [category.id]: value }))} />
               ) : null}
-              <Button size="xs" variant="outline" onClick={() => { setEditingCategory(category.id); setCategoryName(category.name) }}>{copy.rename}</Button>
-              <Button size="xs" variant="outline" onClick={() => void run(() => saveMonthlyCategory(accessToken, category.name, { id: category.id, archived: !category.archived }))}>
+              <Button size="sm" variant="secondary" onClick={() => { setEditingCategory(category.id); setCategoryName(category.name) }}>{copy.rename}</Button>
+              <Button size="sm" variant="secondary" onClick={() => void run(() => saveMonthlyCategory(accessToken, category.name, { id: category.id, archived: !category.archived }))}>
                 {category.archived ? copy.restore : copy.archive}
               </Button>
             </div>
@@ -203,11 +203,11 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, isAdmin, m
           <Block className="flex flex-wrap items-center gap-2">
             <Label htmlFor="category-name" className="sr-only">{copy.categoryName}</Label>
             <Input id="category-name" className="min-w-40 flex-1" placeholder={copy.categoryName} value={categoryName} maxLength={100} onChange={event => setCategoryName(event.target.value)} />
-            <Button variant="outline" disabled={!categoryName.trim()} onClick={async () => {
+            <Button variant="secondary" disabled={!categoryName.trim()} onClick={async () => {
               const existing = state.categories.find(category => category.id === editingCategory)
               if (await run(() => saveMonthlyCategory(accessToken, categoryName.trim(), existing))) { setCategoryName(""); setEditingCategory(null) }
             }}>{editingCategory ? copy.rename : copy.addCategory}</Button>
-            {editingCategory ? <Button variant="ghost" onClick={() => { setCategoryName(""); setEditingCategory(null) }}>{copy.cancel}</Button> : null}
+            {editingCategory ? <Button variant="text" onClick={() => { setCategoryName(""); setEditingCategory(null) }}>{copy.cancel}</Button> : null}
           </Block>
         </Group>
         <MerchantDirectory
@@ -220,7 +220,7 @@ export function MonthlyPlanEditor({ state, accessToken, locale, busy, isAdmin, m
       </fieldset>
 
       {previewCurrent && forecast.length > 0 ? <Forecast forecast={forecast} locale={locale} currency={state.currency} /> : null}
-      <p className="text-[11px] text-muted-foreground">{copy.leftoverNote}</p>
+      <p className="text-footnote text-label-secondary">{copy.leftoverNote}</p>
     </div>
   )
 }
@@ -242,9 +242,9 @@ export function Forecast({ forecast, locale, currency }: { forecast: MonthlyFore
         <Row key={row.key}>
           <div className="min-w-0 flex-1">
             <p>{row.period}</p>
-            {row.bills ? <p className="text-[11px] text-muted-foreground">{row.bills}</p> : null}
+            {row.bills ? <p className="text-footnote text-label-secondary">{row.bills}</p> : null}
           </div>
-          <span className={cn("font-medium tabular-nums", row.negative && "text-destructive")}>{row.amount}</span>
+          <span className={cn("font-medium tabular-nums", row.negative && "text-danger-text")}>{row.amount}</span>
         </Row>
       ))}
     </Group>

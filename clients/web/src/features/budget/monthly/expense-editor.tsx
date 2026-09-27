@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { FormSelect } from "@/components/app/form-select"
-import { FormRow } from "@/components/app/grouped"
+import { FormRow, listCardClass } from "@/components/app/grouped"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
-import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import type { Locale } from "@/lib/i18n"
 import { uuid } from "@/lib/uuid"
 
@@ -96,8 +96,8 @@ function useExpenseEditor(props: Props) {
 }
 
 /**
- * Expense form as a sheet in the Apple form idiom: a header bar with Cancel /
- * title / Save, a large amount field, then grouped rows.
+ * Expense form as a glass sheet: a header with Cancel / title / Save, a large
+ * amount field, then list cards of form rows.
  */
 export function MonthlyExpenseEditor(props: Props) {
   const editor = useExpenseEditor(props)
@@ -106,25 +106,21 @@ export function MonthlyExpenseEditor(props: Props) {
   const formId = "monthly-expense-form"
   return (
     <Sheet open onOpenChange={open => { if (!open && !props.busy) props.close() }}>
-      <SheetContent
-        showCloseButton={false}
-        onCloseAutoFocus={event => { event.preventDefault(); props.restoreFocus() }}
-        className="overflow-y-auto border-l-0 bg-background p-0 shadow-[0_0_0_0.5px_var(--hairline),0_24px_60px_-20px_rgb(0_0_0/0.4)] data-[side=right]:w-full sm:data-[side=right]:max-w-md"
-      >
-        <div className="glass-bar sticky top-0 z-10 flex h-[52px] items-center justify-between px-4">
-          <Button type="button" variant="outline" disabled={props.busy} onClick={props.close}>{copy.cancel}</Button>
-          <SheetTitle className="text-[13px] font-semibold">{title}</SheetTitle>
+      <SheetContent onCloseAutoFocus={event => { event.preventDefault(); props.restoreFocus() }}>
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-separator px-4">
+          <Button type="button" variant="secondary" disabled={props.busy} onClick={props.close}>{copy.cancel}</Button>
+          <SheetTitle className="truncate">{title}</SheetTitle>
           <SheetDescription className="sr-only">{props.intent.kind === "refund" ? copy.refundAmount : copy.source}</SheetDescription>
           <Button type="submit" form={formId} disabled={props.busy || !editor.calculated.ready}>
             {props.intent.kind === "refund" ? copy.saveRefund : copy.save}
           </Button>
         </div>
-        <form id={formId} className="space-y-5 px-4 py-5" onSubmit={event => { event.preventDefault(); void editor.submit(false) }}>
-          <fieldset disabled={props.busy} className="space-y-5">
+        <form id={formId} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5" onSubmit={event => { event.preventDefault(); void editor.submit(false) }}>
+          <fieldset disabled={props.busy} className="space-y-4">
             {editor.error ? <Alert variant="destructive"><AlertDescription>{editor.error}</AlertDescription></Alert> : null}
             {props.serverError ? <Alert variant="destructive"><AlertDescription>{props.serverError}</AlertDescription></Alert> : null}
 
-            <div className="surface-group px-4 py-5 text-center">
+            <div className="rounded-xl bg-surface px-4 py-5 text-center">
               <Label htmlFor="expense-amount" className="sr-only">{props.intent.kind === "refund" ? copy.refundAmount : copy.amount}</Label>
               <input
                 autoFocus
@@ -134,12 +130,12 @@ export function MonthlyExpenseEditor(props: Props) {
                 placeholder="0,00"
                 value={editor.amount}
                 onChange={event => editor.setAmount(event.target.value)}
-                className="w-full bg-transparent text-center text-[44px] font-semibold leading-none tracking-[-0.03em] tabular-nums outline-none placeholder:text-muted-foreground/40"
+                className="w-full rounded-sm bg-transparent text-center text-large-title tabular-nums placeholder:text-label-disabled"
               />
-              <p className="mt-1 text-muted-foreground">{props.state.currency}</p>
+              <p className="mt-1 text-label-secondary">{props.state.currency}</p>
             </div>
 
-            <div className="surface-group hairline-rows">
+            <div className={`${listCardClass} hairline-rows`}>
               {props.intent.kind !== "refund" ? (
                 <FormRow label={copy.category} htmlFor="expense-category">
                   <FormSelect id="expense-category" className="w-auto min-w-40" value={editor.category} onValueChange={editor.setCategory} options={editor.calculated.categories} />
@@ -177,19 +173,19 @@ export function MonthlyExpenseEditor(props: Props) {
             </div>
 
             {editor.calculated.shortage > 0 ? (
-              <div className="surface-group hairline-rows">
+              <div className={`${listCardClass} hairline-rows`}>
                 <div className="px-4 py-3">
                   <p className="font-medium">{copy.excess}: {editor.calculated.shortfall}</p>
-                  <p className="text-[11px] text-muted-foreground">{copy.coverNote}</p>
+                  <p className="text-footnote text-label-secondary">{copy.coverNote}</p>
                 </div>
                 <FormRow label={copy.cover} htmlFor="cover-shortfall">
-                  <Switch id="cover-shortfall" checked={editor.cover} onCheckedChange={editor.setCover} />
+                  <Checkbox id="cover-shortfall" checked={editor.cover} onCheckedChange={(checked) => editor.setCover(checked === true)} />
                 </FormRow>
               </div>
             ) : null}
 
             {props.intent.kind === "add" ? (
-              <Button type="button" variant="outline" className="w-full" disabled={!editor.calculated.ready} onClick={() => void editor.submit(true)}>
+              <Button type="button" variant="secondary" className="w-full" disabled={!editor.calculated.ready} onClick={() => void editor.submit(true)}>
                 {copy.saveAnother}
               </Button>
             ) : null}

@@ -21,7 +21,7 @@ import {
 import { type Locale, isLocale, translate } from "@/lib/i18n"
 
 import {
-  BudgetSubnav,
+  BudgetViewMenu,
   MobileTabBar,
   Sidebar,
   SidebarGroupLabel,
@@ -30,10 +30,10 @@ import {
   moduleIcons,
   useSidebarCollapsed,
 } from "@/components/app/sidebar"
-import { GlobalSearch, type SearchDestination } from "@/components/app/global-search"
+import { SearchField, SearchTab, type SearchDestination } from "@/components/app/global-search"
 import { ProfileMenu } from "@/components/app/profile-menu"
-import { AppearanceToggle } from "@/components/app/switchers"
-import { Topbar } from "@/components/app/topbar"
+import { Toast, ToastContext } from "@/components/app/toast"
+import { ToolbarContent, ToolbarFrame } from "@/components/app/toolbar"
 import { AccountPanel } from "@/features/account/account-panel"
 import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
 import { SettingsPanel } from "@/features/settings/settings-panel"
@@ -42,7 +42,6 @@ import { LoginScreen } from "@/features/auth/login-screen"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
 import { errorMessage } from "@/lib/error-message"
 import { LOCALE_STORAGE_KEY, TOKENS_STORAGE_KEY, registerSession } from "@/lib/session"
-import { applyTheme, isThemeId, type ThemeId } from "@/lib/theme"
 import type { CurrentUser, TokenPair } from "@/lib/session"
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -70,6 +69,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The toast calls this after its few seconds; stable so its timer is not reset on every render.
+  const clearMessage = useCallback(() => setMessage(null), [])
 
   const t = useCallback(
     (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) =>
@@ -124,7 +125,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           accessToken: nextTokens.accessToken,
         })
         setCurrentUser(user)
-        if (isThemeId(user.theme)) applyTheme(user.theme)
         await loadModules(nextTokens.accessToken)
       } catch (err) {
         // Only an actual rejection ends the session. A restarting API or a
@@ -338,21 +338,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // The theme is applied instantly by the picker; the profile keeps it for other devices.
-  async function saveTheme(theme: ThemeId) {
-    if (!tokens) return
-    try {
-      const user = await apiRequest<CurrentUser>("/users/me", {
-        method: "PATCH",
-        accessToken: tokens.accessToken,
-        body: { theme },
-      })
-      setCurrentUser(user)
-    } catch (err) {
-      setError(errorMessage(err, t))
-    }
-  }
-
   async function logout() {
     if (tokens) {
       try {
@@ -434,7 +419,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
+      <main className="flex min-h-screen items-center justify-center bg-bg p-6">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>{t("app.name")}</CardTitle>
@@ -476,133 +461,126 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isAdmin = currentUser.role === "admin"
   const inBudget = selectedModule?.key === "budget"
   const budgetActive = activeModules.some((module) => module.key === "budget")
-  const searchDestinations = destinationsFor({ activeModules, isAdmin, locale, t })
+  const search = {
+    destinations: destinationsFor({ activeModules, isAdmin, locale, t }),
+    expensesHref: budgetActive ? budgetViews.expenses.route : undefined,
+    t,
+  }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      <Topbar
+    <div className="flex h-screen overflow-hidden bg-bg text-label">
+      <Sidebar
         appName={t("app.name")}
         collapsed={collapsed}
-        toggleSidebar={toggleSidebar}
+        toggle={toggleSidebar}
         collapseLabel={t("nav.collapseSidebar")}
         expandLabel={t("nav.expandSidebar")}
-        search={
-          <GlobalSearch
-            destinations={searchDestinations}
-            expensesHref={budgetActive ? budgetViews.expenses.route : undefined}
+        navLabel={t("nav.main")}
+        footer={<ProfileMenu name={currentUser.name} collapsed={collapsed} logout={logout} t={t} />}
+      >
+        <SidebarGroupLabel collapsed={collapsed}>{t("nav.main")}</SidebarGroupLabel>
+        <SidebarLink collapsed={collapsed} href="/" active={isHome} icon={<IconHome />}>
+          {t("dashboard.title")}
+        </SidebarLink>
+        {activeModules.map((module) => (
+          <SidebarModuleNav
+            key={module.id}
+            collapsed={collapsed}
+            locale={locale}
+            module={module}
+            pathname={pathname}
             t={t}
           />
-        }
-        actions={
+        ))}
+        {isAdmin ? (
           <>
-            <AppearanceToggle t={t} />
-            <ProfileMenu name={currentUser.name} logout={logout} t={t} />
+            <SidebarGroupLabel collapsed={collapsed}>{t("nav.admin")}</SidebarGroupLabel>
+            <SidebarLink collapsed={collapsed} href="/admin/settings" active={isAdminSettings} icon={<IconShield />}>
+              {t("nav.adminSettings")}
+            </SidebarLink>
           </>
-        }
-      />
+        ) : null}
+      </Sidebar>
 
-      <div className="flex min-h-0 flex-1">
-        <Sidebar collapsed={collapsed}>
-          <SidebarGroupLabel collapsed={collapsed}>{t("nav.main")}</SidebarGroupLabel>
-          <SidebarLink collapsed={collapsed} href="/" active={isHome} icon={<IconHome />}>
-            {t("dashboard.title")}
-          </SidebarLink>
-          {activeModules.map((module) => (
-            <SidebarModuleNav
-              key={module.id}
-              collapsed={collapsed}
-              locale={locale}
-              module={module}
-              pathname={pathname}
-              t={t}
-            />
-          ))}
-          {isAdmin ? (
-            <>
-              <SidebarGroupLabel collapsed={collapsed}>{t("nav.admin")}</SidebarGroupLabel>
-              <SidebarLink
-                collapsed={collapsed}
-                href="/admin/settings"
-                level={1}
-                active={isAdminSettings}
-                icon={<IconShield />}
-              >
-                {t("nav.adminSettings")}
-              </SidebarLink>
-            </>
-          ) : null}
-        </Sidebar>
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <ToastContext.Provider value={setMessage}>
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            <ToolbarFrame
+              leading={inBudget ? <BudgetViewMenu pathname={pathname} t={t} /> : null}
+              search={<SearchField {...search} />}
+            >
+              <div className="space-y-4 px-6 pt-6 pb-10 max-lg:px-5 max-lg:pt-5 max-lg:pb-32">
+                {error ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>{t("error.title")}</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                ) : null}
 
-        <main className="min-w-0 flex-1 overflow-y-auto bg-canvas px-4 pt-5 pb-32 shadow-[inset_5px_5px_10px_rgb(0_0_0/0.02)] lg:rounded-tl-3xl lg:p-6">
-          <div className="space-y-5">
-            {inBudget ? <BudgetSubnav pathname={pathname} t={t} /> : null}
-            {error ? (
-              <Alert variant="destructive">
-                <AlertTitle>{t("error.title")}</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : null}
-            {message ? (
-              <Alert>
-                <AlertTitle>{t("status.title")}</AlertTitle>
-                <AlertDescription>{message}</AlertDescription>
-              </Alert>
-            ) : null}
+                <div key={pathname} className="rise">
+                  {isHome ? (
+                    <DashboardPage
+                      accessToken={tokens?.accessToken}
+                      modules={activeModules}
+                      locale={locale}
+                      t={t}
+                    />
+                  ) : isAccount ? (
+                    <AccountPanel
+                      currentUser={currentUser}
+                      currentPassword={currentPassword}
+                      newPassword={newPassword}
+                      setCurrentPassword={setCurrentPassword}
+                      setNewPassword={setNewPassword}
+                      changePassword={changePassword}
+                      t={t}
+                    />
+                  ) : isSettings ? (
+                    <SettingsPanel locale={locale} setLocale={setLocale} t={t} />
+                  ) : isAdminSettings ? (
+                    <AdminSettingsPanel
+                      currentUser={currentUser}
+                      modules={modules}
+                      locale={locale}
+                      toggleModule={toggleModule}
+                      updateCandidates={updateCandidates}
+                      updateStatus={updateStatus}
+                      checkUpdates={checkUpdates}
+                      startUpdate={startUpdate}
+                      auditEvents={auditEvents}
+                      loadAuditEvents={loadAuditEvents}
+                      t={t}
+                    />
+                  ) : selectedModule ? (
+                    <DashboardPanel
+                      accessToken={tokens?.accessToken}
+                      locale={locale}
+                      pathname={pathname}
+                      selectedModule={selectedModule}
+                      isAdmin={currentUser?.role === "admin"}
+                      t={t}
+                    />
+                  ) : (
+                    <>
+                      <ToolbarContent title={t("dashboard.title")} />
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>{t("dashboard.inactiveTitle")}</CardTitle>
+                          <CardDescription>{t("dashboard.inactiveDescription")}</CardDescription>
+                        </CardHeader>
+                      </Card>
+                    </>
+                  )}
+                </div>
+              </div>
+            </ToolbarFrame>
+          </main>
+        </ToastContext.Provider>
 
-            <div key={pathname} className="rise">
-              {isHome ? (
-                <DashboardPage
-                  accessToken={tokens?.accessToken}
-                  modules={activeModules}
-                  locale={locale}
-                  t={t}
-                />
-              ) : isAccount ? (
-                <AccountPanel
-                  currentUser={currentUser}
-                  currentPassword={currentPassword}
-                  newPassword={newPassword}
-                  setCurrentPassword={setCurrentPassword}
-                  setNewPassword={setNewPassword}
-                  changePassword={changePassword}
-                  t={t}
-                />
-              ) : isSettings ? (
-                <SettingsPanel saveTheme={saveTheme} locale={locale} setLocale={setLocale} t={t} />
-              ) : isAdminSettings ? (
-                <AdminSettingsPanel
-                  currentUser={currentUser}
-                  modules={modules}
-                  locale={locale}
-                  toggleModule={toggleModule}
-                  updateCandidates={updateCandidates}
-                  updateStatus={updateStatus}
-                  checkUpdates={checkUpdates}
-                  startUpdate={startUpdate}
-                  auditEvents={auditEvents}
-                  loadAuditEvents={loadAuditEvents}
-                  t={t}
-                />
-              ) : selectedModule ? (
-                <DashboardPanel
-                  accessToken={tokens?.accessToken}
-                  locale={locale}
-                  pathname={pathname}
-                  selectedModule={selectedModule}
-                  isAdmin={currentUser?.role === "admin"}
-                  t={t}
-                />
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t("dashboard.inactiveTitle")}</CardTitle>
-                    <CardDescription>{t("dashboard.inactiveDescription")}</CardDescription>
-                  </CardHeader>
-                </Card>
-              )}
-            </div>
-          </div>
-        </main>
+        {/* Toasts sit at the bottom centre of the content area, above the phone tab bar. */}
+        <div role="status" className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-4 max-lg:bottom-[96px]">
+          {message ? <Toast key={message} message={message} onDismiss={clearMessage} /> : null}
+        </div>
       </div>
 
       <MobileTabBar
@@ -614,6 +592,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         isSettings={isSettings}
         isAdminSettings={isAdminSettings}
         isAdmin={isAdmin}
+        search={<SearchTab {...search} />}
         t={t}
       />
     </div>
@@ -625,7 +604,7 @@ function selectedSectionFromPath(pathname: string) {
 }
 
 /**
- * Everything the topbar search can jump to, in sidebar order: the dashboard,
+ * Everything the search can jump to, in sidebar order: the dashboard,
  * each active module and its pages, then the personal and admin places.
  */
 function destinationsFor(input: {
