@@ -1,0 +1,92 @@
+name: PR size
+
+# Labels every pull request size:XS .. size:XXL by effective changed lines, so a
+# mechanical or agent-written diff that balloons is visible at a glance.
+# Tests, lock files, and generated EF migration files do not count.
+#
+# pull_request_target runs with write permission on the base repo, so this job
+# treats the PR head as passive git data only: no checkout of PR code, no
+# installs, no scripts from the PR.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: Label PR size
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout base repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Sync size label
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { execFileSync } = require("node:child_process");
+
+            const sizes = [
+              { name: "size:XS", max: 10, color: "0e8a16" },
+              { name: "size:S", max: 30, color: "5ebd3e" },
+              { name: "size:M", max: 100, color: "fbca04" },
+              { name: "size:L", max: 500, color: "fe7d37" },
+              { name: "size:XL", max: 1000, color: "d93f0b" },
+              { name: "size:XXL", max: Infinity, color: "b60205" },
+            ];
+            const excluded = [
+              ":(glob,exclude)**/tests/**",
+              ":(glob,exclude)**/*.test.*",
+              ":(glob,exclude)**/*.spec.*",
+              ":(glob,exclude)**/package-lock.json",
+              ":(glob,exclude)**/Migrations/*.Designer.cs",
+              ":(glob,exclude)**/Migrations/*ModelSnapshot.cs",
+            ];
+
+            const pr = context.payload.pull_request;
+            execFileSync("git", ["fetch", "--no-tags", "origin", pr.base.sha, pr.head.sha], { stdio: "inherit" });
+            const numstat = execFileSync(
+              "git",
+              ["diff", "--numstat", `${pr.base.sha}...${pr.head.sha}`, "--", ".", ...excluded],
+              { encoding: "utf8" },
+            );
+            const changed = numstat
+              .split("\n")
+              .filter(Boolean)
+              .reduce((total, line) => {
+                const [added, deleted] = line.split("\t");
+                return total + (Number.parseInt(added, 10) || 0) + (Number.parseInt(deleted, 10) || 0);
+              }, 0);
+            const target = sizes.find((size) => changed < size.max);
+            core.info(`${changed} effective changed lines -> ${target.name}`);
+
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            try {
+              await github.rest.issues.getLabel({ ...repo, name: target.name });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.issues.createLabel({
+                ...repo,
+                name: target.name,
+                color: target.color,
+                description: `Effective changed lines below ${target.max === Infinity ? "no limit" : target.max} (tests, lock files, generated migrations excluded).`,
+              });
+            }
+
+            const current = pr.labels.map((label) => label.name);
+            for (const stale of current.filter((name) => name.startsWith("size:") && name !== target.name)) {
+              await github.rest.issues.removeLabel({ ...repo, issue_number: pr.number, name: stale });
+            }
+            if (!current.includes(target.name)) {
+              await github.rest.issues.addLabels({ ...repo, issue_number: pr.number, labels: [target.name] });
+            }

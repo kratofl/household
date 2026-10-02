@@ -1,0 +1,268 @@
+/*
+  PROTOTYPE ONLY. Liquid Glass materials, macOS 26 Tahoe vs macOS 27 Golden Gate.
+
+  --tint is the "clear to tinted" slider (Golden Gate's new appearance setting).
+  --glass-base is the sheet colour; it flips in dark mode.
+
+  Tahoe (26): one thick lens. Low fill, little blur, strong refraction at the
+  edges, a bright rim all the way round plus an inner glow on two sides. Reads
+  as a lump of glass, busy content shows through almost unchanged.
+
+  Golden Gate (27): thin sheets. More fill and much more blur so busy content
+  is diffused, no lensing, a darkened 0.5px edge that separates the sheet from
+  whatever is behind it, and one directional specular highlight on the top
+  edge only. Stacking sheets adds edges, not thickness.
+
+  Everything sits in the components layer so Tailwind utilities (absolute,
+  rounded-*, padding) still win, the same as for the classes in globals.css.
+*/
+
+@layer components {
+  .root {
+    --tint: 0.5;
+    --glass-base: 255 255 255;
+    --sidebar-base: 232 232 237;
+    --edge-27: rgb(0 0 0 / 0.16);
+    --spec-27: rgb(255 255 255 / 0.95);
+    --rim-26: rgb(255 255 255 / 0.5);
+    --glow-26: rgb(255 255 255 / 0.85);
+    --ink-soft: rgb(0 0 0 / 0.05);
+  }
+
+  :global(.dark) .root {
+    --glass-base: 40 40 44;
+    --sidebar-base: 24 24 27;
+    --edge-27: rgb(0 0 0 / 0.55);
+    --spec-27: rgb(255 255 255 / 0.4);
+    --rim-26: rgb(255 255 255 / 0.2);
+    --glow-26: rgb(255 255 255 / 0.4);
+    --ink-soft: rgb(0 0 0 / 0.3);
+  }
+
+  /* Something for the glass to sit on. Static, painted once. */
+  .backdrop {
+    background:
+      radial-gradient(60% 55% at 12% 18%, color-mix(in srgb, var(--primary) 55%, transparent), transparent 70%),
+      radial-gradient(50% 60% at 88% 12%, color-mix(in srgb, var(--sys-teal) 50%, transparent), transparent 70%),
+      radial-gradient(55% 60% at 70% 92%, color-mix(in srgb, var(--sys-indigo) 45%, transparent), transparent 70%),
+      radial-gradient(40% 45% at 25% 85%, color-mix(in srgb, var(--sys-pink) 35%, transparent), transparent 70%),
+      var(--canvas);
+  }
+
+  /* ---------- macOS 26 Tahoe: thick lens ---------- */
+
+  .g26,
+  .btn26 {
+    position: relative;
+    background: rgb(var(--glass-base) / calc(var(--tint) * 0.55));
+    -webkit-backdrop-filter: blur(4px) saturate(1.9) brightness(1.06);
+    backdrop-filter: blur(4px) saturate(1.9) brightness(1.06);
+    box-shadow:
+      inset 0 0 0 1px var(--rim-26),
+      inset 2px 2px 1px -1px var(--glow-26),
+      inset -2px -2px 1px -1px color-mix(in srgb, var(--glow-26) 60%, transparent),
+      inset 0 0 20px rgb(255 255 255 / 0.18),
+      0 12px 32px rgb(0 0 0 / 0.16),
+      0 2px 6px rgb(0 0 0 / 0.08);
+  }
+
+  /* Edge refraction. Chromium only: Safari and Firefox ignore url() in backdrop-filter. */
+  .lens .g26,
+  .lens .btn26 {
+    backdrop-filter: url(#lens26) blur(3px) saturate(1.9) brightness(1.06);
+  }
+
+  .btn26 {
+    box-shadow:
+      inset 0 0 0 1px var(--rim-26),
+      inset 1.5px 1.5px 1px -0.5px var(--glow-26),
+      inset -1.5px -1.5px 1px -0.5px color-mix(in srgb, var(--glow-26) 55%, transparent),
+      0 4px 12px rgb(0 0 0 / 0.12);
+  }
+
+  /* Tinted lens: accent fill, same rim and glow as clear glass. Gummy. */
+  .primary26 {
+    position: relative;
+    color: var(--primary-foreground);
+    background: color-mix(in srgb, var(--primary) 82%, transparent);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.4),
+      inset 2px 2px 2px -1px rgb(255 255 255 / 0.75),
+      inset -2px -2px 2px -1px rgb(255 255 255 / 0.35),
+      inset 0 0 14px rgb(255 255 255 / 0.25),
+      0 6px 16px color-mix(in srgb, var(--primary) 40%, transparent);
+  }
+
+  .thumb26 {
+    background: rgb(255 255 255 / 0.55);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.7),
+      inset 1.5px 1.5px 1px -0.5px rgb(255 255 255 / 0.95),
+      0 2px 6px rgb(0 0 0 / 0.14);
+  }
+  :global(.dark) .thumb26 {
+    background: rgb(255 255 255 / 0.18);
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.25),
+      inset 1.5px 1.5px 1px -0.5px rgb(255 255 255 / 0.45),
+      0 2px 6px rgb(0 0 0 / 0.3);
+  }
+
+  /* ---------- macOS 27 Golden Gate: thin sheets ---------- */
+
+  /* A sheet that floats over content: its own blur, darkened edge, short shadow. */
+  .g27,
+  .sidebar27,
+  .toolbar27 {
+    position: relative;
+    background: rgb(var(--glass-base) / var(--tint));
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow:
+      0 0 0 0.5px var(--edge-27),
+      0 1px 1px var(--ink-soft),
+      0 6px 18px var(--ink-soft);
+  }
+
+  /* Golden Gate sidebar: flush with the edge, a little darker, no floating shadow. */
+  .sidebar27 {
+    background: rgb(var(--sidebar-base) / calc(0.45 + var(--tint) * 0.5));
+    box-shadow: inset -0.5px 0 0 var(--edge-27);
+  }
+
+  /* Golden Gate toolbar: one uniform bar with a darkened bottom edge. */
+  .toolbar27 {
+    box-shadow: 0 0.5px 0 var(--edge-27), 0 6px 18px var(--ink-soft);
+  }
+
+  /*
+    A sheet on a sheet: buttons, groups and thumbs inside a 27 surface. The
+    parent already diffused the background, so a sheet is only fill, darkened
+    edge and a 1px lift. No second blur, no highlight.
+  */
+  .sheet,
+  .thumb27 {
+    position: relative;
+    background: rgb(var(--glass-base) / calc(0.35 + var(--tint) * 0.4));
+    box-shadow:
+      0 0 0 0.5px var(--edge-27),
+      0 1px 2px var(--ink-soft);
+  }
+
+  /* Selected thumb in a segmented control or tab bar: the brightest sheet,
+     flat like the buttons. The recessed track gives it enough contrast. */
+  .thumb27 {
+    background: rgb(255 255 255 / 0.92);
+    box-shadow: none;
+  }
+  :global(.dark) .thumb27 {
+    background: rgb(255 255 255 / 0.16);
+  }
+
+  /*
+    Push buttons, as in the macOS 27 kit: rounded rectangles with flat fills. No
+    edge, no shadow, no highlight, over glass and over content alike. Gray is the
+    existing fill scale, pressed is one step deeper. Filled is the accent, pressed
+    darker in light mode and lighter in dark mode.
+  */
+  .btn27 {
+    color: var(--foreground);
+    background: var(--fill-3);
+  }
+  .btn27:active {
+    background: var(--fill);
+  }
+
+  .primary27 {
+    color: var(--primary-foreground);
+    background: var(--primary);
+  }
+
+  /*
+    The specular highlight. A 1px ring (masked to the border only, same trick as
+    .push-default in globals.css) that is bright along the top edge and fades out
+    before the middle, with a faint return along the bottom. Only floating
+    surfaces (bars, menus, the tab bar) get one. Buttons stay without shine, and
+    the flush sidebar and toolbar are edges of the window, not sheets on it.
+  */
+  .g27::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      to bottom,
+      var(--spec-27),
+      color-mix(in srgb, var(--spec-27) 20%, transparent) 30%,
+      transparent 55%,
+      color-mix(in srgb, var(--spec-27) 18%, transparent)
+    );
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+    pointer-events: none;
+  }
+
+  /* Recessed track for segmented controls inside a bar. */
+  .well27 {
+    background: rgb(0 0 0 / 0.06);
+    box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.08);
+  }
+  :global(.dark) .well27 {
+    background: rgb(0 0 0 / 0.25);
+    box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.4);
+  }
+
+  /* The segmented thumb sliding to the new selection. Finite, triggered by the click. */
+  .slide {
+    transition: transform var(--motion-panel) cubic-bezier(0.3, 0.7, 0.2, 1);
+  }
+
+  .pressable {
+    transition: transform 120ms ease-out, filter 120ms ease-out;
+  }
+  .pressable:hover {
+    filter: brightness(1.04);
+  }
+  .pressable:active {
+    transform: scale(0.97);
+  }
+  /* After .pressable so the pressed tone wins over the hover brightening. */
+  .primary27:active {
+    filter: brightness(0.9);
+  }
+  :global(.dark) .primary27:active {
+    filter: brightness(1.15);
+  }
+
+  /* ---------- Anatomy diagrams in the recipe panel ---------- */
+
+  .anatomyLens {
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0.08));
+    box-shadow:
+      inset 0 0 0 1.5px rgb(255 255 255 / 0.6),
+      inset 4px 4px 3px -2px rgb(255 255 255 / 0.9),
+      inset -4px -4px 3px -2px rgb(255 255 255 / 0.45),
+      inset 0 0 16px rgb(255 255 255 / 0.35),
+      0 8px 18px rgb(0 0 0 / 0.25);
+  }
+
+  .anatomySheet {
+    position: absolute;
+    background: rgb(255 255 255 / 0.18);
+    box-shadow:
+      0 0 0 0.5px rgb(0 0 0 / 0.5),
+      inset 0 0.5px 0 rgb(255 255 255 / 0.9),
+      0 2px 5px rgb(0 0 0 / 0.2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .slide {
+      transition: none;
+    }
+    .pressable:active {
+      transform: none;
+    }
+  }
+}

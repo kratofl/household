@@ -1,46 +1,25 @@
 # Database migrations
 
-The backend is a modular monolith. Feature migrations live inside `backend/internal/features/<feature>/migrations`, while platform migrations live under `backend/internal/platform/<area>/migrations`.
+Each backend feature owns an EF Core context and keeps its migration history in its PostgreSQL schema.
 
-## Create a feature migration
-
-```bash
-make create-migration feature=budget name=add_accounts
-make create-migration feature=identity name=add_profile_fields
-```
-
-This uses the `golang-migrate` timestamp format and creates matching `.up.sql` and `.down.sql` files.
-
-Use feature migrations for feature-owned schemas and tables. Put only shared platform migrations under `backend/internal/platform/<area>/migrations`.
-
-## Runtime behavior
-
-`household-api` runs migrations on startup against the shared Postgres database. Feature data is separated by Postgres schema:
-
-| Area | Schema | Migration table |
+| Feature | Context | History table |
 | --- | --- | --- |
-| Identity | `identity` | `identity_schema_migrations` |
-| Budget | `budget` | `budget_schema_migrations` |
-| Audit | `audit` | `audit_schema_migrations` |
+| Identity | `IdentityDbContext` | `identity.__EFMigrationsHistory` |
+| Budget | `BudgetDbContext` | `budget.__EFMigrationsHistory` |
+| Audit | `AuditDbContext` | `audit.__EFMigrationsHistory` |
 
-The migration runner executes areas in a defined order so the production container can start from an empty database.
+Migrations run in dependency order on API startup. Initial adoption migrations use `IF NOT EXISTS` and additive changes so databases created by the retired Go runtime retain their data.
 
-## Local dev
-
-`make dev` starts Postgres in Docker and then the local API. Migrations run automatically on API startup.
-
-To run backend checks after adding migrations:
+Create a migration from the repository root:
 
 ```bash
-make backend-test
-make backend-build
+make create-migration feature=budget name=AddLedgerEntries
+make create-migration feature=identity name=AddProfileFields
 ```
 
-The first Identity migrations intentionally use `IF NOT EXISTS` and `ON CONFLICT DO NOTHING` so older development databases that already contain `identity.users`, `identity.modules`, or `identity.sessions` can be adopted by the monolith migration table.
+The Make target installs the matching .NET 10 `dotnet-ef` tool when needed and writes the migration into the owning feature. Review generated migrations for ownership, history preservation, safe deployment, and rollback implications before committing them.
 
-## Local dev reset
-
-If an old dev database still contains obsolete service-era migration state, reset the dev volume:
+Reset only disposable local data with:
 
 ```bash
 make reset-dev-db

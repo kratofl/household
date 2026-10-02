@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Figtree } from "next/font/google"
 
 import { AppShell } from "@/components/app/app-shell"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -7,19 +7,21 @@ import { cn } from "@/lib/utils"
 
 import "./globals.css"
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// The design system's font is SF Pro on Apple devices and Figtree everywhere
+// else; globals.css puts the system font first in the stack.
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
-})
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 })
 
 export const metadata: Metadata = {
   title: "Household",
   description: "Local household dashboard for modules, account settings, and updates.",
+  icons: {
+    icon: "/household-logo.svg",
+    apple: "/household-logo.svg",
+  },
 }
 
 export default function RootLayout({
@@ -28,16 +30,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={cn(
-        "h-full antialiased",
-        geistSans.variable,
-        geistMono.variable,
-        "font-sans",
-      )}
-    >
+    <html lang="en" suppressHydrationWarning className={cn("h-full antialiased", figtree.variable, "font-sans")}>
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AppShell>{children}</AppShell>

@@ -1,0 +1,303 @@
+[
+  {
+    "key": "aboutyou",
+    "name": "About You",
+    "state": "zu breit",
+    "detail": "4.79:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:About_You_logo.svg"
+  },
+  {
+    "key": "action",
+    "name": "Action",
+    "state": "zu breit",
+    "detail": "5.3:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Action_Nederland_Logo_2020.svg"
+  },
+  {
+    "key": "amazon",
+    "name": "Amazon",
+    "state": "zu breit",
+    "detail": "3.31:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Amazon_logo.svg"
+  },
+  {
+    "key": "bauhaus",
+    "name": "Bauhaus",
+    "state": "zu breit",
+    "detail": "5.07:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Bauhaus_logo.svg"
+  },
+  {
+    "key": "biocompany",
+    "name": "Bio Company",
+    "state": "zu breit",
+    "detail": "4.39:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Bio_Company_logo.svg"
+  },
+  {
+    "key": "conrad",
+    "name": "Conrad",
+    "state": "zu breit",
+    "detail": "4:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Conrad-Electronic-Logo.svg"
+  },
+  {
+    "key": "cyberport",
+    "name": "Cyberport",
+    "state": "zu breit",
+    "detail": "3.03:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Cyberport_Logo.svg"
+  },
+  {
+    "key": "decathlon",
+    "name": "Decathlon",
+    "state": "zu breit",
+    "detail": "4.25:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Decathlon_-_logo_(France,_1976-1980).svg"
+  },
+  {
+    "key": "dhl",
+    "name": "DHL",
+    "state": "zu breit",
+    "detail": "4.53:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:DHL_Logo.svg"
+  },
+  {
+    "key": "docmorris",
+    "name": "DocMorris",
+    "state": "zu breit",
+    "detail": "3.76:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:DocMorris_Logo_11.2020.svg"
+  },
+  {
+    "key": "douglas",
+    "name": "Douglas",
+    "state": "zu breit",
+    "detail": "5.38:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Douglas_Logo_06.2018.svg"
+  },
+  {
+    "key": "ebay",
+    "name": "eBay",
+    "state": "zu breit",
+    "detail": "2.5:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:EBay_logo.svg"
+  },
+  {
+    "key": "flixbus",
+    "name": "FlixBus",
+    "state": "zu breit",
+    "detail": "5.35:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Flixbus_201x_logo.svg"
+  },
+  {
+    "key": "fressnapf",
+    "name": "Fressnapf",
+    "state": "zu breit",
+    "detail": "6.26:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Fressnapf_Logo_2023.svg"
+  },
+  {
+    "key": "google",
+    "name": "Google",
+    "state": "kein Logo",
+    "detail": "Q648625 (Google Knowledge Graph) führt kein P154",
+    "source": null
+  },
+  {
+    "key": "hermes",
+    "name": "Hermes",
+    "state": "kein SVG",
+    "detail": "image/jpeg",
+    "source": null
+  },
+  {
+    "key": "hornbach",
+    "name": "Hornbach",
+    "state": "zu breit",
+    "detail": "6:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Hornbach_Logo_black.svg"
+  },
+  {
+    "key": "ikea",
+    "name": "IKEA",
+    "state": "zu breit",
+    "detail": "2.5:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Ikea_logo.svg"
+  },
+  {
+    "key": "jet",
+    "name": "JET",
+    "state": "ungeklärt",
+    "detail": "keine Wikidata-Seite mit Domain jet.de",
+    "source": null
+  },
+  {
+    "key": "lieferando",
+    "name": "Lieferando",
+    "state": "kein Logo",
+    "detail": "Q98660154 (Lieferando) führt kein P154",
+    "source": null
+  },
+  {
+    "key": "mediamarkt",
+    "name": "MediaMarkt",
+    "state": "zu breit",
+    "detail": "3:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Media_Markt_logo.svg"
+  },
+  {
+    "key": "microsoft",
+    "name": "Microsoft",
+    "state": "zu breit",
+    "detail": "5:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Microsoft_logo_(1980).svg"
+  },
+  {
+    "key": "mueller",
+    "name": "Müller",
+    "state": "zu breit",
+    "detail": "5.07:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Logo_Drogerie_Mueller.svg"
+  },
+  {
+    "key": "netto",
+    "name": "Netto",
+    "state": "zu breit",
+    "detail": "2.8:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Netto_logo.svg"
+  },
+  {
+    "key": "norma",
+    "name": "Norma",
+    "state": "ungeklärt",
+    "detail": "keine Wikidata-Seite mit Domain norma-online.de",
+    "source": null
+  },
+  {
+    "key": "o2",
+    "name": "o2",
+    "state": "zu breit",
+    "detail": "3.9:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Telef%C3%B3nica_Deutschland_2021_logo.svg"
+  },
+  {
+    "key": "obi",
+    "name": "OBI",
+    "state": "zu breit",
+    "detail": "4.03:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Obi.svg"
+  },
+  {
+    "key": "otto",
+    "name": "Otto",
+    "state": "zu breit",
+    "detail": "4.84:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Logo_otto_group.svg"
+  },
+  {
+    "key": "rewe",
+    "name": "REWE",
+    "state": "zu breit",
+    "detail": "2.88:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Logo_REWE.svg"
+  },
+  {
+    "key": "rossmann",
+    "name": "Rossmann",
+    "state": "zu breit",
+    "detail": "6.94:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Rossmann_Logo.svg"
+  },
+  {
+    "key": "saturn",
+    "name": "Saturn",
+    "state": "zu breit",
+    "detail": "4.6:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Saturn-Logo.svg"
+  },
+  {
+    "key": "shell",
+    "name": "Shell",
+    "state": "zu breit",
+    "detail": "2.52:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Shell_wordmark_2019.svg"
+  },
+  {
+    "key": "shopapotheke",
+    "name": "Shop Apotheke",
+    "state": "zu breit",
+    "detail": "3.01:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:SHOP-APOTHEKE-EUROPE.svg"
+  },
+  {
+    "key": "snipes",
+    "name": "Snipes",
+    "state": "zu breit",
+    "detail": "2.79:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Snipes_logo.svg"
+  },
+  {
+    "key": "spotify",
+    "name": "Spotify",
+    "state": "zu breit",
+    "detail": "3.33:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Spotify_logo_with_text.svg"
+  },
+  {
+    "key": "starbucks",
+    "name": "Starbucks",
+    "state": "kein SVG",
+    "detail": "image/png",
+    "source": null
+  },
+  {
+    "key": "subway",
+    "name": "Subway",
+    "state": "zu breit",
+    "detail": "5.01:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Subway_2016_logo.svg"
+  },
+  {
+    "key": "tedi",
+    "name": "TEDi",
+    "state": "UNSICHER",
+    "detail": "deklariert Entities",
+    "source": "https://commons.wikimedia.org/wiki/File:TEDi-Logo.svg"
+  },
+  {
+    "key": "thalia",
+    "name": "Thalia",
+    "state": "kein SVG",
+    "detail": "image/gif",
+    "source": null
+  },
+  {
+    "key": "toom",
+    "name": "toom",
+    "state": "zu breit",
+    "detail": "4.4:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Toom_Baumarkt.svg"
+  },
+  {
+    "key": "total",
+    "name": "TotalEnergies",
+    "state": "zu breit",
+    "detail": "5.18:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Total_wordmark_(2003-2021).svg"
+  },
+  {
+    "key": "vodafone",
+    "name": "Vodafone",
+    "state": "kein SVG",
+    "detail": "image/png",
+    "source": null
+  },
+  {
+    "key": "zalando",
+    "name": "Zalando",
+    "state": "zu breit",
+    "detail": "5.21:1, im Quadrat unlesbar",
+    "source": "https://commons.wikimedia.org/wiki/File:Zalando_logo.svg"
+  }
+]

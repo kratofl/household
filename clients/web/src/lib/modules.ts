@@ -1,4 +1,4 @@
-import type { Locale } from "@/lib/i18n"
+import type { Locale, TranslationKey } from "@/lib/i18n"
 
 export type AppModule = {
   id: string
@@ -34,7 +34,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Einkaufsliste", en: "Shopping List" },
     description: {
-      de: "Gemeinsame Listen fuer Haushaltseinkaeufe.",
+      de: "Gemeinsame Listen für Haushaltseinkäufe.",
       en: "Plan and share household shopping lists.",
     },
   },
@@ -44,7 +44,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Rezepte", en: "Recipes" },
     description: {
-      de: "Rezepte sammeln und fuer Essensplaene verwenden.",
+      de: "Rezepte sammeln und für Essenspläne verwenden.",
       en: "Manage recipes and reuse them for meal plans.",
     },
   },
@@ -54,7 +54,7 @@ export const moduleCatalog = {
     defaultActive: false,
     name: { de: "Essensplan", en: "Meal Plan" },
     description: {
-      de: "Mahlzeiten ueber Woche und Kalender planen.",
+      de: "Mahlzeiten über Woche und Kalender planen.",
       en: "Plan meals across the week and calendar.",
     },
   },
@@ -72,9 +72,9 @@ export const moduleCatalog = {
     route: "/waste-schedule",
     defaultEnabled: false,
     defaultActive: false,
-    name: { de: "Muellplan", en: "Waste Schedule" },
+    name: { de: "Müllplan", en: "Waste Schedule" },
     description: {
-      de: "Abholtermine und Erinnerungen fuer Tonnen.",
+      de: "Abholtermine und Erinnerungen für Tonnen.",
       en: "Track waste collection dates and reminders.",
     },
   },
@@ -82,28 +82,23 @@ export const moduleCatalog = {
 
 export const moduleKeys = Object.keys(moduleCatalog) as Array<keyof typeof moduleCatalog>
 
+// The Budget module's pages. The monthly budget is the Budget; the sidebar
+// lists these four in this order.
 export const budgetViews = {
-  overview: { route: "/budget", segment: "", labelKey: "budget.nav.overview" },
-  transactions: {
-    route: "/budget/transactions",
-    segment: "transactions",
-    labelKey: "budget.nav.transactions",
-  },
-  planning: { route: "/budget/planning", segment: "planning", labelKey: "budget.nav.planning" },
-  categories: {
-    route: "/budget/categories",
-    segment: "categories",
-    labelKey: "budget.nav.categories",
-  },
-  settings: { route: "/budget/settings", segment: "settings", labelKey: "budget.nav.settings" },
-} as const
+  overview: { route: "/budget", labelKey: "budget.nav.overview" },
+  expenses: { route: "/budget/expenses", labelKey: "budget.nav.expenses" },
+  plan: { route: "/budget/plan", labelKey: "budget.nav.plan" },
+  savings: { route: "/budget/savings", labelKey: "budget.nav.savings" },
+} as const satisfies Record<string, BudgetView>
 
+type BudgetView = { route: string; labelKey: TranslationKey }
 export type BudgetViewKey = keyof typeof budgetViews
+export const budgetViewEntries = Object.entries(budgetViews) as [BudgetViewKey, BudgetView][]
 
 export function budgetViewFromPath(pathname: string): BudgetViewKey {
-  const match = Object.entries(budgetViews).find(([, view]) => view.route === pathname)
+  const match = budgetViewEntries.find(([, view]) => view.route === pathname)
 
-  return (match?.[0] as BudgetViewKey | undefined) ?? "overview"
+  return match?.[0] ?? "overview"
 }
 
 export function fallbackModules(locale: Locale): AppModule[] {
