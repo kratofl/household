@@ -3,18 +3,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Inline banner for persistent page-level states: a -100 tint with -900 text and
+// radius-md. Short-lived confirmations are toasts, not banners.
 const alertVariants = cva(
-  "group/alert relative grid w-full gap-0.5 rounded-lg border px-2 py-1.5 text-left text-xs/relaxed has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-1.5 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-3.5",
+  "grid w-full gap-0.5 rounded-md px-4 py-3 text-left text-footnote",
   {
     variants: {
       variant: {
-        default: "bg-card text-card-foreground",
-        destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+        info: "bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-100",
+        warning: "bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-100",
+        destructive: "bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-100",
       },
     },
     defaultVariants: {
-      variant: "default",
+      variant: "info",
     },
   }
 )
@@ -27,7 +29,7 @@ function Alert({
   return (
     <div
       data-slot="alert"
-      role="alert"
+      role={variant === "destructive" ? "alert" : "status"}
       className={cn(alertVariants({ variant }), className)}
       {...props}
     />
@@ -35,42 +37,11 @@ function Alert({
 }
 
 function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-title"
-      className={cn(
-        "font-medium group-has-[>svg]/alert:col-start-2 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
-        className
-      )}
-      {...props}
-    />
-  )
+  return <div data-slot="alert-title" className={cn("font-semibold", className)} {...props} />
 }
 
-function AlertDescription({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-description"
-      className={cn(
-        "text-xs/relaxed text-balance text-muted-foreground md:text-pretty [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
-        className
-      )}
-      {...props}
-    />
-  )
+function AlertDescription({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="alert-description" className={cn("text-pretty", className)} {...props} />
 }
 
-function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="alert-action"
-      className={cn("absolute top-1.5 right-2", className)}
-      {...props}
-    />
-  )
-}
-
-export { Alert, AlertTitle, AlertDescription, AlertAction }
+export { Alert, AlertTitle, AlertDescription }

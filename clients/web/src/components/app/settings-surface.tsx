@@ -1,6 +1,13 @@
+"use client"
+
 import type { ReactNode } from "react"
 
+import { listCardClass } from "@/components/app/grouped"
+import { PageHeader } from "@/components/app/page-header"
 import { cn } from "@/lib/utils"
+
+// Settings pages: the title in the toolbar, then list cards with a headline and
+// 48px rows separated by hairlines, the same shape as every other list.
 
 export function SettingsSurface({
   title,
@@ -12,12 +19,9 @@ export function SettingsSurface({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-8">
-      <div>
-        <h3 className="text-xl font-semibold tracking-tight">{title}</h3>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
-      </div>
-      <div className="space-y-8">{children}</div>
+    <div className="space-y-4">
+      <PageHeader title={title} subtitle={description} />
+      {children}
     </div>
   )
 }
@@ -34,13 +38,15 @@ export function SettingsSection({
   children: ReactNode
 }) {
   return (
-    <section className="grid gap-4 border-t pt-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-      <div>
-        <h4 className="text-sm font-semibold">{title}</h4>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
-        {aside ? <div className="mt-4">{aside}</div> : null}
+    <section>
+      <div className={listCardClass}>
+        <div className="flex min-h-12 items-center justify-between gap-3 border-b border-separator px-4 pt-3 pb-2">
+          <h2 className="text-headline">{title}</h2>
+          {aside}
+        </div>
+        <div className="hairline-rows">{children}</div>
       </div>
-      <div className="space-y-3">{children}</div>
+      {description ? <p className="mt-2 px-1 text-footnote text-label-secondary">{description}</p> : null}
     </section>
   )
 }
@@ -57,10 +63,10 @@ export function SettingsRow({
   className?: string
 }) {
   return (
-    <div className={cn("flex flex-wrap items-center justify-between gap-4 rounded-md border bg-card p-4", className)}>
+    <div className={cn("flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5", className)}>
       <div className="min-w-0">
-        <p className="text-sm font-medium">{title}</p>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+        <p>{title}</p>
+        {description ? <p className="text-footnote text-label-secondary">{description}</p> : null}
       </div>
       {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
     </div>
@@ -75,9 +81,14 @@ export function SettingsField({
   value: string
 }) {
   return (
-    <div className="rounded-md border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value}</p>
+    <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-2.5">
+      <span>{label}</span>
+      <span className="truncate text-label-secondary">{value}</span>
     </div>
   )
+}
+
+/** A block inside a section that needs its own padding (forms, pickers). */
+export function SettingsBlock({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("px-4 py-3", className)}>{children}</div>
 }

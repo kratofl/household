@@ -4,128 +4,260 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  The Household design system. docs/design-system/DESIGN.md is normative; the
+  values below are docs/design-system/tokens.css transcribed 1:1, with dark mode
+  on the .dark class that next-themes sets.
+
+  Flat first, glass on chrome: content (cards, lists, inputs, buttons, sidebar)
+  is flat with no shadow. Only the toolbar band and floating layers (menus,
+  toasts, dialogs, the phone tab bar) are Liquid Glass. brand-500 is the only
+  brand colour; text on it is always on-brand.
+
+  Tailwind's default palette, radii and text sizes are cleared on purpose, so a
+  class that is not part of the system does not compile to anything.
+*/
+
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-serif);
-  --font-heading: var(--font-heading);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-figtree), system-ui, sans-serif;
+
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-brand-100: var(--brand-100);
+  --color-brand-300: var(--brand-300);
+  --color-brand-500: var(--brand-500);
+  --color-brand-700: var(--brand-700);
+  --color-brand-900: var(--brand-900);
+  --color-green-100: var(--green-100);
+  --color-green-300: var(--green-300);
+  --color-green-500: var(--green-500);
+  --color-green-700: var(--green-700);
+  --color-green-900: var(--green-900);
+  --color-red-100: var(--red-100);
+  --color-red-300: var(--red-300);
+  --color-red-500: var(--red-500);
+  --color-red-700: var(--red-700);
+  --color-red-900: var(--red-900);
+  --color-yellow-100: var(--yellow-100);
+  --color-yellow-300: var(--yellow-300);
+  --color-yellow-500: var(--yellow-500);
+  --color-yellow-700: var(--yellow-700);
+  --color-yellow-900: var(--yellow-900);
+  --color-blue-100: var(--blue-100);
+  --color-blue-300: var(--blue-300);
+  --color-blue-500: var(--blue-500);
+  --color-blue-700: var(--blue-700);
+  --color-blue-900: var(--blue-900);
+  --color-purple-100: var(--purple-100);
+  --color-purple-300: var(--purple-300);
+  --color-purple-500: var(--purple-500);
+  --color-purple-700: var(--purple-700);
+  --color-purple-900: var(--purple-900);
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sidebar: var(--sidebar-bg);
+  --color-fill: var(--fill);
+  --color-fill-strong: var(--fill-strong);
+  --color-separator: var(--separator);
   --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-label: var(--label);
+  --color-label-secondary: var(--label-secondary);
+  --color-label-disabled: var(--label-disabled);
+  --color-on-brand: var(--on-brand);
+  --color-link: var(--link);
+  --color-success-text: var(--success-text);
+  --color-danger-text: var(--danger-text);
+  --color-segment-selected: var(--segment-selected);
+  --color-focus-ring: var(--focus-ring);
+  --color-toolbar-fill: var(--toolbar-fill);
+
+  --radius-*: initial;
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+
+  /* Type styles. `text-kpi` is the 32px bold KPI number from the KpiCard spec. */
+  --text-*: initial;
+  --text-large-title: 34px;
+  --text-large-title--line-height: 41px;
+  --text-large-title--font-weight: 700;
+  --text-large-title--letter-spacing: -0.03em;
+  --text-kpi: 32px;
+  --text-kpi--line-height: 38px;
+  --text-kpi--font-weight: 700;
+  --text-kpi--letter-spacing: -0.03em;
+  --text-title-1: 28px;
+  --text-title-1--line-height: 34px;
+  --text-title-1--font-weight: 700;
+  --text-title-1--letter-spacing: -0.02em;
+  --text-title-2: 22px;
+  --text-title-2--line-height: 28px;
+  --text-title-2--font-weight: 700;
+  --text-title-2--letter-spacing: -0.02em;
+  --text-title-3: 20px;
+  --text-title-3--line-height: 25px;
+  --text-title-3--font-weight: 600;
+  --text-headline: 17px;
+  --text-headline--line-height: 22px;
+  --text-headline--font-weight: 600;
+  --text-body: 15px;
+  --text-body--line-height: 21px;
+  --text-callout: 14px;
+  --text-callout--line-height: 20px;
+  --text-footnote: 13px;
+  --text-footnote--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 600;
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.147 0.004 49.3);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.147 0.004 49.3);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.147 0.004 49.3);
-  --primary: oklch(0.555 0.163 48.998);
-  --primary-foreground: oklch(0.987 0.022 95.277);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.96 0.002 17.2);
-  --muted-foreground: oklch(0.547 0.021 43.1);
-  --accent: oklch(0.96 0.002 17.2);
-  --accent-foreground: oklch(0.214 0.009 43.1);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.005 34.3);
-  --input: oklch(0.922 0.005 34.3);
-  --ring: oklch(0.714 0.014 41.2);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.986 0.002 67.8);
-  --sidebar-foreground: oklch(0.147 0.004 49.3);
-  --sidebar-primary: oklch(0.666 0.179 58.318);
-  --sidebar-primary-foreground: oklch(0.987 0.022 95.277);
-  --sidebar-accent: oklch(0.96 0.002 17.2);
-  --sidebar-accent-foreground: oklch(0.214 0.009 43.1);
-  --sidebar-border: oklch(0.922 0.005 34.3);
-  --sidebar-ring: oklch(0.714 0.014 41.2);
+  /* Brand + status scales (same in both themes) */
+  --brand-100: #ffe9d9; --brand-300: #ffb27f; --brand-500: #ff6a00; --brand-700: #b34a00; --brand-900: #5c2600;
+  --green-100: #dcf5e8; --green-300: #7fd9ab; --green-500: #16b566; --green-700: #0c7a43; --green-900: #06401f;
+  --red-100: #fde0e4; --red-300: #f78b9a; --red-500: #f02744; --red-700: #b3182f; --red-900: #5c0c18;
+  --yellow-100: #faefd2; --yellow-300: #eec766; --yellow-500: #e0a30c; --yellow-700: #8a6200; --yellow-900: #473300;
+  --blue-100: #dcebfc; --blue-300: #86b9f2; --blue-500: #1f7fe6; --blue-700: #154c8a; --blue-900: #0b2a4d;
+  --purple-100: #ece8ff; --purple-300: #c2b5ff; --purple-500: #8f76ff; --purple-700: #3d2fa3; --purple-900: #221a5c;
+
+  /* Semantic */
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --sidebar-bg: #f5f5f7;
+  --fill: #f0f0f2;
+  --fill-strong: #e5e5ea;
+  --separator: #e5e5ea;
+  --border: #d2d2d7;
+  --label: #1d1d1f;
+  --label-secondary: #6e6e73;
+  --label-disabled: #aeaeb2;
+  --on-brand: #1d1d1f;
+  --link: #b34a00;
+  --success-text: #0c7a43;
+  --danger-text: #b3182f;
+  --segment-selected: #ffffff;
+  --focus-ring: #b34a00;
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(0, 0, 0, 0.12);
+  --glass-highlight: rgba(255, 255, 255, 0.5);
+  --toolbar-bg: rgba(245, 245, 247, 0.72);
+  /* Controls inside the frosted toolbar sit on this fill (DESIGN.md, Toolbar). */
+  --toolbar-fill: rgba(0, 0, 0, 0.05);
+  --shadow-glass: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 16px 48px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --glass-blur: 22px;
+  --toolbar-blur: 20px;
+  /* Alpha of brand-500 for chart bars that are not highlighted. */
+  --track-tint: 0.25;
+  color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.147 0.004 49.3);
-  --foreground: oklch(0.986 0.002 67.8);
-  --card: oklch(0.214 0.009 43.1);
-  --card-foreground: oklch(0.986 0.002 67.8);
-  --popover: oklch(0.214 0.009 43.1);
-  --popover-foreground: oklch(0.986 0.002 67.8);
-  --primary: oklch(0.473 0.137 46.201);
-  --primary-foreground: oklch(0.987 0.022 95.277);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.268 0.011 36.5);
-  --muted-foreground: oklch(0.714 0.014 41.2);
-  --accent: oklch(0.268 0.011 36.5);
-  --accent-foreground: oklch(0.986 0.002 67.8);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.547 0.021 43.1);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.214 0.009 43.1);
-  --sidebar-foreground: oklch(0.986 0.002 67.8);
-  --sidebar-primary: oklch(0.769 0.188 70.08);
-  --sidebar-primary-foreground: oklch(0.279 0.077 45.635);
-  --sidebar-accent: oklch(0.268 0.011 36.5);
-  --sidebar-accent-foreground: oklch(0.986 0.002 67.8);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.547 0.021 43.1);
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --sidebar-bg: #161617;
+  --fill: #2c2c2e;
+  --fill-strong: #2c2c2e;
+  --separator: #2c2c2e;
+  --border: #3a3a3c;
+  --label: #f5f5f7;
+  --label-secondary: #98989d;
+  --label-disabled: #636366;
+  --on-brand: #1d1d1f;
+  --link: #ff9a4d;
+  --success-text: #4ade80;
+  --danger-text: #ff7a8a;
+  --segment-selected: #636366;
+  --focus-ring: #ff9a4d;
+  --glass-bg: rgba(44, 44, 46, 0.55);
+  --glass-border: rgba(0, 0, 0, 0.6);
+  --glass-highlight: rgba(255, 255, 255, 0.14);
+  --toolbar-bg: rgba(18, 18, 20, 0.72);
+  --toolbar-fill: rgba(255, 255, 255, 0.08);
+  --shadow-glass: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 16px 48px rgba(0, 0, 0, 0.5);
+  --shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --track-tint: 0.32;
+  color-scheme: dark;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
+    @apply border-border;
   }
   html {
-    @apply h-full font-serif;
+    @apply h-full font-sans;
   }
+  body {
+    @apply bg-bg text-callout text-label;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* 2px focus ring, offset 2px, on every focusable control. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  /* Line icons: 1.8 stroke on the 24px grid. Controls that draw them at 16px set 2. */
+  svg.tabler-icon {
+    stroke-width: 1.8;
+  }
+}
+
+@layer components {
+  /*
+    Liquid Glass for floating layers: context menus, toasts, notifications,
+    popovers, dialogs and the phone tab bar. Never on content.
+  */
+  .glass {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
+  }
+
+  /* The one uniform frosted band across the top of the content area. */
+  .toolbar-band {
+    background: var(--toolbar-bg);
+    -webkit-backdrop-filter: blur(var(--toolbar-blur)) saturate(180%);
+    backdrop-filter: blur(var(--toolbar-blur)) saturate(180%);
+    border-bottom: 1px solid var(--separator);
+  }
+
+  /* Hairlines between rows of a list card. */
+  .hairline-rows > * + * {
+    border-top: 1px solid var(--separator);
+  }
+
+  /* Finite entrance for freshly mounted screens. */
+  .rise {
+    animation: rise 200ms ease-out both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+/* Flat fallback: without backdrop-filter or with reduced transparency, glass
+   becomes surface + border and the toolbar a solid band. A complete variant. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background: var(--surface); border-color: var(--border); box-shadow: none; }
+  .glass.toast { background: var(--label); border-color: transparent; color: var(--bg); }
+  .toolbar-band { background: var(--bg); --toolbar-fill: var(--fill-strong); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--border); box-shadow: none; }
+  /* The toast's flat variant is a solid inverse pill. */
+  .glass.toast { background: var(--label); border-color: transparent; color: var(--bg); }
+  .toolbar-band { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; --toolbar-fill: var(--fill-strong); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: none; }
 }

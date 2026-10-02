@@ -44,10 +44,10 @@ function ChartContainer({
       <div
         data-chart={chartId}
         className={cn(
-          "flex h-[260px] w-full justify-center text-xs",
-          "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground",
-          "[&_.recharts-cartesian-grid_line]:stroke-border/60",
-          "[&_.recharts-tooltip-cursor]:fill-muted/60",
+          "flex h-[260px] w-full justify-center text-caption",
+          "[&_.recharts-cartesian-axis-tick_text]:fill-label-secondary",
+          "[&_.recharts-cartesian-grid_line]:stroke-separator",
+          "[&_.recharts-tooltip-cursor]:fill-fill",
           className,
         )}
       >
@@ -100,7 +100,7 @@ function ChartTooltipContent({
   if (!active || !payload?.length) return null
 
   return (
-    <div className="min-w-32 rounded-md bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10">
+    <div className="glass min-w-32 rounded-sm px-3 py-2 text-footnote text-label">
       {label ? <div className="mb-1 font-medium">{label}</div> : null}
       <div className="space-y-1">
         {payload.map((item) => {
@@ -110,7 +110,7 @@ function ChartTooltipContent({
 
           return (
             <div key={`${key}-${value}`} className="flex items-center justify-between gap-4">
-              <span className="flex items-center gap-2 text-muted-foreground">
+              <span className="flex items-center gap-2 text-label-secondary">
                 <span
                   className="size-2 rounded-full"
                   style={{ backgroundColor: item.color ?? config[key]?.color }}

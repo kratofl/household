@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Household">
+  <!--
+    A lowercase h of two clear glass blocks: a round-ended stem and a shoulder
+    with one large round corner that starts inside it. Where the shoulder lies
+    over the stem, the two colours multiply into a deeper tone. Every block has
+    a light cut edge, brightest along the top, and the pair casts one soft shadow.
+  -->
+  <defs>
+    <linearGradient id="stem" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#ffc54d"/>
+      <stop offset="1" stop-color="#ff9f0a"/>
+    </linearGradient>
+    <linearGradient id="shoulder" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#ff7c30"/>
+      <stop offset="1" stop-color="#f4520c"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.9"/>
+      <stop offset="0.35" stop-color="#fff" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.25"/>
+    </linearGradient>
+    <path id="stem-shape" d="M148 40a68 68 0 0 1 68 68v296a68 68 0 0 1-136 0V108a68 68 0 0 1 68-68Z"/>
+    <path id="shoulder-shape" d="M208 200H300A140 140 0 0 1 440 340V424Q440 472 392 472H208Q160 472 160 424V248Q160 200 208 200Z"/>
+    <clipPath id="clip-stem"><use href="#stem-shape"/></clipPath>
+    <clipPath id="clip-shoulder"><use href="#shoulder-shape"/></clipPath>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
+      <feOffset dy="16" result="drop"/>
+      <feFlood flood-color="#a33600" flood-opacity="0.25"/>
+      <feComposite operator="in" in2="drop"/>
+    </filter>
+  </defs>
+  <g transform="translate(-4 -16)">
+    <g filter="url(#shadow)">
+      <use href="#stem-shape"/>
+      <use href="#shoulder-shape"/>
+    </g>
+    <g style="isolation: isolate">
+      <use href="#stem-shape" fill="url(#stem)"/>
+      <use href="#stem-shape" clip-path="url(#clip-stem)" fill="none" stroke="url(#edge)" stroke-width="9"/>
+      <use href="#shoulder-shape" fill="url(#shoulder)"/>
+      <g clip-path="url(#clip-shoulder)" opacity="0.8" style="mix-blend-mode: multiply">
+        <use href="#stem-shape" fill="url(#stem)"/>
+      </g>
+      <use href="#shoulder-shape" clip-path="url(#clip-shoulder)" fill="none" stroke="url(#edge)" stroke-width="9"/>
+    </g>
+  </g>
+</svg>
