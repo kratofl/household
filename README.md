@@ -4,7 +4,7 @@
 
 Household is a local-network-first, self-hosted household management app. It is being built as a small home-server application for identity/admin, budget tracking, and future household workflows such as shopping lists, recipes, meal planning, calendar, and waste schedules.
 
-The project is early-stage. The install, identity foundation, module toggles, update checks, and backend architecture are the current focus; budget functionality is still under active development.
+The project is early-stage. Budget is the first complete feature; the other household areas are planned.
 
 ## Why run it?
 
@@ -12,7 +12,7 @@ The project is early-stage. The install, identity foundation, module toggles, up
 - **One Compose stack:** web UI, .NET modular-monolith API, updater sidecar, and PostgreSQL.
 - **Public-image installs:** normal installs use published container images, not local source builds.
 - **Admin-gated identity:** users can register, remain pending, and be approved by an admin.
-- **Modular foundation:** one backend process with feature-owned packages and Postgres schemas.
+- **Modular foundation:** one backend process with feature-owned modules and Postgres schemas.
 - **Operational basics:** backups, release-channel checks, optional observability, and documented configuration.
 
 ## Current status
@@ -22,8 +22,8 @@ The project is early-stage. The install, identity foundation, module toggles, up
 | Install and operations | Docker Compose stack, env template, backup/restore docs, updater sidecar. |
 | Identity | Login, refresh/logout, pending users, admin user management foundation, password change. |
 | Modules | Enabled/active module toggles drive navigation visibility. |
-| Budget | Schema and route scaffold; domain behavior is planned/in progress. |
-| Web UI | Next.js App Router UI with local-network backend proxy. |
+| Budget | Monthly plan, append-only ledger with corrections and voids, recurring income and commitments, savings goals, investments, wishlist, reports, and reviewed CSV import/export. |
+| Web UI | Next.js App Router UI in German and English, desktop and mobile, with a local-network backend proxy. |
 | Observability | Optional Grafana, Loki, and Grafana Alloy profile. |
 
 Screenshots are not ready yet. The current public-readiness work is prioritizing reliable install and contributor workflows first.
@@ -120,7 +120,7 @@ Useful docs:
 
 ## Architecture
 
-Household is moving toward a modular monolith:
+Household is a modular monolith:
 
 - `backend/`: .NET 10 API, updater, feature modules, EF Core migrations, and platform code.
 - `clients/web/`: Next.js 16 App Router UI.

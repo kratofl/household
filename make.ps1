@@ -35,7 +35,7 @@ function Invoke-Step {
 }
 
 # Use the same POSIX script as Make. Git for Windows includes sh.exe.
-$devTargets = @("dev", "dev-info", "dev-project", "dev-down", "dev-logs", "db-up", "db-down", "db-logs", "reset-dev-db", "api-dev", "web-dev", "logs", "observability-up", "observability-down", "observability-logs")
+$devTargets = @("dev", "dev-info", "dev-project", "dev-prune", "dev-down", "dev-logs", "db-up", "db-down", "db-logs", "reset-dev-db", "api-dev", "web-dev", "logs", "observability-up", "observability-down", "observability-logs")
 if ($Target -in $devTargets -or $Target -eq "seed-dev") {
     if ($Target -eq "seed-dev" -and -not $Backup) { Write-Error "Please add -Backup <path> (a dump from prod-backup)"; exit 1 }
     $gitCommand = Get-Command git -ErrorAction Stop
@@ -79,8 +79,8 @@ switch ($Target) {
     "help" {
         Write-Host "Household targets (.\make.ps1 <target>)"
         Write-Host ""
-        Write-Host "Setup:        setup-env, bootstrap, doctor"
-        Write-Host "Development:  dev, dev-info, dev-down, dev-logs, db-up, db-logs, reset-dev-db,"
+        Write-Host "Setup:        setup-env, bootstrap, worktree-setup, doctor"
+        Write-Host "Development:  dev, dev-info, dev-down, dev-prune, dev-logs, db-up, db-logs, reset-dev-db,"
         Write-Host "              seed-dev -Backup <path>"
         Write-Host "Quality:      check, backend-test, backend-build, web-lint, web-build, compose-config, workflow-check"
         Write-Host "Production:   prod-pull, prod-up, prod-build-up, prod-down, prod-logs, prod-backup,"
@@ -94,6 +94,15 @@ switch ($Target) {
 
     "bootstrap" {
         Invoke-SetupEnv
+        Invoke-Step "Restoring backend dependencies" { Set-Location $backendDir; dotnet restore Household.slnx }
+        Invoke-Step "Installing web dependencies" { Set-Location $webDir; npm ci }
+    }
+
+    # Runs when T3 Code creates a worktree (see t3.json). Skips setup-env: a
+    # worktree never needs a production .env.
+    "worktree-setup" {
+        & $PSCommandPath dev-prune
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Invoke-Step "Restoring backend dependencies" { Set-Location $backendDir; dotnet restore Household.slnx }
         Invoke-Step "Installing web dependencies" { Set-Location $webDir; npm ci }
     }

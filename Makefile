@@ -19,6 +19,7 @@ help:
 	@echo "Setup:"
 	@echo "  make setup-env              Copy deployments/.env.example to deployments/.env if missing"
 	@echo "  make bootstrap              Restore .NET and web dependencies"
+	@echo "  make worktree-setup         Prepare a new worktree: dev-prune, then restore dependencies"
 	@echo "  make doctor                 Check required local tools"
 	@echo ""
 	@echo "Development:"
@@ -26,6 +27,7 @@ help:
 	@echo "  make dev-info               Show this worktree URL and services"
 	@echo "  make dev-down               Stop this worktree, keep its data"
 	@echo "  make dev-logs               Follow this worktree logs"
+	@echo "  make dev-prune              Remove dev stacks and data of deleted worktrees"
 	@echo "  make db-up                  Start local dev Postgres in Docker"
 	@echo "  make db-down                Stop local dev Postgres"
 	@echo "  make db-logs                Follow local dev Postgres logs"
@@ -66,7 +68,7 @@ help:
 # ----------------------
 # SETUP
 # ----------------------
-.PHONY: setup-env bootstrap doctor require-env validate-prod-env
+.PHONY: setup-env bootstrap worktree-setup doctor require-env validate-prod-env
 setup-env:
 	@if [ ! -f "$(ENV_FILE)" ]; then \
 		cp "$(ENV_EXAMPLE_FILE)" "$(ENV_FILE)"; \
@@ -76,6 +78,14 @@ setup-env:
 	fi
 
 bootstrap: setup-env
+	@echo ">> Restoring backend dependencies"
+	@cd $(BACKEND_DIR) && dotnet restore Household.slnx
+	@echo ">> Installing web dependencies"
+	@cd $(WEB_DIR) && npm ci
+
+# Runs when T3 Code creates a worktree (see t3.json). Skips setup-env: a worktree
+# never needs a production .env.
+worktree-setup: dev-prune
 	@echo ">> Restoring backend dependencies"
 	@cd $(BACKEND_DIR) && dotnet restore Household.slnx
 	@echo ">> Installing web dependencies"
@@ -157,8 +167,8 @@ merchant-logos:
 	@node scripts/merchant-logos.mjs $(MERCHANTS)
 
 # Development commands share one implementation with make.ps1.
-.PHONY: dev dev-info dev-project dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs core-up core-down
-dev dev-info dev-project dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs:
+.PHONY: dev dev-info dev-project dev-prune dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs core-up core-down
+dev dev-info dev-project dev-prune dev-down dev-logs db-up db-down db-logs reset-dev-db api-dev web-dev logs observability-up observability-down observability-logs:
 	@sh scripts/dev.sh $@
 
 .PHONY: seed-dev

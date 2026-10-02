@@ -54,7 +54,17 @@ or automatically copy data from another worktree or machine. Image build cache
 may be reused by Docker, but running filesystems and database writes are separate.
 Stopping one stack does not stop another. Reset requires typing its exact project
 name and deletes all that development project's volumes, including optional
-observability data. Removing a Git worktree does not remove Docker resources.
+observability data.
+
+Removing a Git worktree leaves its stack behind until the next `dev`,
+`worktree-setup`, or `dev-prune` in any worktree of the same repository. Every
+dev command records its project and worktree path under
+`.git/household-dev-stacks/`; those commands remove the containers, network, and
+volumes of each recorded project whose worktree directory no longer exists. A
+worktree on a disconnected drive counts as gone. Stacks from before this record
+existed, and stacks of separate clones, are never touched. T3 Code runs
+`make worktree-setup` when it creates a worktree (`t3.json`), which also restores
+.NET and npm dependencies so host-side checks work immediately.
 
 Only the web service publishes a port, bound to `127.0.0.1`. Docker allocates it
 without a separate find-free-port race. The URL may change on recreation; use

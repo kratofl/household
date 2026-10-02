@@ -98,7 +98,8 @@ make create-migration feature=budget name=AddAccounts
 - Backend calls should go through `src/lib/api.ts`.
 - Browser-facing backend access is proxied through `src/app/api/backend/[...path]/route.ts`.
 - Use existing shadcn/ui components in `src/components/ui`.
-- Keep UI state and feature code close to the App Router route that uses it until there is a clear reason to extract it.
+- Feature UI lives in `src/features/<feature>`; App Router pages in `src/app` stay thin and render it.
+- Follow the design system in `docs/design-system/DESIGN.md`. Every user-facing string needs German and English text; `npm run check:i18n` enforces it.
 
 ## Documentation expectations
 

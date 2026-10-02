@@ -51,13 +51,10 @@ In production Compose, the web container talks to the API over the internal Dock
 | Variable | Default/example | Description |
 | --- | --- | --- |
 | `HOUSEHOLD_API_SERVER_PORT` | `8090` | API listen port inside the Compose network. It is not published to the host by default. |
-| `HOUSEHOLD_API_SERVER_TIMEOUT_READ` | `5s` | HTTP server read timeout. |
-| `HOUSEHOLD_API_SERVER_TIMEOUT_WRITE` | `10s` | HTTP server write timeout. |
-| `HOUSEHOLD_API_SERVER_TIMEOUT_IDLE` | `60s` | HTTP server idle timeout and graceful shutdown timeout. |
-| `HOUSEHOLD_API_SERVER_DEBUG` | unset / `false` | Enables debug behavior in the API. Leave disabled in production. |
-| `HOUSEHOLD_API_DB_DEBUG` | unset / `false` | Enables verbose database logging. Leave disabled in production unless troubleshooting. |
 
 The API reads database settings as `HOUSEHOLD_API_DB_*`. Compose and the Makefile derive those from the simpler `HOUSEHOLD_DB_*` values below.
+
+The API writes logs to stdout; read them with `docker compose logs household-api`. These settings from earlier releases are still accepted in `.env` but have no effect: `HOUSEHOLD_API_SERVER_TIMEOUT_READ`, `HOUSEHOLD_API_SERVER_TIMEOUT_WRITE`, `HOUSEHOLD_API_SERVER_TIMEOUT_IDLE`, `HOUSEHOLD_API_SERVER_DEBUG`, `HOUSEHOLD_API_DB_DEBUG`, `HOUSEHOLD_LOG_LEVEL`, `HOUSEHOLD_LOG_ENVIRONMENT`, `HOUSEHOLD_LOG_VERSION`, and `HOUSEHOLD_LOG_FILE_ENABLED`.
 
 ## Database settings
 
@@ -67,15 +64,6 @@ The API reads database settings as `HOUSEHOLD_API_DB_*`. Compose and the Makefil
 | `HOUSEHOLD_DB_USER` | `household` | Postgres database user. |
 | `HOUSEHOLD_DB_PASSWORD` | `change-me-long-random-database-password` | Postgres password. Must be changed for production. |
 | `HOUSEHOLD_DB_PORT` | `5432` | Host port for the development database. Production does not publish Postgres to the host. |
-
-## Logging settings
-
-| Variable | Default/example | Description |
-| --- | --- | --- |
-| `HOUSEHOLD_LOG_LEVEL` | `info` | Log level accepted by zerolog, such as `trace`, `debug`, `info`, `warn`, or `error`. |
-| `HOUSEHOLD_LOG_ENVIRONMENT` | `production` in production Compose, `dev` in local Make targets | Environment label attached to structured logs. |
-| `HOUSEHOLD_LOG_VERSION` | `HOUSEHOLD_VERSION` in production Compose | Version label attached to structured logs. |
-| `HOUSEHOLD_LOG_FILE_ENABLED` | unset / `false` | Writes logs to local files in addition to stdout. Prefer stdout for containers. |
 
 ## First admin seed
 

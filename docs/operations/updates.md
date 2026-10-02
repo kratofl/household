@@ -71,6 +71,7 @@ Release bundles include:
 
 - `docker-compose.yml`
 - `.env.example`
+- `observability/`
 - `INSTALL.md`
 - `UPGRADE.md`
 - `household-release.json`

@@ -6,8 +6,34 @@ root=$(git rev-parse --show-toplevel)
 label=$(printf '%s' "$(basename "$root")" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | cut -c1-24)
 identity=$(printf '%s\n' "$root" | git hash-object --stdin | cut -c1-12)
 project="household-dev-${label}-${identity}"
+# Every worktree of this repository records its stack here, so a stack can be
+# found and removed after its worktree directory is gone.
+registry="$(git rev-parse --path-format=absolute --git-common-dir)/household-dev-stacks"
+compose_project() {
+    name=$1; shift
+    docker compose --project-name "$name" --env-file deployments/dev.env -f deployments/docker-compose.dev.yml "$@"
+}
 compose() {
-    docker compose --project-name "$project" --env-file deployments/dev.env -f deployments/docker-compose.dev.yml "$@"
+    mkdir -p "$registry"
+    printf '%s\n' "$root" > "$registry/$project"
+    compose_project "$project" "$@"
+}
+# Removes containers, networks, and volumes of recorded stacks whose worktree no
+# longer exists. Stacks that were never recorded are left alone.
+prune() {
+    [ -d "$registry" ] || return 0
+    for record in "$registry"/household-dev-*; do
+        [ -f "$record" ] || continue
+        path=$(cat "$record")
+        [ -e "$path/.git" ] && continue
+        stale=$(basename "$record")
+        printf 'Removing %s: worktree %s no longer exists\n' "$stale" "$path"
+        if compose_project "$stale" --profile observability down --volumes --remove-orphans; then
+            rm -f "$record"
+        else
+            printf 'Could not remove %s; will retry next time.\n' "$stale" >&2
+        fi
+    done
 }
 # Best-effort LAN address so the printed URL works from another machine.
 # Prints nothing when no method fits the host, which only drops the LAN line.
@@ -33,6 +59,7 @@ info() {
 }
 case "${1:-dev}" in
     dev)
+        prune
         compose up --build --detach --wait --wait-timeout 180 household-web
         info
         printf '\nWatching source changes. Ctrl+C ends watch; dev-down stops this stack.\n'
@@ -40,6 +67,7 @@ case "${1:-dev}" in
         ;;
     dev-info) info ;;
     dev-project) printf '%s\n' "$project" ;;
+    dev-prune) prune ;;
     dev-down|db-down) compose --profile observability down --remove-orphans ;;
     dev-logs|logs) compose logs --follow ;;
     db-up) compose up --detach --wait household-db ;;

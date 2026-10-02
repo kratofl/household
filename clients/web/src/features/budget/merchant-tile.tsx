@@ -21,9 +21,10 @@ export function MerchantTile({ merchant, size = 32, className }: { merchant: Mer
   const tile = "inline-flex shrink-0 items-center justify-center font-semibold"
 
   // A catalog entry whose logo file has not been added yet falls back like any other merchant.
+  // Padding in pixels from size: a percentage would resolve against the row's width, not the tile's.
   if (url && !broken) {
     return (
-      <span className={cn(tile, "border border-separator bg-white p-[15%]", className)} style={style}>
+      <span className={cn(tile, "border border-separator bg-white", className)} style={{ ...style, padding: size * 0.15 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt="" aria-hidden className="size-full object-contain" onError={() => setBroken(true)} />
       </span>

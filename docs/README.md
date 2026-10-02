@@ -20,6 +20,14 @@ Household is a local-network-first household management app. These docs focus on
 - [Testing and checks](development/testing.md)
 - [Database migrations](db/migrations.md)
 - [Release artifact format](releases.md)
+- [Design system](design-system/DESIGN.md)
+
+## Budget
+
+- [Monthly budget](budget/monthly-budget.md): the model everyday budgeting follows.
+- [Glossary](budget/glossary.md)
+- [CSV import and export format](budget/csv-format.md)
+- [Product definition](budget/product-definition.md)
 
 ## Project context
 
