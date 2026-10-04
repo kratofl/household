@@ -463,9 +463,7 @@ API.
   development, deployment, CI, and database documents that still describe Go
   remain accurate descriptions of the current implementation until the migration
   lands; they must be updated as part of cutover.
-- The older dashboard-navigation design predates the final Saving & Investing,
-  Wishlist, and Reports destinations. This specification and ADR 0057 govern the
-  completed navigation.
+- ADR 0067 supersedes the navigation in this specification and ADR 0057.
 - This specification describes the complete product slice. Implementation should
   be decomposed into dependency-aware tracer-bullet tickets rather than attempted
   as one unreviewable change, while every ticket preserves the end-to-end target

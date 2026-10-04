@@ -8,20 +8,53 @@ The older Budget screens were removed from the web client. Their tables and
 endpoints are untouched, and that data has never been converted into this
 model, so it is no longer reachable through the UI.
 
-The proposal and spreadsheet examples are in [simplification-proposal.md](simplification-proposal.md).
+## Why it works this way
+
+The model replaces a spreadsheet kept by hand, and its main goal is removing
+recurring manual work. The everyday routine is opening Budget and recording a
+purchase. Creating months, copying recurring rows, confirming salary or each
+subscription, transferring the planned saving, and closing periods are not
+monthly chores, and the everyday flow does not ask for recurring confirmation,
+income-variance routing, custom recurrence rules, wishlist management, or
+investing setup.
+
+- Fun money is calculated from the configured income, not from a confirmed
+  salary transaction. It is an allowance, not a bank balance or proof that
+  income arrived.
+- Each plan deduction reserves money once. Recording the matching payment
+  consumes that reserve and never charges fun money a second time.
+- A missing payment record is not evidence of an unpaid bill or of spare money.
+  Scheduled costs stay accounted for automatically and never become savings at
+  rollover.
+- Category and funding source are separate: the category says what an expense
+  was for, the source which balance paid. A savings-funded car repair still
+  counts toward car spending.
+- There is no "excluded from budget" switch; every expense is fully assigned to
+  real balances. A shortfall is never taken silently from fun money, buffer, or
+  savings. An accepted fun-money remainder may make fun money negative and shows
+  the deficit; protected balances never go negative.
+- Category reserves are monthly allowances and reset each period, so a fuel
+  allowance cannot quietly grow. Money meant to accumulate belongs in Savings.
+- Rollover nets leftovers against a deficit first, so the same money is not both
+  saved and treated as missing.
+- An unaffordable plan never manufactures funded savings or protected reserves.
+- Each expense stores its funding instead of recalculating it from today's
+  category configuration.
 
 ## What works
 
 - One monthly income amount, fixed costs, monthly buffer, monthly saving,
   monthly subscriptions, and yearly subscriptions.
 - Yearly bills reduce the allowance only in the period containing their due
-  date. Missing dates clamp to the last day of the due month.
+  date. Missing dates clamp to the last day of the due month without moving
+  later years' dates.
 - Immediate plan previews and a twelve-period outlook. Plan changes start next
   period by default, or overwrite the running period when the user picks "this
   period" before saving. Either way, periods that have already closed keep the
   plan version that produced them. Pending next-period changes can be replaced
   or cancelled. Setting a rate to zero pauses that allocation; setting it above
-  zero resumes it.
+  zero resumes it. A plan that exceeds income in any of the next twelve periods
+  cannot be saved.
 - Categories can be created, renamed, archived, and restored. A category with
   a current or pending reserve must have that reserve removed before archival.
   Expense records retain their historical category names.
@@ -112,10 +145,50 @@ Rewriting the running period is refused when a recorded expense would lose the
 source it was paid from; the request replays the whole history first and returns
 a conflict instead. Closed periods are never rewritten.
 
-Additional savings pots, merchant suggestions, and reconciliation of scheduled
-bills with actual payments are not implemented.
+## Not implemented
+
+These are open. When they are built, they keep the rules above and these:
+
+- **Additional savings pots.** A pot needs only a name, a monthly contribution,
+  and an optional opening amount; targets, deadlines, valuations, and allocation
+  percentages stay out. An expense added from a pot defaults to that pot,
+  whatever its category. Archiving a pot with money left requires an explicit
+  destination for the balance.
+- **Merchant suggestions.** Picking a known merchant may suggest a category from
+  merchant history; the choice stays editable.
+- **Reconciling scheduled bills with payments.** An optional Record payment
+  action links an actual payment, or an already recorded expense (reversing its
+  earlier funding), to the reserved plan item. It never creates a second charge,
+  and a difference from the planned amount needs an explicit funding choice. A
+  bill explicitly marked unpaid keeps its reserve across the period boundary, and
+  its late payment does not charge the new period. Actual-only reporting must
+  then tell scheduled amounts from recorded payments.
+- **Converting the older Budget's data.** Old periods keep their old calculation
+  rules. Existing plans and balances map into a next-period plan; excluded
+  expenses, investments, and custom schedules are never silently reinterpreted.
+  Unmappable items are presented for review and keep their history and balances.
+  Imports, exports, reports, and old routes are audited first so they use or
+  preserve the right funding rules.
 
 ## Verification
+
+The reference plan below (`SpreadsheetPlan` in the tests) uses invented figures
+and is not seed data:
+
+| Calculation | Amount |
+| --- | ---: |
+| Salary | EUR 2,800.00 |
+| Fixed payment, rent | -EUR 500.00 |
+| Fuel reservation | -EUR 180.00 |
+| Monthly savings | -EUR 1,000.00 |
+| Buffer | -EUR 200.00 |
+| Monthly subscriptions | -EUR 42.97 |
+| Normal-period fun budget | **EUR 877.03** |
+| September, after EUR 36.00 yearly credit-card fee | **EUR 841.03** |
+| October, after EUR 69.00 yearly Amazon subscription | **EUR 808.03** |
+
+With EUR 97.40 spent on fuel, EUR 82.60 of the fuel reserve remains and fun
+money is unchanged.
 
 `MonthlyBudgetTests` covers the spreadsheet's allowances, fuel remaining,
 savings funding, refunds, custom periods, clamped yearly due dates, rollover,
@@ -127,8 +200,4 @@ corrections, plan conflicts and cancellation, and owner isolation.
 `Plan_can_overwrite_the_running_period_unless_it_unfunds_recorded_expenses`
 covers the current-period option and its refusal case.
 
-The repository check passed on 2026-09-16 with 115 backend tests, backend and web
-builds, and web lint. An isolated browser walkthrough also exercised setup,
-ordinary/category/savings purchases, explicit shortfall coverage, English and
-German, mobile layout, plan save/cancel, corrections, refunds, widget
-rearrangement, and keyboard operation. Test artifacts belong under ignored `tmp/`.
+Test artifacts belong under ignored `tmp/`.

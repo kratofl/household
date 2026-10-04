@@ -5,9 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  The Household design system. docs/design-system/DESIGN.md is normative; the
-  values below are docs/design-system/tokens.css transcribed 1:1, with dark mode
-  on the .dark class that next-themes sets.
+  The Household design system. docs/design-system/DESIGN.md is normative and
+  names the tokens; their values live here, with dark mode on the .dark class
+  that next-themes sets.
 
   Flat first, glass on chrome: content (cards, lists, inputs, buttons, sidebar)
   is flat with no shadow. Only the toolbar band and floating layers (menus,

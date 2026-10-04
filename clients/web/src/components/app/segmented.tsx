@@ -5,8 +5,8 @@
 // segment itself carries segment-selected, shadow-segment and semibold; there is
 // no separate sliding thumb.
 // Shape follows its context. In content it is a flat desktop control: a
-// fill-strong track with radius-md and radius-sm segments inside (tokens.json:
-// "segmented tracks (flat)"). Only in the toolbar is it a pill on the toolbar
+// fill-strong track with radius-md and radius-sm segments inside (DESIGN.md,
+// SegmentedControl). Only in the toolbar is it a pill on the toolbar
 // fill, and below lg it is a pill with 40px segments on a 48px track like every
 // mobile control. Not for navigation.
 // Keyboard follows the radio group pattern: one Tab stop, arrow keys move and select.
