@@ -32,7 +32,7 @@
   ],
   "uid": "household-api",
   "title": "Household – API",
-  "description": "Anfragen, Fehler, Latenz, Datenbank und .NET-Laufzeit der Household-API aus OpenTelemetry.",
+  "description": "Requests, errors, latency, database, and .NET runtime of the Household API from OpenTelemetry.",
   "tags": [
     "household",
     "opentelemetry"
@@ -50,7 +50,7 @@
     "list": [
       {
         "name": "service",
-        "label": "Dienst",
+        "label": "Service",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -69,7 +69,7 @@
         "includeAll": false,
         "multi": false,
         "sort": 1,
-        "description": "Wert von OTEL_SERVICE_NAME der API."
+        "description": "The API's OTEL_SERVICE_NAME."
       }
     ]
   },
@@ -80,7 +80,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Überblick",
+      "title": "Overview",
       "collapsed": false,
       "panels": [],
       "id": 1,
@@ -93,8 +93,8 @@
     },
     {
       "type": "stat",
-      "title": "Anfragen pro Sekunde",
-      "description": "Alle API-Anfragen ohne die Health-Checks von Docker und Web.",
+      "title": "Requests per second",
+      "description": "All API requests, without the Docker and web health checks.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -152,8 +152,8 @@
     },
     {
       "type": "stat",
-      "title": "Serverfehler (5xx)",
-      "description": "Anteil der Anfragen, die mit einem 5xx-Status endeten.",
+      "title": "Server errors (5xx)",
+      "description": "Share of requests that ended with a 5xx status.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -220,8 +220,8 @@
     },
     {
       "type": "stat",
-      "title": "Latenz p95",
-      "description": "95 % der Anfragen sind schneller.",
+      "title": "Latency p95",
+      "description": "95 % of requests are faster.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -287,8 +287,8 @@
     },
     {
       "type": "stat",
-      "title": "Abgelehnte Logins",
-      "description": "Fehlgeschlagene Anmeldungen im gewählten Zeitraum: falsches Passwort, gesperrtes oder nicht freigeschaltetes Konto.",
+      "title": "Rejected sign-ins",
+      "description": "Failed sign-ins in the selected time range: wrong password, blocked or not yet approved account.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -355,8 +355,8 @@
     },
     {
       "type": "stat",
-      "title": "Arbeitsspeicher",
-      "description": "Working Set des API-Prozesses.",
+      "title": "Memory",
+      "description": "Working set of the API process.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -427,8 +427,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Anfragen pro Route",
-      "description": "Anfragen pro Sekunde je Route.",
+      "title": "Requests per route",
+      "description": "Requests per second for each route.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -486,8 +486,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Antworten nach Status",
-      "description": "4xx sind meist abgelaufene Sitzungen oder falsche Eingaben, 5xx sind Fehler der API.",
+      "title": "Responses by status",
+      "description": "4xx are mostly expired sessions or invalid input; 5xx are API errors.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -545,8 +545,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Latenz p95 pro Route",
-      "description": "95. Perzentil der Antwortzeit je Route.",
+      "title": "Latency p95 per route",
+      "description": "95th percentile response time per route.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -604,8 +604,8 @@
     },
     {
       "type": "table",
-      "title": "Langsamste Routen",
-      "description": "Antwortzeit und Last je Route über den gewählten Zeitraum.",
+      "title": "Slowest routes",
+      "description": "Response time and load per route over the selected time range.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -648,10 +648,10 @@
               "Time": true
             },
             "renameByName": {
-              "http_request_method": "Methode",
+              "http_request_method": "Method",
               "http_route": "Route",
               "Value #A": "p95",
-              "Value #B": "Anfragen"
+              "Value #B": "Requests"
             }
           }
         },
@@ -689,7 +689,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Anfragen"
+              "options": "Requests"
             },
             "properties": [
               {
@@ -718,7 +718,7 @@
     },
     {
       "type": "row",
-      "title": "Datenbank",
+      "title": "Database",
       "collapsed": false,
       "panels": [],
       "id": 12,
@@ -731,8 +731,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Datenbankbefehle pro Sekunde",
-      "description": "SQL-Befehle, die die API an PostgreSQL schickt.",
+      "title": "Database commands per second",
+      "description": "SQL commands the API sends to PostgreSQL.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -744,7 +744,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "expr": "sum(rate(db_client_operation_duration_seconds_count{job=\"$service\"}[$__rate_interval]))",
-          "legendFormat": "Befehle",
+          "legendFormat": "Commands",
           "refId": "A"
         }
       ],
@@ -790,8 +790,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Dauer der Datenbankbefehle",
-      "description": "Median und 95. Perzentil der Ausführungszeit.",
+      "title": "Database command duration",
+      "description": "Median and 95th percentile of execution time.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -858,8 +858,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Verbindungen im Pool",
-      "description": "Belegte (used) und offene, freie (idle) Verbindungen. Npgsql erlaubt standardmäßig 100; nähert sich used dem, warten Anfragen auf eine Verbindung.",
+      "title": "Pool connections",
+      "description": "Busy (used) and open, free (idle) connections. Npgsql allows 100 by default; when used gets close, requests wait for a connection.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -917,7 +917,7 @@
     },
     {
       "type": "row",
-      "title": ".NET-Laufzeit",
+      "title": ".NET runtime",
       "collapsed": false,
       "panels": [],
       "id": 16,
@@ -931,7 +931,7 @@
     {
       "type": "timeseries",
       "title": "CPU",
-      "description": "Anteil der CPU-Kerne, den der API-Prozess nutzt.",
+      "description": "Share of the CPU cores the API process uses.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -989,8 +989,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Speicher",
-      "description": "Working Set des Prozesses und Größe des verwalteten Heaps nach der letzten Garbage Collection.",
+      "title": "Memory",
+      "description": "Working set of the process and size of the managed heap after the last garbage collection.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1058,7 +1058,7 @@
     {
       "type": "timeseries",
       "title": "Garbage Collections",
-      "description": "Collections pro Sekunde je Generation. Viele gen2-Collections deuten auf Speicherdruck.",
+      "description": "Collections per second for each generation. Many gen2 collections point to memory pressure.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1116,8 +1116,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Thread-Pool",
-      "description": "Steigt die Warteschlange dauerhaft, kommt die API mit der Arbeit nicht hinterher.",
+      "title": "Thread pool",
+      "description": "If the queue keeps growing, the API cannot keep up with its work.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1138,7 +1138,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "expr": "sum(dotnet_thread_pool_queue_length_total{job=\"$service\"})",
-          "legendFormat": "Warteschlange",
+          "legendFormat": "Queue",
           "refId": "B"
         }
       ],
@@ -1184,7 +1184,7 @@
     },
     {
       "type": "row",
-      "title": "Logs und Traces",
+      "title": "Logs and traces",
       "collapsed": false,
       "panels": [],
       "id": 21,
@@ -1197,8 +1197,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Warnungen und Fehler",
-      "description": "Log-Einträge ab Warning, aus den OTLP-Logs der API.",
+      "title": "Warnings and errors",
+      "description": "Log entries at Warning and above, from the API's OTLP logs.",
       "datasource": {
         "type": "loki",
         "uid": "${DS_LOKI}"
@@ -1257,8 +1257,8 @@
     },
     {
       "type": "logs",
-      "title": "Warnungen und Fehler im Detail",
-      "description": "Ein Klick auf einen Eintrag zeigt die Trace-ID; darüber geht es zum Trace in Tempo.",
+      "title": "Warnings and errors in detail",
+      "description": "Click an entry to see its trace id, which links to the trace in Tempo.",
       "datasource": {
         "type": "loki",
         "uid": "${DS_LOKI}"
@@ -1292,8 +1292,8 @@
     },
     {
       "type": "table",
-      "title": "Fehlerhafte Anfragen",
-      "description": "Traces mit Fehlerstatus. Die Trace-ID öffnet den ganzen Ablauf inklusive SQL.",
+      "title": "Failed requests",
+      "description": "Traces with error status. The trace id opens the whole request, SQL included.",
       "datasource": {
         "type": "tempo",
         "uid": "${DS_TEMPO}"
@@ -1329,8 +1329,8 @@
     },
     {
       "type": "table",
-      "title": "Langsame Anfragen",
-      "description": "Anfragen über 500 ms.",
+      "title": "Slow requests",
+      "description": "Requests over 500 ms.",
       "datasource": {
         "type": "tempo",
         "uid": "${DS_TEMPO}"

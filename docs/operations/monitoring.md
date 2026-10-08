@@ -45,6 +45,6 @@ dashboard JSON file** and choose your data sources when asked.
 | `household-api.json` | Prometheus, Loki, Tempo | Requests, errors, latency per route, database, .NET runtime, warnings and errors with their traces, failed and slow requests. |
 | `household-containers.json` | Prometheus with cAdvisor, Loki with Docker logs | CPU, memory, network, and restarts per Household container, and their logs. |
 
-The container dashboard selects containers by the Compose project label. Set **Compose-Projekt**
+The container dashboard selects containers by the Compose project label. Set **Compose project**
 to the project name of your stack, `household` unless you changed it. cAdvisor has to keep
 Docker labels, which it does by default.
