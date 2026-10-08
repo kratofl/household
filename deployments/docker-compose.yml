@@ -51,6 +51,15 @@ services:
       HOUSEHOLD_OIDC_CLIENT_ID: ${HOUSEHOLD_OIDC_CLIENT_ID:-}
       HOUSEHOLD_OIDC_CLIENT_SECRET: ${HOUSEHOLD_OIDC_CLIENT_SECRET:-}
       HOUSEHOLD_OIDC_NAME: ${HOUSEHOLD_OIDC_NAME:-SSO}
+      # OpenTelemetry: traces, metrics and logs go to this OTLP endpoint; empty sends nothing.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-household}
+      # Every 15 s instead of the SDK's 60 s, so Grafana's rate windows always hold several points.
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-15000}
+    # Lets OTEL_EXPORTER_OTLP_ENDPOINT reach a collector published on this host.
+    extra_hosts:
+      - host.docker.internal:host-gateway
     expose:
       - "${HOUSEHOLD_API_SERVER_PORT:-8090}"
     restart: unless-stopped

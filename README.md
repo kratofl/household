@@ -117,6 +117,7 @@ Useful docs:
 - [Backups and restores](docs/operations/backups.md)
 - [Updates and rollback](docs/operations/updates.md)
 - [Troubleshooting](docs/operations/troubleshooting.md)
+- [Monitoring with OpenTelemetry](docs/operations/monitoring.md)
 
 ## Architecture
 
