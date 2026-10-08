@@ -20,7 +20,7 @@ The project is early-stage. Budget is the first complete feature; the other hous
 | Area | Status |
 | --- | --- |
 | Install and operations | Docker Compose stack, env template, backup/restore and update docs. |
-| Identity | Login, refresh/logout, pending users, admin user management foundation, password change. |
+| Identity | Login, refresh/logout, OIDC, pending users, admin user management (approve, block, admin role), password change. |
 | Modules | Enabled/active module toggles drive navigation visibility. |
 | Budget | Monthly plan, append-only ledger with corrections and voids, recurring income and commitments, savings goals, investments, wishlist, reports, and reviewed CSV import/export. |
 | Web UI | Next.js App Router UI in German and English, desktop and mobile, with a local-network backend proxy. |

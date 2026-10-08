@@ -10,7 +10,8 @@ import { ToolbarContent } from "@/components/app/toolbar"
 import { Switch } from "@/components/ui/switch"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
 
-import type { AuditEvent } from "@/features/admin/types"
+import type { AuditEvent, UserChange } from "@/features/admin/types"
+import { UsersSection } from "@/features/admin/users-section"
 import type { CurrentUser } from "@/lib/session"
 
 export function AdminSettingsPanel(props: {
@@ -18,6 +19,8 @@ export function AdminSettingsPanel(props: {
   modules: AppModule[]
   locale: Locale
   toggleModule: (module: AppModule, active: boolean) => Promise<void>
+  users: CurrentUser[]
+  updateUser: (user: CurrentUser, change: UserChange) => Promise<void>
   auditEvents: AuditEvent[]
   loadAuditEvents: (showMessage?: boolean) => Promise<void>
   t: Translator
@@ -38,6 +41,8 @@ export function AdminSettingsPanel(props: {
 
   return (
     <SettingsSurface title={props.t("admin.title")} description={props.t("admin.description")}>
+      <UsersSection currentUser={props.currentUser} users={props.users} updateUser={props.updateUser} t={props.t} />
+
       <SettingsSection title={props.t("services.title")} description={props.t("services.description")}>
         <SettingsBlock className="text-footnote text-label-secondary">{props.t("services.catalogHint")}</SettingsBlock>
         {props.modules.map((module) => (

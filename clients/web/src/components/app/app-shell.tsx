@@ -37,7 +37,7 @@ import { ToolbarContent, ToolbarFrame } from "@/components/app/toolbar"
 import { AccountPanel } from "@/features/account/account-panel"
 import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
 import { SettingsPanel } from "@/features/settings/settings-panel"
-import type { AuditEvent } from "@/features/admin/types"
+import type { AuditEvent, UserChange } from "@/features/admin/types"
 import { LoginScreen } from "@/features/auth/login-screen"
 import { OIDC_CALLBACK_PATH, completeOidc, loadOidcOffer, startOidc, type OidcOffer } from "@/features/auth/oidc"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
@@ -55,6 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [modules, setModules] = useState<AppModule[]>(fallbackModules("de"))
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+  const [users, setUsers] = useState<CurrentUser[]>([])
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [registerName, setRegisterName] = useState("")
@@ -262,6 +263,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [t, tokens])
 
+  // Registrations waiting for approval come first; the rest stay in the API's name order.
+  const loadUsers = useCallback(async () => {
+    if (!tokens) return
+
+    try {
+      const list = await apiRequest<CurrentUser[]>("/users", { accessToken: tokens.accessToken })
+      setUsers([...list.filter((user) => user.status === "pending"), ...list.filter((user) => user.status !== "pending")])
+    } catch (err) {
+      setError(errorMessage(err, t))
+    }
+  }, [t, tokens])
+
+  useEffect(() => {
+    if (!isAdminSettings || currentUser?.role !== "admin") return
+
+    const timer = window.setTimeout(() => void loadUsers(), 0)
+    return () => window.clearTimeout(timer)
+  }, [currentUser?.role, isAdminSettings, loadUsers])
+
   useEffect(() => {
     if (!isAdminSettings || currentUser?.role !== "admin" || !tokens) return
 
@@ -393,6 +413,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setError(null)
     setAuditEvents([])
     router.replace("/")
+  }
+
+  async function updateUser(user: CurrentUser, change: UserChange) {
+    if (!tokens) return
+
+    setError(null)
+    setMessage(null)
+    try {
+      await apiRequest(`/users/${user.id}`, { method: "PATCH", accessToken: tokens.accessToken, body: change })
+      setMessage(t("users.updated", { name: user.name }))
+    } catch (err) {
+      setError(errorMessage(err, t))
+    }
+    await loadUsers()
   }
 
   async function toggleModule(module: AppModule, active: boolean) {
@@ -563,6 +597,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       modules={modules}
                       locale={locale}
                       toggleModule={toggleModule}
+                      users={users}
+                      updateUser={updateUser}
                       auditEvents={auditEvents}
                       loadAuditEvents={loadAuditEvents}
                       t={t}

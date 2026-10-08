@@ -17,6 +17,7 @@ public static class IdentityEndpoints
         RouteGroupBuilder users = routes.MapGroup("/users");
         users.MapGet("/", ListUsers);
         users.MapPut("/", CreateUser);
+        users.MapPatch("/{id:guid}", UpdateUser);
         users.MapGet("/me", Me);
         users.MapPatch("/me", UpdateMe);
         users.MapPut("/me/password", ChangePassword);
@@ -96,6 +97,42 @@ public static class IdentityEndpoints
         if (admin is null) return Unauthorized();
         if (admin.Role != Roles.Admin) return Forbidden();
         return Results.Ok(await database.Users.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken));
+    }
+
+    /// <summary>
+    /// Lets an admin activate a registration, block or restore an account, and grant or take the admin
+    /// role. Admins cannot change their own account, so the household never loses its last admin.
+    /// </summary>
+    private static async Task<IResult> UpdateUser(
+        Guid id,
+        UpdateUserRequest request,
+        HttpContext context,
+        IIdentityAccess identity,
+        IdentityDbContext database,
+        AuditWriter audit,
+        CancellationToken cancellationToken)
+    {
+        CurrentUser? admin = await identity.CurrentUserAsync(context, cancellationToken);
+        if (admin is null) return Unauthorized();
+        if (admin.Role != Roles.Admin) return Forbidden();
+        if (request.Status is not (null or UserStatuses.Active or UserStatuses.Blocked) ||
+            request.Role is not (null or Roles.Admin or Roles.User))
+            return HttpResults.Problem(422, "Validation failed", "Status must be active or blocked, role admin or user");
+        if (id == admin.Id)
+            return HttpResults.Problem(409, "Own account", "Admins cannot change their own status or role");
+
+        User? user = await database.Users.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (user is null) return HttpResults.Problem(404, "Not found", "User not found");
+        user.Status = request.Status ?? user.Status;
+        user.Role = request.Role ?? user.Role;
+        await database.SaveChangesAsync(cancellationToken);
+        await audit.RecordAsync(context, admin, "update_user", "identity", "user", "success", new
+        {
+            userId = user.Id,
+            status = user.Status,
+            role = user.Role,
+        }, cancellationToken);
+        return Results.Ok(user);
     }
 
     private static async Task<IResult> CreateUser(
@@ -236,6 +273,7 @@ public static class IdentityEndpoints
     private sealed record AuthorizeRequest(string? Username, string? Password);
     private sealed record RefreshRequest(string? RefreshToken);
     private sealed record LogoutRequest(string? RefreshToken);
+    private sealed record UpdateUserRequest(string? Status, string? Role);
     private sealed record CreateUserRequest(string? Name, string? Email, string? Password);
     private sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
     private sealed record UpdateMeRequest(string? Theme);

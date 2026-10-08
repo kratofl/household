@@ -18,7 +18,8 @@ ENTRYPOINT ["dotnet", "watch", "--non-interactive", "--project", "src/Household.
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS release
 WORKDIR /app
-RUN apk add --no-cache ca-certificates wget
+# tzdata: budget periods resolve the user's IANA time zone (e.g. Europe/Berlin); Alpine ships none.
+RUN apk add --no-cache ca-certificates tzdata wget
 COPY --from=build /app .
 USER $APP_UID
 ENTRYPOINT ["dotnet", "Household.Api.dll"]
