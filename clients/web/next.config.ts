@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
   // private ranges instead of one hard-coded address, since the dev host and
   // its Docker port differ per machine and per worktree.
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.16.*.*"],
+  // Admin settings used to be one page; bookmarks to it land on the first admin page now.
+  async redirects() {
+    return [{ source: "/admin/settings", destination: "/admin/users", permanent: false }];
+  },
 };
 
 export default nextConfig;

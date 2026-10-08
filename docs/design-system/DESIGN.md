@@ -311,7 +311,7 @@ hairlines, selected row = `fill` with `radius-md`.
 - An alert belongs to the view that raised it and clears on navigation.
 - A route of an inactive module shows the inactive-module state, not the feature.
 - With no active modules, the dashboard shows an empty state that points to
-  Admin Settings.
+  Admin → Services.
 
 ## Content
 

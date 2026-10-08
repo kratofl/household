@@ -1,6 +1,6 @@
 "use client"
 
-import { IconHome, IconSettings, IconShield, IconUserCircle } from "@tabler/icons-react"
+import { IconHome, IconSettings, IconUserCircle } from "@tabler/icons-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -21,12 +21,13 @@ import {
 import { type Locale, isLocale, translate } from "@/lib/i18n"
 
 import {
-  BudgetViewMenu,
   MobileTabBar,
   Sidebar,
   SidebarGroupLabel,
   SidebarLink,
   SidebarModuleNav,
+  ViewMenu,
+  budgetViewMenuItems,
   moduleIcons,
   useSidebarCollapsed,
 } from "@/components/app/sidebar"
@@ -35,9 +36,10 @@ import { ProfileMenu } from "@/components/app/profile-menu"
 import { Toast, ToastContext } from "@/components/app/toast"
 import { ToolbarContent, ToolbarFrame } from "@/components/app/toolbar"
 import { AccountPanel } from "@/features/account/account-panel"
-import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
+import { AdminAuditPage, AdminForbidden, AdminServicesPage, AdminUsersPage } from "@/features/admin/admin-pages"
+import { adminViewFromPath, adminViews } from "@/features/admin/views"
 import { SettingsPanel } from "@/features/settings/settings-panel"
-import type { AuditEvent } from "@/features/admin/types"
+import type { AuditEvent, UserChange } from "@/features/admin/types"
 import { LoginScreen } from "@/features/auth/login-screen"
 import { OIDC_CALLBACK_PATH, completeOidc, loadOidcOffer, startOidc, type OidcOffer } from "@/features/auth/oidc"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
@@ -55,6 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [modules, setModules] = useState<AppModule[]>(fallbackModules("de"))
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
+  const [users, setUsers] = useState<CurrentUser[]>([])
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [registerName, setRegisterName] = useState("")
@@ -86,9 +89,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isHome = pathname === "/"
   const isAccount = selectedSection === "account"
   const isSettings = selectedSection === "settings"
-  const isAdminSettings = selectedSection === "admin"
+  const inAdmin = selectedSection === "admin"
+  const adminView = inAdmin ? adminViewFromPath(pathname) : undefined
   const selectedModuleKey =
-    isHome || isAccount || isSettings || isAdminSettings
+    isHome || isAccount || isSettings || inAdmin
       ? undefined
       : moduleKeyFromSection(selectedSection) ?? activeModules[0]?.key
   const selectedModule = selectedModuleKey
@@ -100,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ...Object.values(moduleCatalog).map((module) => module.route),
       "/account",
       "/settings",
-      "/admin/settings",
+      ...adminViews.map((view) => view.route),
     ],
     [],
   )
@@ -262,8 +266,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [t, tokens])
 
+  const loadUsers = useCallback(async () => {
+    if (!tokens) return
+
+    try {
+      setUsers(await apiRequest<CurrentUser[]>("/users", { accessToken: tokens.accessToken }))
+    } catch (err) {
+      setError(errorMessage(err, t))
+    }
+  }, [t, tokens])
+
   useEffect(() => {
-    if (!isAdminSettings || currentUser?.role !== "admin" || !tokens) return
+    if (adminView !== "users" || currentUser?.role !== "admin") return
+
+    const timer = window.setTimeout(() => void loadUsers(), 0)
+    return () => window.clearTimeout(timer)
+  }, [adminView, currentUser?.role, loadUsers])
+
+  useEffect(() => {
+    if (adminView !== "audit" || currentUser?.role !== "admin" || !tokens) return
 
     const timer = window.setTimeout(() => {
       if (auditEvents.length === 0) {
@@ -272,7 +293,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [auditEvents.length, currentUser?.role, isAdminSettings, loadAuditEvents, tokens])
+  }, [adminView, auditEvents.length, currentUser?.role, loadAuditEvents, tokens])
 
   async function login() {
     setError(null)
@@ -395,6 +416,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.replace("/")
   }
 
+  async function updateUser(user: CurrentUser, change: UserChange) {
+    if (!tokens) return
+
+    setError(null)
+    setMessage(null)
+    try {
+      await apiRequest(`/users/${user.id}`, { method: "PATCH", accessToken: tokens.accessToken, body: change })
+      setMessage(t("users.updated", { name: user.name }))
+    } catch (err) {
+      setError(errorMessage(err, t))
+    }
+    await loadUsers()
+  }
+
   async function toggleModule(module: AppModule, active: boolean) {
     if (!tokens || currentUser?.role !== "admin") {
       setError(t("error.adminRequired"))
@@ -512,9 +547,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {isAdmin ? (
           <>
             <SidebarGroupLabel collapsed={collapsed}>{t("nav.admin")}</SidebarGroupLabel>
-            <SidebarLink collapsed={collapsed} href="/admin/settings" active={isAdminSettings} icon={<IconShield />}>
-              {t("nav.adminSettings")}
-            </SidebarLink>
+            {adminViews.map((view) => (
+              <SidebarLink key={view.key} collapsed={collapsed} href={view.route} active={adminView === view.key} icon={<view.icon />}>
+                {t(view.labelKey)}
+              </SidebarLink>
+            ))}
           </>
         ) : null}
       </Sidebar>
@@ -523,7 +560,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <ToastContext.Provider value={setMessage}>
           <main className="min-h-0 flex-1 overflow-y-auto">
             <ToolbarFrame
-              leading={inBudget ? <BudgetViewMenu pathname={pathname} t={t} /> : null}
+              leading={
+                inBudget ? (
+                  <ViewMenu label={t("nav.budgetViews")} items={budgetViewMenuItems(pathname, t)} />
+                ) : inAdmin && isAdmin ? (
+                  <ViewMenu
+                    label={t("nav.adminViews")}
+                    items={adminViews.map((view) => ({
+                      key: view.key,
+                      href: view.route,
+                      label: t(view.labelKey),
+                      icon: view.icon,
+                      current: adminView === view.key,
+                    }))}
+                  />
+                ) : null
+              }
               search={<SearchField {...search} />}
             >
               <div className="space-y-4 px-6 pt-6 pb-10 max-lg:px-5 max-lg:pt-5 max-lg:pb-32">
@@ -557,16 +609,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     />
                   ) : isSettings ? (
                     <SettingsPanel locale={locale} setLocale={setLocale} t={t} />
-                  ) : isAdminSettings ? (
-                    <AdminSettingsPanel
-                      currentUser={currentUser}
-                      modules={modules}
-                      locale={locale}
-                      toggleModule={toggleModule}
-                      auditEvents={auditEvents}
-                      loadAuditEvents={loadAuditEvents}
-                      t={t}
-                    />
+                  ) : inAdmin && !isAdmin ? (
+                    <AdminForbidden t={t} />
+                  ) : adminView === "users" ? (
+                    <AdminUsersPage currentUser={currentUser} users={users} updateUser={updateUser} t={t} />
+                  ) : adminView === "services" ? (
+                    <AdminServicesPage modules={modules} locale={locale} toggleModule={toggleModule} t={t} />
+                  ) : adminView === "audit" ? (
+                    <AdminAuditPage auditEvents={auditEvents} loadAuditEvents={loadAuditEvents} locale={locale} t={t} />
                   ) : selectedModule ? (
                     <DashboardPanel
                       accessToken={tokens?.accessToken}
@@ -606,7 +656,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         isHome={isHome}
         isAccount={isAccount}
         isSettings={isSettings}
-        isAdminSettings={isAdminSettings}
+        inAdmin={inAdmin}
         isAdmin={isAdmin}
         search={<SearchTab {...search} />}
         t={t}
@@ -642,7 +692,7 @@ function destinationsFor(input: {
     { key: "account", label: t("nav.account"), href: "/account", icon: IconUserCircle },
     { key: "settings", label: t("nav.settings"), href: "/settings", icon: IconSettings },
     ...(input.isAdmin
-      ? [{ key: "admin", label: t("nav.adminSettings"), group: t("nav.admin"), href: "/admin/settings", icon: IconShield }]
+      ? adminViews.map((view) => ({ key: `admin.${view.key}`, label: t(view.labelKey), group: t("nav.admin"), href: view.route, icon: view.icon }))
       : []),
   ]
 }

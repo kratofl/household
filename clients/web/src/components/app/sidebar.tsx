@@ -34,6 +34,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { Locale, Translator } from "@/lib/i18n"
 import { budgetViewEntries, budgetViewFromPath, moduleHref, moduleName, type AppModule, type BudgetViewKey } from "@/lib/modules"
 import { cn } from "@/lib/utils"
+import { adminViews } from "@/features/admin/views"
 
 export const moduleIcons = {
   budget: IconWallet,
@@ -220,7 +221,7 @@ export function MobileTabBar(props: {
   isHome: boolean
   isAccount: boolean
   isSettings: boolean
-  isAdminSettings: boolean
+  inAdmin: boolean
   isAdmin: boolean
   search: ReactNode
   t: Translator
@@ -237,7 +238,7 @@ export function MobileTabBar(props: {
     { key: "account", href: "/account", label: props.t("nav.account"), icon: IconUserCircle, active: props.isAccount },
     { key: "settings", href: "/settings", label: props.t("nav.settings"), icon: IconSettings, active: props.isSettings },
     ...(props.isAdmin
-      ? [{ key: "admin", href: "/admin/settings", label: props.t("nav.admin"), icon: IconShield, active: props.isAdminSettings }]
+      ? [{ key: "admin", href: adminViews[0].route, label: props.t("nav.admin"), icon: IconShield, active: props.inAdmin }]
       : []),
   ]
 
@@ -264,35 +265,46 @@ export function MobileTabBar(props: {
   )
 }
 
+/** One page of a section (Budget, Admin) for the phone view menu. */
+export type ViewMenuItem = { key: string; href: string; label: string; icon: typeof IconWallet; current: boolean }
+
 /**
- * Budget's pages on phones, where there is no sidebar: a chevron beside the toolbar
+ * A section's pages on phones, where there is no sidebar: a chevron beside the toolbar
  * title that opens them as a menu.
  */
-export function BudgetViewMenu({ pathname, t }: { pathname: string; t: Translator }) {
-  const current = budgetViewFromPath(pathname)
+export function ViewMenu({ label, items }: { label: string; items: ViewMenuItem[] }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={t("nav.budgetViews")}
-        title={t("nav.budgetViews")}
+        aria-label={label}
+        title={label}
         className="grid size-11 shrink-0 place-items-center rounded-full text-label hover:bg-toolbar-fill lg:hidden"
       >
         <IconChevronDown className="size-5" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {budgetViewEntries.map(([key, view]) => {
-          const ViewIcon = budgetViewIcons[key]
-          return (
-            <DropdownMenuItem key={key} asChild>
-              <Link href={view.route} aria-current={current === key ? "page" : undefined}>
-                <ViewIcon />
-                <span className="flex-1">{t(view.labelKey)}</span>
-                {current === key ? <IconCheck /> : null}
-              </Link>
-            </DropdownMenuItem>
-          )
-        })}
+        {items.map((item) => (
+          <DropdownMenuItem key={item.key} asChild>
+            <Link href={item.href} aria-current={item.current ? "page" : undefined}>
+              <item.icon />
+              <span className="flex-1">{item.label}</span>
+              {item.current ? <IconCheck /> : null}
+            </Link>
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   )
+}
+
+/** Budget's pages for the phone view menu. */
+export function budgetViewMenuItems(pathname: string, t: Translator): ViewMenuItem[] {
+  const current = budgetViewFromPath(pathname)
+  return budgetViewEntries.map(([key, view]) => ({
+    key,
+    href: view.route,
+    label: t(view.labelKey),
+    icon: budgetViewIcons[key],
+    current: current === key,
+  }))
 }

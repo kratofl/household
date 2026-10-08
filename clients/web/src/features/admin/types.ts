@@ -12,3 +12,6 @@ export type AuditEvent = {
   userAgent: string
   errorCode: string
 }
+
+/** What an admin can change about another account: one status or role change at a time. */
+export type UserChange = { status: "active" | "blocked" } | { role: "admin" | "user" }
