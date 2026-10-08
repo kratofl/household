@@ -16,7 +16,6 @@ const fixture = {
   PLATFORMS: "linux/amd64,linux/arm64",
   API_DIGEST: `sha256:${"a".repeat(64)}`,
   WEB_DIGEST: `sha256:${"b".repeat(64)}`,
-  UPDATER_DIGEST: `sha256:${"c".repeat(64)}`,
 };
 
 function workspace(t) {
@@ -50,7 +49,6 @@ for (const [channel, version] of [["stable", "v1.2.3"], ["unstable", "v1.2.4-rc.
     assert.deepEqual(manifest.images, {
       api: { image: "ghcr.io/release-test/household-api", tag: version, digest: fixture.API_DIGEST },
       web: { image: "ghcr.io/release-test/household-web", tag: version, digest: fixture.WEB_DIGEST },
-      updater: { image: "ghcr.io/release-test/household-updater", tag: version, digest: fixture.UPDATER_DIGEST },
     });
     const checksumLines = readFileSync(join(extracted, "SHA256SUMS"), "utf8").trim().split("\n");
     const checkedFiles = checksumLines.map((line) => {

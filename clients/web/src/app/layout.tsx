@@ -17,7 +17,7 @@ const figtree = Figtree({
 
 export const metadata: Metadata = {
   title: "Household",
-  description: "Local household dashboard for modules, account settings, and updates.",
+  description: "Local household dashboard for modules and account settings.",
   icons: {
     icon: "/household-logo.svg",
     apple: "/household-logo.svg",

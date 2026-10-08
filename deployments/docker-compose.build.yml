@@ -9,8 +9,3 @@ services:
       context: ..
       target: release
       dockerfile: backend/Dockerfile
-
-  household-updater:
-    build:
-      context: ..
-      dockerfile: backend/Dockerfile.updater

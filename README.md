@@ -9,17 +9,17 @@ The project is early-stage. Budget is the first complete feature; the other hous
 ## Why run it?
 
 - **Home-server first:** designed for trusted local networks, NAS boxes, small VMs, and homelabs.
-- **One Compose stack:** web UI, .NET modular-monolith API, updater sidecar, and PostgreSQL.
+- **One Compose stack:** web UI, .NET modular-monolith API, and PostgreSQL.
 - **Public-image installs:** normal installs use published container images, not local source builds.
 - **Admin-gated identity:** users can register, remain pending, and be approved by an admin.
 - **Modular foundation:** one backend process with feature-owned modules and Postgres schemas.
-- **Operational basics:** backups, release-channel checks, optional observability, and documented configuration.
+- **Operational basics:** backups, stable and unstable release channels, optional observability, and documented configuration.
 
 ## Current status
 
 | Area | Status |
 | --- | --- |
-| Install and operations | Docker Compose stack, env template, backup/restore docs, updater sidecar. |
+| Install and operations | Docker Compose stack, env template, backup/restore and update docs. |
 | Identity | Login, refresh/logout, pending users, admin user management foundation, password change. |
 | Modules | Enabled/active module toggles drive navigation visibility. |
 | Budget | Monthly plan, append-only ledger with corrections and voids, recurring income and commitments, savings goals, investments, wishlist, reports, and reviewed CSV import/export. |
@@ -122,7 +122,7 @@ Useful docs:
 
 Household is a modular monolith:
 
-- `backend/`: .NET 10 API, updater, feature modules, EF Core migrations, and platform code.
+- `backend/`: .NET 10 API, feature modules, EF Core migrations, and platform code.
 - `clients/web/`: Next.js 16 App Router UI.
 - `deployments/`: Docker Compose and observability configuration.
 - `docs/`: install, operations, architecture, and contributor documentation.
@@ -134,8 +134,6 @@ See [docs/architecture.md](docs/architecture.md).
 ## Security model
 
 Household is intended for trusted local networks. Do not expose it directly to the public internet unless you add and maintain your own reverse proxy, TLS, access controls, and update practices.
-
-The updater sidecar mounts the Docker socket so it can pull images and restart services. It is internal-only in Compose and protected by `HOUSEHOLD_UPDATER_TOKEN`, but Docker socket access is powerful and should only be used on a trusted host.
 
 See [SECURITY.md](SECURITY.md).
 

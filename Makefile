@@ -39,7 +39,7 @@ help:
 	@echo "Quality:"
 	@echo "  make check                  Run backend, web, and Compose checks"
 	@echo "  make backend-test           Run .NET tests"
-	@echo "  make backend-build          Build API and updater binaries"
+	@echo "  make backend-build          Build the API"
 	@echo "  make web-lint               Lint web app"
 	@echo "  make web-build              Build web app"
 	@echo "  make compose-config         Validate Compose configuration"
@@ -139,7 +139,7 @@ backend-test:
 	@cd $(BACKEND_DIR) && dotnet test Household.slnx --configuration Release
 
 backend-build:
-	@echo ">> Building household-api and household-updater"
+	@echo ">> Building household-api"
 	@cd $(BACKEND_DIR) && dotnet build Household.slnx --configuration Release
 
 web-build:

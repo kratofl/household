@@ -8,7 +8,6 @@ Household is a modular monolith: one ASP.NET Core API process, one PostgreSQL da
 | --- | --- | --- |
 | Web UI | `clients/web` / `household-web` | Next.js UI and browser-to-backend proxy. |
 | API | `backend/src/Household.Api` / `household-api` | .NET 10 HTTP API, EF Core migrations, authentication, and feature modules. |
-| Updater | `backend/src/Household.Updater` / `household-updater` | Internal .NET sidecar for release updates. |
 | Database | `household-db` | Shared PostgreSQL database with feature-owned schemas. |
 
 ## Backend layout
@@ -21,9 +20,7 @@ backend/
         Identity/
         Budget/
         Audit/
-        Updates/
       Platform/
-    Household.Updater/
   tests/
     Household.Api.Tests/
 ```
@@ -45,7 +42,3 @@ Feature data remains separated by PostgreSQL schema:
 | Audit | `audit` | `audit.__EFMigrationsHistory` |
 
 The adoption migrations are intentionally compatible with the previous Go-era schemas. Existing users, bcrypt password hashes, opaque token hashes, sessions, modules, audit records, and prototype Budget records remain readable during cutover.
-
-## Update architecture
-
-The API checks GitHub Releases and asks the updater sidecar to apply an update. The updater edits the stack environment, creates a database backup, pulls images, and restarts the API and web containers. It is internal-only, mounts the Docker socket, and requires `HOUSEHOLD_UPDATER_TOKEN`.

@@ -42,10 +42,6 @@ services:
       HOUSEHOLD_LOG_FILE_ENABLED: ${HOUSEHOLD_LOG_FILE_ENABLED:-false}
       HOUSEHOLD_LOG_ENVIRONMENT: production
       HOUSEHOLD_LOG_VERSION: ${HOUSEHOLD_VERSION:-stable}
-      HOUSEHOLD_UPDATES_GITHUB_REPOSITORY: ${HOUSEHOLD_UPDATES_GITHUB_REPOSITORY:-kratofl/household}
-      HOUSEHOLD_UPDATES_UPDATER_URL: http://household-updater:8091
-      HOUSEHOLD_UPDATES_UPDATER_TOKEN: ${HOUSEHOLD_UPDATER_TOKEN:?set HOUSEHOLD_UPDATER_TOKEN}
-      HOUSEHOLD_UPDATES_TIMEOUT: ${HOUSEHOLD_UPDATES_TIMEOUT:-15s}
       HOUSEHOLD_SEED_DEMO_USER: ${HOUSEHOLD_SEED_DEMO_USER:-false}
       HOUSEHOLD_SEED_DEMO_USER_NAME: ${HOUSEHOLD_SEED_DEMO_USER_NAME:-admin}
       HOUSEHOLD_SEED_DEMO_USER_EMAIL: ${HOUSEHOLD_SEED_DEMO_USER_EMAIL:-admin@household.local}
@@ -66,28 +62,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
-
-  household-updater:
-    image: ghcr.io/${HOUSEHOLD_IMAGE_OWNER:-kratofl}/household-updater:${HOUSEHOLD_VERSION:-stable}
-    environment:
-      HOUSEHOLD_UPDATER_TOKEN: ${HOUSEHOLD_UPDATER_TOKEN:?set HOUSEHOLD_UPDATER_TOKEN}
-      HOUSEHOLD_UPDATER_STACK_DIR: /stack
-      HOUSEHOLD_UPDATER_ENV_FILE: /stack/.env
-      HOUSEHOLD_UPDATER_COMPOSE_FILE: /stack/docker-compose.yml
-      HOUSEHOLD_UPDATER_BACKUP_DIR: /stack/backups
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/stack
-    expose:
-      - "8091"
-    restart: unless-stopped
-    networks:
-      - backend
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8091/healthz >/dev/null"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
 
   household-db:
     image: postgres:18.4-alpine3.23

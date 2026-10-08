@@ -18,27 +18,32 @@ jobs:
     name: Validate release commit
     uses: ./.github/workflows/ci.yml
 
+  # Each image is built on a runner of its own platform; emulating arm64 on an x86 runner made
+  # dotnet publish and next build 10-25x slower. Builds push by digest only; merge-images tags them.
   build-images:
-    name: Build and publish images
+    name: Build ${{ matrix.image.name }} (${{ matrix.platform.arch }})
     needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
-    outputs:
-      api_digest: ${{ steps.api.outputs.digest }}
-      web_digest: ${{ steps.web.outputs.digest }}
-      updater_digest: ${{ steps.updater.outputs.digest }}
+    strategy:
+      fail-fast: true
+      matrix:
+        # Keep in step with PLATFORMS above, which the release manifest reports.
+        platform:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+        image:
+          - { name: api, file: backend/Dockerfile, target: release }
+          - { name: web, file: clients/web/Dockerfile, target: runner }
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -50,54 +55,91 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push API
-        id: api
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: backend/Dockerfile
-          target: release
-          platforms: ${{ env.PLATFORMS }}
-          push: true
+          file: ${{ matrix.image.file }}
+          target: ${{ matrix.image.target }}
+          platforms: linux/${{ matrix.platform.arch }}
           provenance: true
           sbom: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-api:${{ github.event.release.tag_name }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-api:${{ env.CHANNEL }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-${{ matrix.image.name }},push-by-digest=true,name-canonical=true,push=true
 
-      - name: Build and push web
-        id: web
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: clients/web/Dockerfile
-          platforms: ${{ env.PLATFORMS }}
-          push: true
-          provenance: true
-          sbom: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-web:${{ github.event.release.tag_name }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-web:${{ env.CHANNEL }}
+      - name: Record digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ matrix.image.name }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests/${IMAGE}"
+          touch "${RUNNER_TEMP}/digests/${IMAGE}/${DIGEST#sha256:}"
 
-      - name: Build and push updater
-        id: updater
-        uses: docker/build-push-action@v7
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
         with:
-          context: .
-          file: backend/Dockerfile.updater
-          platforms: ${{ env.PLATFORMS }}
-          push: true
-          provenance: true
-          sbom: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-updater:${{ github.event.release.tag_name }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/household-updater:${{ env.CHANNEL }}
+          name: digests-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          path: ${{ runner.temp }}/digests/
+          if-no-files-found: error
+          retention-days: 1
+
+  # Joins the per-platform builds into one multi-arch image per service under the release tag and
+  # the channel tag, and hands the resulting digests to the install bundle.
+  merge-images:
+    name: Publish multi-arch images
+    needs: build-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api_digest: ${{ steps.merge.outputs.api_digest }}
+      web_digest: ${{ steps.merge.outputs.web_digest }}
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          pattern: digests-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest lists
+        id: merge
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          expected=$(tr ',' '\n' <<< "$PLATFORMS" | wc -l)
+          for service in api web; do
+            image="${REGISTRY}/${IMAGE_OWNER}/household-${service}"
+            sources=()
+            for file in "${RUNNER_TEMP}/digests/${service}"/*; do
+              sources+=("${image}@sha256:$(basename "$file")")
+            done
+            if [ "${#sources[@]}" -ne "$expected" ]; then
+              echo "::error::${service}: ${#sources[@]} platform builds, expected ${expected}"
+              exit 1
+            fi
+            docker buildx imagetools create -t "${image}:${RELEASE_TAG}" -t "${image}:${CHANNEL}" "${sources[@]}"
+            digest=$(docker buildx imagetools inspect "${image}:${RELEASE_TAG}" --format '{{json .Manifest}}' | jq -r .digest)
+            echo "${service}_digest=${digest}" >> "$GITHUB_OUTPUT"
+          done
 
   publish-bundle:
     name: Publish install bundle
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: build-images
+    needs: merge-images
     permissions:
       contents: write
     steps:
@@ -115,9 +157,8 @@ jobs:
       - name: Create release bundle
         env:
           RELEASE_VERSION: ${{ github.event.release.tag_name }}
-          API_DIGEST: ${{ needs.build-images.outputs.api_digest }}
-          WEB_DIGEST: ${{ needs.build-images.outputs.web_digest }}
-          UPDATER_DIGEST: ${{ needs.build-images.outputs.updater_digest }}
+          API_DIGEST: ${{ needs.merge-images.outputs.api_digest }}
+          WEB_DIGEST: ${{ needs.merge-images.outputs.web_digest }}
         run: node scripts/create-release-bundle.mjs
 
       - name: Upload release assets
@@ -130,3 +171,27 @@ jobs:
             dist/household-release.json \
             dist/SHA256SUMS \
             --clobber
+
+  # Points the `stable` branch at the commit of each stable release, so deployments that track Git
+  # (a Komodo stack in Git Repo mode) get the released Compose file together with the released images.
+  # Nobody commits to `stable`; it only moves forward here. A release of an older commit would move
+  # it backwards, so GitHub's fast-forward check fails this job instead.
+  advance-stable-branch:
+    name: Advance the stable branch
+    needs: publish-bundle
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Fast-forward stable to the release commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/stable" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/stable" -f sha="$RELEASE_SHA" -F force=false
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref=refs/heads/stable -f sha="$RELEASE_SHA"
+          fi

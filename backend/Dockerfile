@@ -2,7 +2,6 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS restore
 WORKDIR /src
 COPY backend/Directory.Build.props backend/Household.slnx ./
 COPY backend/src/Household.Api/Household.Api.csproj src/Household.Api/
-COPY backend/src/Household.Updater/Household.Updater.csproj src/Household.Updater/
 COPY backend/tests/Household.Api.Tests/Household.Api.Tests.csproj tests/Household.Api.Tests/
 RUN dotnet restore src/Household.Api/Household.Api.csproj
 

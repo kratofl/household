@@ -1,8 +1,8 @@
 # Household
 
 Household is a local-network-first, self-hosted household management app: one Docker
-Compose stack with a Next.js web UI, a .NET 10 modular-monolith API, an updater
-sidecar, and PostgreSQL. Budget is the first complete feature slice; shopping lists,
+Compose stack with a Next.js web UI, a .NET 10 modular-monolith API, and PostgreSQL.
+Budget is the first complete feature slice; shopping lists,
 recipes, meal planning, calendar, and waste schedule are planned. It runs on a home
 server for one household, so install reliability, safe defaults, and honest docs
 matter as much as features.
@@ -174,7 +174,6 @@ primitives live in `src/components/ui`.
 - `backend/src/Household.Api/Features/<Feature>/` - Identity, Budget, Audit, Updates.
 - `backend/src/Household.Api/Platform/` - hosting, configuration, problem responses,
   migration orchestration. Only genuinely cross-cutting code.
-- `backend/src/Household.Updater/` - internal updater sidecar.
 - `backend/tests/Household.Api.Tests/` - HTTP and migration tests against real
   PostgreSQL, plus focused domain tests.
 - `clients/web/src/lib/api.ts` - typed backend client. `src/features/` - feature UI.
@@ -199,7 +198,7 @@ Windows PowerShell uses `.\make.ps1 <target>` with the same names.
 
 ## Taste
 
-- Complexity belongs at the boundary: parsers, CSV import, HTTP adapters, the updater.
+- Complexity belongs at the boundary: parsers, CSV import, HTTP adapters.
   Orchestration stays pure and testable without I/O. UI stays dumb.
 - Prefer existing patterns over new abstractions. YAGNI: no config knobs or plugin
   systems nobody asked for.

@@ -19,5 +19,4 @@ Please do not open a public issue for vulnerabilities. Use GitHub private vulner
 - Change all values copied from `deployments/.env.example` before first production use.
 - Disable `HOUSEHOLD_SEED_DEMO_USER` after the first admin account is usable.
 - Keep `deployments/.env` and `deployments/backups/` private and backed up.
-- The updater sidecar uses Docker socket access so it can pull images and restart services. Keep it on the internal Compose network only and protect it with a long random `HOUSEHOLD_UPDATER_TOKEN`.
 - Run the app behind your home-network firewall or VPN unless you have reviewed and accepted the risk of wider exposure.

@@ -2,7 +2,6 @@ using System.Text.Json;
 using Household.Api.Features.Audit;
 using Household.Api.Features.Budget;
 using Household.Api.Features.Identity;
-using Household.Api.Features.Updates;
 using Household.Api.Platform;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,7 +29,6 @@ public partial class Program
         builder.Services.AddHttpClient<OidcProvider>();
         builder.Services.AddScoped<AuditWriter>();
         builder.Services.AddScoped<BudgetService>();
-        builder.Services.AddHttpClient<UpdatesClient>(client => client.Timeout = HouseholdConfiguration.UpdatesTimeout());
 
         WebApplication app = builder.Build();
         app.Use(async (context, next) =>
@@ -44,7 +42,6 @@ public partial class Program
         api.MapIdentityEndpoints();
         api.MapAuditEndpoints();
         api.MapBudgetEndpoints();
-        api.MapUpdateEndpoints();
 
         using (IServiceScope scope = app.Services.CreateScope())
         {

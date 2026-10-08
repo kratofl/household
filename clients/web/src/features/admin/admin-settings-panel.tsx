@@ -1,8 +1,8 @@
 "use client"
 
-import { IconCloudDownload, IconRefresh } from "@tabler/icons-react"
+import { IconRefresh } from "@tabler/icons-react"
 import type { Locale, Translator } from "@/lib/i18n"
-import { Badge, StatusDot } from "@/components/ui/badge"
+import { StatusDot } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { SettingsBlock, SettingsRow, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
@@ -10,7 +10,7 @@ import { ToolbarContent } from "@/components/app/toolbar"
 import { Switch } from "@/components/ui/switch"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
 
-import type { AuditEvent, UpdateCandidate, UpdateStatus } from "@/features/admin/types"
+import type { AuditEvent } from "@/features/admin/types"
 import type { CurrentUser } from "@/lib/session"
 
 export function AdminSettingsPanel(props: {
@@ -18,13 +18,6 @@ export function AdminSettingsPanel(props: {
   modules: AppModule[]
   locale: Locale
   toggleModule: (module: AppModule, active: boolean) => Promise<void>
-  updateCandidates: {
-    stable?: UpdateCandidate | null
-    unstable?: UpdateCandidate | null
-  } | null
-  updateStatus: UpdateStatus | null
-  checkUpdates: () => Promise<void>
-  startUpdate: (candidate: UpdateCandidate) => Promise<void>
   auditEvents: AuditEvent[]
   loadAuditEvents: (showMessage?: boolean) => Promise<void>
   t: Translator
@@ -42,11 +35,6 @@ export function AdminSettingsPanel(props: {
       </>
     )
   }
-
-  const updateEntries = [
-    ["stable", props.updateCandidates?.stable] as const,
-    ["unstable", props.updateCandidates?.unstable] as const,
-  ]
 
   return (
     <SettingsSurface title={props.t("admin.title")} description={props.t("admin.description")}>
@@ -68,40 +56,6 @@ export function AdminSettingsPanel(props: {
                 name: moduleName(module, props.locale),
               })}
             />
-          </SettingsRow>
-        ))}
-      </SettingsSection>
-
-      <SettingsSection title={props.t("updates.title")} description={props.t("updates.description")}>
-        <SettingsRow
-          title={props.t("updates.status")}
-          description={`${props.updateStatus?.state ?? props.t("updates.unknown")}${
-            props.updateStatus?.message ? ` (${props.updateStatus.message})` : ""
-          }`}
-        >
-          <Button variant="secondary" size="sm" onClick={props.checkUpdates}>
-            <IconRefresh />
-            {props.t("updates.check")}
-          </Button>
-        </SettingsRow>
-        {updateEntries.map(([channel, candidate]) => (
-          <SettingsRow
-            key={channel}
-            title={channel === "stable" ? props.t("updates.stable") : props.t("updates.unstable")}
-            description={candidate?.name || candidate?.releaseNotes || props.t("updates.notChecked")}
-          >
-            <Badge tone={candidate ? (channel === "stable" ? "green" : "yellow") : "neutral"}>
-              {candidate?.version ?? props.t("updates.noRelease")}
-            </Badge>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!candidate || props.updateStatus?.state === "running"}
-              onClick={() => candidate && props.startUpdate(candidate)}
-            >
-              <IconCloudDownload />
-              {props.t("updates.install")}
-            </Button>
           </SettingsRow>
         ))}
       </SettingsSection>
