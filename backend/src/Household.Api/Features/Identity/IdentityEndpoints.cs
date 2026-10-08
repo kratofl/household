@@ -12,6 +12,7 @@ public static class IdentityEndpoints
         auth.MapPost("/authorize", Authorize);
         auth.MapPost("/refresh", Refresh);
         auth.MapPost("/logout", Logout);
+        auth.MapOidcEndpoints();
 
         RouteGroupBuilder users = routes.MapGroup("/users");
         users.MapGet("/", ListUsers);
@@ -19,6 +20,7 @@ public static class IdentityEndpoints
         users.MapGet("/me", Me);
         users.MapPatch("/me", UpdateMe);
         users.MapPut("/me/password", ChangePassword);
+        users.MapDelete("/me/oidc", UnlinkOidc);
 
         RouteGroupBuilder modules = routes.MapGroup("/modules");
         modules.MapGet("/", ListModules);
@@ -35,22 +37,12 @@ public static class IdentityEndpoints
     {
         string username = request.Username?.Trim().ToLowerInvariant() ?? "";
         User? user = await database.Users.SingleOrDefaultAsync(x => x.Name == username, cancellationToken);
-        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password ?? "", user.PasswordHash))
+        if (user is null || !PasswordMatches(user, request.Password))
             return HttpResults.Problem(401, "Invalid login", "Username or password incorrect");
         if (user.Status != UserStatuses.Active)
             return HttpResults.Problem(403, "User inactive", "User is not active");
 
-        TokenPair pair = TokenFactory.Create(timeProvider.GetUtcNow().UtcDateTime);
-        database.Sessions.Add(new Session
-        {
-            UserId = user.Id,
-            AccessTokenHash = TokenFactory.Hash(pair.AccessToken),
-            RefreshTokenHash = TokenFactory.Hash(pair.RefreshToken),
-            AccessExpiresAt = DateTime.SpecifyKind(pair.AccessExpiresAt, DateTimeKind.Unspecified),
-            RefreshExpiresAt = DateTime.SpecifyKind(pair.RefreshExpiresAt, DateTimeKind.Unspecified),
-        });
-        await database.SaveChangesAsync(cancellationToken);
-        return Results.Ok(pair);
+        return Results.Ok(await IdentitySessions.StartAsync(database, user.Id, timeProvider.GetUtcNow().UtcDateTime, cancellationToken));
     }
 
     private static async Task<IResult> Refresh(
@@ -176,12 +168,37 @@ public static class IdentityEndpoints
         if (string.IsNullOrEmpty(request.NewPassword))
             return HttpResults.Problem(422, "Validation failed", "New password is required");
         User user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
-        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword ?? "", user.PasswordHash))
+        if (!PasswordMatches(user, request.CurrentPassword))
             return HttpResults.Problem(403, "Invalid password", "Current password is incorrect");
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, 14);
         await database.SaveChangesAsync(cancellationToken);
         return Results.NoContent();
     }
+
+    /// <summary>
+    /// Detaches the provider account from the current user. Refused while it is the only way in:
+    /// an account created through the provider has no password to fall back on.
+    /// </summary>
+    private static async Task<IResult> UnlinkOidc(
+        HttpContext context,
+        IIdentityAccess identity,
+        IdentityDbContext database,
+        CancellationToken cancellationToken)
+    {
+        CurrentUser? current = await identity.CurrentUserAsync(context, cancellationToken);
+        if (current is null) return Unauthorized();
+        User user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
+        if (user.PasswordHash.Length == 0)
+            return HttpResults.Problem(409, "Only sign-in method", "This account has no password, so the provider is its only way in");
+        user.OidcIssuer = null;
+        user.OidcSubject = null;
+        await database.SaveChangesAsync(cancellationToken);
+        return Results.NoContent();
+    }
+
+    /// <summary>Accounts created through the OIDC provider have no password hash; nothing matches it.</summary>
+    private static bool PasswordMatches(User user, string? password) =>
+        user.PasswordHash.Length > 0 && BCrypt.Net.BCrypt.Verify(password ?? "", user.PasswordHash);
 
     private static async Task<IResult> ListModules(IdentityDbContext database, CancellationToken cancellationToken) =>
         Results.Ok(await database.Modules.AsNoTracking().OrderBy(x => x.Name).ToListAsync(cancellationToken));

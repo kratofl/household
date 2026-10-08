@@ -39,6 +39,7 @@ import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
 import { SettingsPanel } from "@/features/settings/settings-panel"
 import type { AuditEvent, UpdateCandidate, UpdateStatus } from "@/features/admin/types"
 import { LoginScreen } from "@/features/auth/login-screen"
+import { OIDC_CALLBACK_PATH, completeOidc, loadOidcOffer, startOidc, type OidcOffer } from "@/features/auth/oidc"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
 import { errorMessage } from "@/lib/error-message"
 import { LOCALE_STORAGE_KEY, TOKENS_STORAGE_KEY, registerSession } from "@/lib/session"
@@ -69,6 +70,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [oidcOffer, setOidcOffer] = useState<OidcOffer>({ enabled: false, name: null })
+  // A notice raised right before navigating (the OIDC callback hands off to another page) would be
+  // cleared by the route change; it is shown on the next page instead.
+  const carriedNotice = useRef<{ message?: string; error?: string } | null>(null)
   // The toast calls this after its few seconds; stable so its timer is not reset on every render.
   const clearMessage = useCallback(() => setMessage(null), [])
 
@@ -185,15 +190,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setError(null)
-      setMessage(null)
+      setError(carriedNotice.current?.error ?? null)
+      setMessage(carriedNotice.current?.message ?? null)
+      carriedNotice.current = null
     }, 0)
 
     return () => window.clearTimeout(timer)
   }, [pathname])
 
   useEffect(() => {
+    void loadOidcOffer().then(setOidcOffer)
+  }, [])
+
+  // Back from the OIDC provider: a sign-in leaves a fresh token pair in storage for the hydration
+  // below, a link keeps the session that is already there. The effect below reruns (locale load,
+  // strict mode), and the callback can only be spent once, so every run awaits the same attempt.
+  const oidcFinish = useRef<Promise<void> | null>(null)
+  const finishOidc = useCallback(async () => {
+    try {
+      const result = await completeOidc(new URLSearchParams(window.location.search))
+      if (result.kind === "signedIn") window.localStorage.setItem(TOKENS_STORAGE_KEY, JSON.stringify(result.tokens))
+      if (result.kind === "linked") carriedNotice.current = { message: t("account.oidcLinkDone") }
+      if (result.kind === "rejected") carriedNotice.current = { error: t("auth.oidcRejected") }
+      router.replace(result.kind === "linked" ? "/account" : "/")
+    } catch (err) {
+      carriedNotice.current = { error: errorMessage(err, t) }
+      router.replace("/")
+    }
+  }, [router, t])
+
+  useEffect(() => {
     void (async () => {
+      if (window.location.pathname === OIDC_CALLBACK_PATH) {
+        oidcFinish.current ??= finishOidc()
+        await oidcFinish.current
+      }
       const rawTokens = window.localStorage.getItem(TOKENS_STORAGE_KEY)
       if (!rawTokens) {
         setLoading(false)
@@ -209,7 +240,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setLoading(false)
       }
     })()
-  }, [hydrateSession])
+  }, [finishOidc, hydrateSession])
 
   useEffect(() => {
     if (!currentUser) return
@@ -307,6 +338,40 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setRegisterEmail("")
       setRegisterPassword("")
       setMessage(t("auth.registerDone"))
+    } catch (err) {
+      setError(errorMessage(err, t))
+    }
+  }
+
+  async function loginWithOidc() {
+    setError(null)
+    setMessage(null)
+    try {
+      await startOidc()
+    } catch (err) {
+      setError(errorMessage(err, t))
+    }
+  }
+
+  async function linkOidc() {
+    if (!tokens) return
+    setError(null)
+    setMessage(null)
+    try {
+      await startOidc(tokens.accessToken)
+    } catch (err) {
+      setError(errorMessage(err, t))
+    }
+  }
+
+  async function unlinkOidc() {
+    if (!tokens) return
+    setError(null)
+    setMessage(null)
+    try {
+      await apiRequest("/users/me/oidc", { method: "DELETE", accessToken: tokens.accessToken })
+      setCurrentUser((user) => (user ? { ...user, oidcLinked: false } : user))
+      setMessage(t("account.oidcUnlinkDone"))
     } catch (err) {
       setError(errorMessage(err, t))
     }
@@ -453,6 +518,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         setRegisterPassword={setRegisterPassword}
         login={login}
         register={register}
+        oidcName={oidcOffer.name}
+        loginWithOidc={loginWithOidc}
         t={t}
       />
     )
@@ -533,6 +600,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       setCurrentPassword={setCurrentPassword}
                       setNewPassword={setNewPassword}
                       changePassword={changePassword}
+                      oidcName={oidcOffer.name}
+                      linkOidc={linkOidc}
+                      unlinkOidc={unlinkOidc}
                       t={t}
                     />
                   ) : isSettings ? (

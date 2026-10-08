@@ -26,6 +26,8 @@ public partial class Program
         builder.Services.AddDbContext<BudgetDbContext>(options => ConfigurePostgres(options, connectionString, "budget"));
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped<IIdentityAccess, IdentityAccess>();
+        builder.Services.AddSingleton(OidcSettings.FromEnvironment());
+        builder.Services.AddHttpClient<OidcProvider>();
         builder.Services.AddScoped<AuditWriter>();
         builder.Services.AddScoped<BudgetService>();
         builder.Services.AddHttpClient<UpdatesClient>(client => client.Timeout = HouseholdConfiguration.UpdatesTimeout());
