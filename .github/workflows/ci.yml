@@ -130,14 +130,6 @@ jobs:
           push: false
           load: false
 
-      - name: Build updater image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: backend/Dockerfile.updater
-          push: false
-          load: false
-
       - name: Build web image
         uses: docker/build-push-action@v7
         with:

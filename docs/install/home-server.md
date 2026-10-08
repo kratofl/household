@@ -1,6 +1,6 @@
 # Home-server install
 
-Household is intended to run on a trusted home network. The default production install exposes only the web UI to the host. The API, Postgres, and updater sidecar stay on the internal Docker Compose network.
+Household is intended to run on a trusted home network. The default production install exposes only the web UI to the host. The API and Postgres stay on the internal Docker Compose network.
 
 ## Requirements
 
@@ -32,10 +32,9 @@ Create your private env file:
 cp .env.example .env
 ```
 
-Generate three separate secrets:
+Generate two separate secrets:
 
 ```bash
-openssl rand -base64 36
 openssl rand -base64 36
 openssl rand -base64 36
 ```
@@ -45,9 +44,8 @@ Edit `.env` and set at least:
 | Variable | Required action |
 | --- | --- |
 | `HOUSEHOLD_DB_PASSWORD` | Use a generated value. |
-| `HOUSEHOLD_UPDATER_TOKEN` | Use a different generated value. |
 | `HOUSEHOLD_SEED_DEMO_USER` | Set to `true` for the first boot only. |
-| `HOUSEHOLD_SEED_DEMO_USER_PASSWORD` | Use a third generated value. |
+| `HOUSEHOLD_SEED_DEMO_USER_PASSWORD` | Use the second generated value. |
 
 Check the configuration:
 
@@ -83,7 +81,7 @@ After logging in and confirming the admin account is usable:
 docker compose --env-file .env -f docker-compose.yml up -d
 ```
 
-Keep `.env` private. It contains database and updater credentials.
+Keep `.env` private. It contains the database password and other credentials.
 
 ## Install from a source checkout
 
@@ -126,7 +124,7 @@ Grafana is available on `GRAFANA_PORT`, default `3001`.
 
 ## Updating
 
-Admin users can check releases from the web UI when the updater sidecar is configured. You can also update manually by creating a backup, changing `HOUSEHOLD_VERSION`, pulling images, and restarting. See [updates and rollback](../operations/updates.md).
+Household does not update itself. Update by creating a backup, changing `HOUSEHOLD_VERSION` if you pin a release, pulling images, and restarting. See [updates and rollback](../operations/updates.md).
 
 ## Backups
 

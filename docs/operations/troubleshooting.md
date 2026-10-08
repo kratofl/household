@@ -90,15 +90,13 @@ Do not run this against production data.
 
 ## Updates fail
 
-Check updater status and logs:
+Check the API logs after the restart; migrations run on startup:
 
 ```bash
-docker compose --env-file .env -f docker-compose.yml logs household-updater household-api
+docker compose --env-file .env -f docker-compose.yml logs household-api
 ```
 
 Confirm:
 
-- `HOUSEHOLD_UPDATER_TOKEN` is the same value for API and updater.
-- The updater has access to `/var/run/docker.sock`.
 - The server can pull from `ghcr.io`.
 - `HOUSEHOLD_VERSION` is a valid image tag.

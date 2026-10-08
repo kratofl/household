@@ -14,7 +14,7 @@ Generate strong values before first production use:
 openssl rand -base64 36
 ```
 
-Use separate generated values for `HOUSEHOLD_DB_PASSWORD`, `HOUSEHOLD_UPDATER_TOKEN`, and `HOUSEHOLD_SEED_DEMO_USER_PASSWORD`.
+Use separate generated values for `HOUSEHOLD_DB_PASSWORD` and `HOUSEHOLD_SEED_DEMO_USER_PASSWORD`.
 
 ## Required production changes
 
@@ -23,7 +23,6 @@ Change these before starting a real home-server install:
 | Variable | Why it matters |
 | --- | --- |
 | `HOUSEHOLD_DB_PASSWORD` | Protects the Postgres database inside the Compose stack. |
-| `HOUSEHOLD_UPDATER_TOKEN` | Protects the internal updater sidecar API. |
 | `HOUSEHOLD_SEED_DEMO_USER_PASSWORD` | Initial admin password when `HOUSEHOLD_SEED_DEMO_USER=true`. |
 
 After the first admin account is usable, set `HOUSEHOLD_SEED_DEMO_USER=false` and restart the stack.
@@ -34,7 +33,7 @@ After the first admin account is usable, set `HOUSEHOLD_SEED_DEMO_USER=false` an
 | --- | --- | --- |
 | `PROJECT_NAME` | `household` | Docker Compose project name. It prefixes containers, networks, and volumes. |
 | `HOUSEHOLD_VERSION` | `stable` | Image tag to run. Use a release tag for pinned installs, `stable` for the latest stable release, or `unstable` for prereleases. |
-| `HOUSEHOLD_IMAGE_OWNER` | `kratofl` | GitHub Container Registry owner for `household-api`, `household-web`, and `household-updater`. Change this when running images from a fork. |
+| `HOUSEHOLD_IMAGE_OWNER` | `kratofl` | GitHub Container Registry owner for `household-api` and `household-web`. Change this when running images from a fork. |
 
 ## Web settings
 
@@ -98,16 +97,6 @@ Signing in with an unknown provider account creates a `pending` user that an adm
 like a password registration. To use the provider with an existing account, sign in with the password
 and link the provider under **Account**. A provider account never takes over an existing account by
 matching name or email.
-
-## Updates
-
-| Variable | Default/example | Description |
-| --- | --- | --- |
-| `HOUSEHOLD_UPDATES_GITHUB_REPOSITORY` | `kratofl/household` | Repository used by the app to check GitHub Releases. Change when running a fork. |
-| `HOUSEHOLD_UPDATER_TOKEN` | `change-me-long-random-updater-token` | Shared bearer token between the API and updater sidecar. Must be changed for production. |
-| `HOUSEHOLD_UPDATES_TIMEOUT` | `15s` | API timeout for update checks and updater calls. |
-
-The updater sidecar also uses internal variables such as `HOUSEHOLD_UPDATER_STACK_DIR`, `HOUSEHOLD_UPDATER_ENV_FILE`, `HOUSEHOLD_UPDATER_COMPOSE_FILE`, and `HOUSEHOLD_UPDATER_BACKUP_DIR`. The production Compose file sets those automatically.
 
 ## Observability profile
 

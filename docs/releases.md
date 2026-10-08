@@ -14,7 +14,6 @@ The release workflow builds and pushes multi-architecture images for `linux/amd6
 
 - `ghcr.io/<owner>/household-api:<tag>`
 - `ghcr.io/<owner>/household-web:<tag>`
-- `ghcr.io/<owner>/household-updater:<tag>`
 
 The same images are also tagged as `stable` or `unstable` based on the GitHub Release type.
 

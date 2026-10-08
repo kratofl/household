@@ -37,7 +37,7 @@ import { ToolbarContent, ToolbarFrame } from "@/components/app/toolbar"
 import { AccountPanel } from "@/features/account/account-panel"
 import { AdminSettingsPanel } from "@/features/admin/admin-settings-panel"
 import { SettingsPanel } from "@/features/settings/settings-panel"
-import type { AuditEvent, UpdateCandidate, UpdateStatus } from "@/features/admin/types"
+import type { AuditEvent } from "@/features/admin/types"
 import { LoginScreen } from "@/features/auth/login-screen"
 import { OIDC_CALLBACK_PATH, completeOidc, loadOidcOffer, startOidc, type OidcOffer } from "@/features/auth/oidc"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
@@ -54,11 +54,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [tokens, setTokens] = useState<TokenPair | null>(null)
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [modules, setModules] = useState<AppModule[]>(fallbackModules("de"))
-  const [updateCandidates, setUpdateCandidates] = useState<{
-    stable?: UpdateCandidate | null
-    unstable?: UpdateCandidate | null
-  } | null>(null)
-  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([])
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -250,28 +245,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     })
   }, [currentUser, router, staticRoutes])
 
-  // The admin page loads candidates on its own; only a click on "check" earns a banner.
-  const checkUpdates = useCallback(async (showMessage = true) => {
-    if (!tokens) return
-
-    setError(null)
-    setMessage(null)
-    try {
-      const candidates = await apiRequest<{
-        stable?: UpdateCandidate | null
-        unstable?: UpdateCandidate | null
-      }>("/updates/candidates", { accessToken: tokens.accessToken })
-      const status = await apiRequest<UpdateStatus>("/updates/status", {
-        accessToken: tokens.accessToken,
-      })
-      setUpdateCandidates(candidates)
-      setUpdateStatus(status)
-      if (showMessage) setMessage(t("updates.checked"))
-    } catch (err) {
-      setError(errorMessage(err, t))
-    }
-  }, [t, tokens])
-
   const loadAuditEvents = useCallback(async (showMessage = true) => {
     if (!tokens) return
 
@@ -293,16 +266,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!isAdminSettings || currentUser?.role !== "admin" || !tokens) return
 
     const timer = window.setTimeout(() => {
-      if (updateCandidates == null) {
-        void checkUpdates(false)
-      }
       if (auditEvents.length === 0) {
         void loadAuditEvents(false)
       }
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [auditEvents.length, checkUpdates, currentUser?.role, isAdminSettings, loadAuditEvents, tokens, updateCandidates])
+  }, [auditEvents.length, currentUser?.role, isAdminSettings, loadAuditEvents, tokens])
 
   async function login() {
     setError(null)
@@ -421,8 +391,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setCurrentUser(null)
     setMessage(null)
     setError(null)
-    setUpdateCandidates(null)
-    setUpdateStatus(null)
     setAuditEvents([])
     router.replace("/")
   }
@@ -458,24 +426,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch (err) {
       setError(errorMessage(err, t))
       await loadModules(tokens.accessToken)
-    }
-  }
-
-  async function startUpdate(candidate: UpdateCandidate) {
-    if (!tokens) return
-
-    setError(null)
-    setMessage(null)
-    try {
-      const status = await apiRequest<UpdateStatus>("/updates/jobs", {
-        method: "POST",
-        accessToken: tokens.accessToken,
-        body: { version: candidate.version, channel: candidate.channel },
-      })
-      setUpdateStatus(status)
-      setMessage(t("updates.started", { version: candidate.version }))
-    } catch (err) {
-      setError(errorMessage(err, t))
     }
   }
 
@@ -613,10 +563,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       modules={modules}
                       locale={locale}
                       toggleModule={toggleModule}
-                      updateCandidates={updateCandidates}
-                      updateStatus={updateStatus}
-                      checkUpdates={checkUpdates}
-                      startUpdate={startUpdate}
                       auditEvents={auditEvents}
                       loadAuditEvents={loadAuditEvents}
                       t={t}

@@ -245,23 +245,6 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
     }
 
     [Fact]
-    public async Task Update_contract_enforces_admin_and_reports_disabled_updater()
-    {
-        HttpResponseMessage anonymousStatus = await fixture.Client.GetAsync("/api/v1/updates/status");
-        Assert.Equal(HttpStatusCode.Unauthorized, anonymousStatus.StatusCode);
-
-        using HttpRequestMessage statusRequest = Authenticated(HttpMethod.Get, "/api/v1/updates/status");
-        HttpResponseMessage statusResponse = await fixture.Client.SendAsync(statusRequest);
-        JsonElement status = await statusResponse.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
-        Assert.Equal("disabled", status.GetProperty("state").GetString());
-
-        using HttpRequestMessage jobRequest = Authenticated(HttpMethod.Post, "/api/v1/updates/jobs");
-        jobRequest.Content = JsonContent.Create(new { version = "v1.0.0", channel = "stable" });
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await fixture.Client.SendAsync(jobRequest)).StatusCode);
-    }
-
-    [Fact]
     public async Task First_run_setup_creates_initial_values_and_future_period_changes_do_not_rewrite_history()
     {
         using HttpRequestMessage initialRequest = Authenticated(HttpMethod.Get, "/api/v1/budget/setup", LegacyParityFixture.FreshAccessToken);

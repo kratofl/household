@@ -23,7 +23,7 @@ if (channel !== "stable" && channel !== "unstable") {
 }
 const registry = required("REGISTRY");
 const owner = required("IMAGE_OWNER");
-const images = Object.fromEntries(["api", "web", "updater"].map((service) => {
+const images = Object.fromEntries(["api", "web"].map((service) => {
   const digest = required(`${service.toUpperCase()}_DIGEST`);
   if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new Error(`Invalid ${service} image digest`);
   return [service, { image: `${registry}/${owner}/household-${service}`, tag: version, digest }];

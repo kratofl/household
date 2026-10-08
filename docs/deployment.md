@@ -6,7 +6,6 @@ The production deployment is a Docker Compose stack made of:
 | --- | --- | --- |
 | `household-web` | Next.js web UI and backend proxy | Published on `HOUSEHOLD_WEB_PORT`, default `3000` |
 | `household-api` | ASP.NET Core modular-monolith API | Internal Compose network only |
-| `household-updater` | Internal update sidecar | Internal Compose network only |
 | `household-db` | Postgres database | Internal Compose network only |
 
 Optional observability services run behind the `observability` profile:
@@ -45,6 +44,3 @@ Keep these on persistent storage:
 
 The environment file contains secrets. Back it up securely and do not commit it.
 
-## Updater security
-
-The updater sidecar mounts the Docker socket so it can pull images and restart services. It is not published to the host and is protected by `HOUSEHOLD_UPDATER_TOKEN`, but Docker socket access is powerful. Only run the updater on a trusted host and trusted network.

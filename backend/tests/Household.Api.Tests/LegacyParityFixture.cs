@@ -69,7 +69,6 @@ public sealed class LegacyParityFixture : IAsyncLifetime
                 {
                     ["ConnectionStrings:Household"] = this._connectionString,
                     ["Seed:DemoUser"] = "false",
-                    ["Updates:GitHubRepository"] = "kratofl/household",
                 });
             });
             builder.ConfigureServices(services =>

@@ -78,7 +78,6 @@ Keep feature code inside the owning feature unless a helper is genuinely reusabl
 ## Backend conventions
 
 - API entry point: `backend/src/Household.Api`.
-- Updater entry point: `backend/src/Household.Updater`.
 - Route registration happens through feature-owned endpoint mapping extensions.
 - Migrations run on API startup.
 - Use focused xUnit theory tests for pure domain logic.

@@ -7,18 +7,14 @@ Household uses GitHub Releases as update channels:
 
 `HOUSEHOLD_VERSION` controls the image tag used by Docker Compose. Use a specific release tag for pinned installs, `stable` for the latest stable channel, or `unstable` for prereleases.
 
-## In-app updates
+Household does not update itself. Update by hand as below, or let a tool that manages Compose
+stacks pull new images for the `stable` tag. Whatever runs the update must take a database backup
+first: migrations run when the new API starts and are not reversed by going back to older images.
 
-When `household-updater` is running, admin users can check releases from the web UI and start an update.
-
-The updater sidecar:
-
-1. Updates `HOUSEHOLD_VERSION` in the stack env file.
-2. Creates a Postgres backup in the stack backup directory.
-3. Pulls the tagged API and web images.
-4. Restarts API and web services.
-
-The updater mounts the Docker socket. Keep it internal to the Compose network and protect it with a long random `HOUSEHOLD_UPDATER_TOKEN`.
+Installs from before the updater sidecar was removed still have a `household-updater` container.
+Start the updated stack once with `up -d --remove-orphans` to remove it, and delete
+`HOUSEHOLD_UPDATER_TOKEN`, `HOUSEHOLD_UPDATES_GITHUB_REPOSITORY`, and `HOUSEHOLD_UPDATES_TIMEOUT`
+from `.env`.
 
 ## Manual update from a release-bundle install
 
@@ -78,3 +74,16 @@ Release bundles include:
 - `SHA256SUMS`
 
 Do not publish or share your real `.env`.
+
+## Following releases from Git
+
+After a stable release is published, the Release workflow moves the `stable` branch to the
+release commit. A deployment that pulls Compose files from Git, such as a Komodo stack in Git
+Repo mode with run directory `deployments`, should track `stable` rather than `main`: `main`
+can carry Compose changes, such as a new Postgres image, before they are released. Prereleases do
+not move the branch.
+
+Development happens on `main` only. Nobody commits to `stable`; it moves forward with each
+release, and the workflow fails instead of moving it backwards when an older commit is released.
+Protect it with a ruleset that blocks deletion and force pushes. Fast-forward updates from the
+workflow stay allowed.

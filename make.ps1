@@ -139,7 +139,7 @@ switch ($Target) {
     }
 
     "backend-build" {
-        Invoke-Step "Building household-api and household-updater" { Set-Location $backendDir; dotnet build Household.slnx --configuration Release }
+        Invoke-Step "Building household-api" { Set-Location $backendDir; dotnet build Household.slnx --configuration Release }
     }
 
     "web-lint" { Invoke-Step "Linting web" { Set-Location $webDir; npm run lint } }
