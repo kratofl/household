@@ -98,6 +98,21 @@ like a password registration. To use the provider with an existing account, sign
 and link the provider under **Account**. A provider account never takes over an existing account by
 matching name or email.
 
+## OpenTelemetry
+
+The API sends traces, metrics, and logs over OTLP once an endpoint is set. See
+[monitoring](operations/monitoring.md) for what arrives and the Grafana dashboards.
+
+| Variable | Default/example | Description |
+| --- | --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Collector base URL, for example `http://host.docker.internal:4318`. Empty sends nothing. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | `grpc` for a collector on port 4317. |
+| `OTEL_SERVICE_NAME` | `household` | Service name in traces and logs; the `job` label in Prometheus. |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Milliseconds between metric exports. |
+
+The API also reads the other standard `OTEL_*` variables, such as `OTEL_EXPORTER_OTLP_HEADERS`,
+when they are added to its `environment` in `docker-compose.yml`.
+
 ## Observability profile
 
 | Variable | Default/example | Description |

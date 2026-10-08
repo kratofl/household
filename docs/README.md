@@ -13,6 +13,7 @@ Household is a local-network-first household management app. These docs focus on
 - [Backups and restores](operations/backups.md)
 - [Updates and rollback](operations/updates.md)
 - [Troubleshooting](operations/troubleshooting.md)
+- [Monitoring with OpenTelemetry](operations/monitoring.md)
 
 ## Development
 
