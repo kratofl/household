@@ -14,6 +14,7 @@ public partial class Program
         WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
         string port = Environment.GetEnvironmentVariable("HOUSEHOLD_API_SERVER_PORT") ?? "8090";
         builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+        builder.AddHouseholdTelemetry();
         builder.Services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
