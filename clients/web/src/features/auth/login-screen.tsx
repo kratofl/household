@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { IconLogin2, IconUserCheck } from "@tabler/icons-react"
+import { IconKey, IconLogin2, IconUserCheck } from "@tabler/icons-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,6 +29,9 @@ export function LoginScreen(props: {
   setRegisterPassword: (value: string) => void
   login: () => Promise<void>
   register: () => Promise<void>
+  /** Provider to offer next to the password, or null when OIDC login is off. */
+  oidcName: string | null
+  loginWithOidc: () => Promise<void>
   t: Translator
 }) {
   const [mode, setMode] = useState<"login" | "register">("login")
@@ -89,6 +92,15 @@ export function LoginScreen(props: {
                 <IconLogin2 />
                 {props.t("auth.login")}
               </Button>
+              {props.oidcName ? (
+                <>
+                  <p className="text-center text-footnote text-label-secondary">{props.t("auth.oidcOr")}</p>
+                  <Button className="w-full" size="lg" type="button" variant="outline" onClick={() => void props.loginWithOidc()}>
+                    <IconKey />
+                    {props.t("auth.oidcLogin", { name: props.oidcName })}
+                  </Button>
+                </>
+              ) : null}
             </form>
           ) : (
             <form

@@ -1,12 +1,12 @@
 "use client"
 
-// Account: who is signed in and their password. Appearance and language live
-// on the Settings page.
+// Account: who is signed in, their password, and the linked OIDC provider account.
+// Appearance and language live on the Settings page.
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SettingsBlock, SettingsField, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
+import { SettingsBlock, SettingsField, SettingsRow, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
 import type { Translator } from "@/lib/i18n"
 import type { CurrentUser } from "@/lib/session"
 
@@ -17,8 +17,14 @@ export function AccountPanel(props: {
   setCurrentPassword: (value: string) => void
   setNewPassword: (value: string) => void
   changePassword: () => Promise<void>
+  /** Configured provider, or null when OIDC login is off. */
+  oidcName: string | null
+  linkOidc: () => Promise<void>
+  unlinkOidc: () => Promise<void>
   t: Translator
 }) {
+  // A linked account stays visible after OIDC is switched off, so it can still be unlinked.
+  const providerName = props.oidcName ?? (props.currentUser.oidcLinked ? "SSO" : null)
   return (
     <SettingsSurface title={props.t("account.title")} description={props.t("account.description")}>
       <SettingsSection title={props.t("account.profileTitle")} description={props.t("account.profileDescription")}>
@@ -61,6 +67,25 @@ export function AccountPanel(props: {
           </form>
         </SettingsBlock>
       </SettingsSection>
+
+      {providerName ? (
+        <SettingsSection
+          title={props.t("account.oidcTitle", { name: providerName })}
+          description={props.t("account.oidcDescription", { name: providerName })}
+        >
+          <SettingsRow
+            title={props.currentUser.oidcLinked ? props.t("account.oidcLinked") : props.t("account.oidcNotLinked")}
+          >
+            {props.currentUser.oidcLinked ? (
+              <Button variant="outline" onClick={() => void props.unlinkOidc()}>
+                {props.t("account.oidcUnlink")}
+              </Button>
+            ) : props.oidcName ? (
+              <Button onClick={() => void props.linkOidc()}>{props.t("account.oidcLink")}</Button>
+            ) : null}
+          </SettingsRow>
+        </SettingsSection>
+      ) : null}
     </SettingsSurface>
   )
 }

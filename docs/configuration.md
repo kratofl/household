@@ -77,6 +77,28 @@ The API writes logs to stdout; read them with `docker compose logs household-api
 For local development, `make dev` seeds `admin` / `admin` in an isolated database
 per worktree. It does not load the production `.env`; see [Local setup](development/local-setup.md).
 
+## Login through an OIDC provider
+
+Optional. Adds a sign-in button for an OpenID Connect provider such as Pocket ID next to the
+password login, which stays available.
+
+| Variable | Default/example | Description |
+| --- | --- | --- |
+| `HOUSEHOLD_OIDC_ENABLED` | `false` | When `true`, the login screen offers the provider. The API refuses to start if the next three are missing. |
+| `HOUSEHOLD_OIDC_ISSUER` | `https://auth.example.com` | Issuer URL of the provider, without `/.well-known/...`. The API container must reach it and trust its certificate. |
+| `HOUSEHOLD_OIDC_CLIENT_ID` | | Client ID of the OIDC client registered for Household. |
+| `HOUSEHOLD_OIDC_CLIENT_SECRET` | | Client secret of that client. Treat it like a password. |
+| `HOUSEHOLD_OIDC_NAME` | `SSO` | Provider name on the button, for example `Pocket ID`. |
+
+Register Household at the provider as a confidential client with the callback URL
+`<your Household URL>/auth/callback`, for example `https://household.example.com/auth/callback`.
+Every address you open Household under needs its own callback URL there.
+
+Signing in with an unknown provider account creates a `pending` user that an admin has to activate,
+like a password registration. To use the provider with an existing account, sign in with the password
+and link the provider under **Account**. A provider account never takes over an existing account by
+matching name or email.
+
 ## Updates
 
 | Variable | Default/example | Description |

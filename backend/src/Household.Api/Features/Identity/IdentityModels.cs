@@ -11,8 +11,29 @@ public sealed class User
     public string Role { get; set; } = Roles.User;
     public string Status { get; set; } = UserStatuses.Pending;
     public string Theme { get; set; } = Themes.Default;
+    /// <summary>Issuer and subject of the linked OIDC account; both null while unlinked.</summary>
+    [JsonIgnore] public string? OidcIssuer { get; set; }
+    [JsonIgnore] public string? OidcSubject { get; set; }
+    public bool OidcLinked => this.OidcSubject is not null;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// A provider login the browser was sent off to, waiting for its callback. Looked up by the hash of
+/// its state, used once, and dead after <see cref="ExpiresAt"/>. <see cref="LinkUserId"/> is set
+/// when a signed-in user links the provider instead of signing in.
+/// </summary>
+public sealed class OidcLogin
+{
+    public Guid Id { get; set; }
+    public string StateHash { get; set; } = "";
+    public string Nonce { get; set; } = "";
+    public string CodeVerifier { get; set; } = "";
+    public string RedirectUri { get; set; } = "";
+    public Guid? LinkUserId { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public sealed class AppModule

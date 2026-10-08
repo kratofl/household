@@ -30,6 +30,25 @@ public sealed class IdentityAccess(IdentityDbContext database, TimeProvider time
     private static DateTime AsUtc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);
 }
 
+/// <summary>Opens a session for a user who has proven who they are, by password or through the OIDC provider.</summary>
+public static class IdentitySessions
+{
+    public static async Task<TokenPair> StartAsync(IdentityDbContext database, Guid userId, DateTime now, CancellationToken cancellationToken)
+    {
+        TokenPair pair = TokenFactory.Create(now);
+        database.Sessions.Add(new Session
+        {
+            UserId = userId,
+            AccessTokenHash = TokenFactory.Hash(pair.AccessToken),
+            RefreshTokenHash = TokenFactory.Hash(pair.RefreshToken),
+            AccessExpiresAt = DateTime.SpecifyKind(pair.AccessExpiresAt, DateTimeKind.Unspecified),
+            RefreshExpiresAt = DateTime.SpecifyKind(pair.RefreshExpiresAt, DateTimeKind.Unspecified),
+        });
+        await database.SaveChangesAsync(cancellationToken);
+        return pair;
+    }
+}
+
 public static class TokenFactory
 {
     public static TokenPair Create(DateTime now)
