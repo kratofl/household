@@ -428,6 +428,10 @@ Solid `surface-floating` panels with `floating-border`, `shadow-e4` and
 in from the right, inset 8px from the window edges; on phones it fills the
 screen. Never glass.
 
+A details sheet inspects one item read-only: its tile and name in the header, then
+its figures as a metric strip and its latest entries as a list ending in a link to
+all of them. Its actions sit in the footer beside Close.
+
 A side panel that stays open beside the page while you work on it (a tray of
 items to drag in) is the same solid surface at `shadow-e4`, with `radius-lg` and
 no dimming.
@@ -439,6 +443,13 @@ Column heads `caption` in `label-secondary`, rows 36px (48px on phones),
 40px (48px on phones): `headline` title, an optional `link` text action on the
 right. A list may end in a summary footer row on `fill` in `footnote`. Rows are
 flat inside their one card; a card never contains another card.
+
+A table whose rows are edited in place uses quiet fields, so it still reads as a
+table. A text field has no edge at rest and looks like the row's text; it gains a
+`fill` on hover. A value field (amount, date part, select) sits on `fill` with no
+edge. Focus brings back the `border-control` edge on `surface`. Every action sits in
+the row as an icon button with a tooltip, never behind a "…" menu. What a row only
+shows (figures, history) opens in a details sheet instead of extra columns.
 
 ## States
 
@@ -463,7 +474,8 @@ flat inside their one card; a card never contains another card.
 ## Accessibility
 
 - Text meets 4.5:1 on its grounds in both themes; control edges
-  (`border-control`) meet 3:1.
+  (`border-control`) meet 3:1. Quiet table fields are the one exception: a field
+  is found by its row, its hover fill and its focus edge instead.
 - Focus: 2px solid `focus-ring`, offset 2px, on every focusable control.
 - Touch targets ≥ 44px on mobile.
 - Status is never colour-only.

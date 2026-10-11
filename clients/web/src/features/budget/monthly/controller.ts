@@ -79,6 +79,14 @@ export type Run = (action: () => Promise<unknown>, report?: "page" | "sheet") =>
 export type ExpenseRowModel = { expense: MonthlyExpense; voided: boolean; date: string; amount: string; sources: string
   merchant: Merchant | null; category?: MonthlyCategory }
 
+/** Prepares a ledger entry for ExpenseRow; `sources` names them only when not all from fun money. */
+export function expenseRowModel({ expense, voided }: { expense: MonthlyExpense; voided: boolean }, state: MonthlyState,
+  merchantById: Map<string, Merchant>, fmt: Formatters, copy: MonthlyCopy): ExpenseRowModel {
+  return { expense, voided, category: state.categories.find(category => category.id === expense.categoryId), date: fmt.date(expense.occurredOn), amount: fmt.money(expense.amountCents),
+    merchant: expense.merchantId ? merchantById.get(expense.merchantId) ?? null : null,
+    sources: expense.funding.some(part => part.source !== "fun") ? expense.funding.map(part => part.source === "category" ? copy.categorySource : part.source === "savings" ? copy.savingsSource : part.source === "buffer" ? copy.bufferSource : copy.fun).join(" · ") : "" }
+}
+
 function daysBetween(from: string, to: string) {
   return Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000)
 }
@@ -272,9 +280,7 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
     const recent: ExpenseRowModel[] = [...inPeriod]
       .sort((a, b) => b.expense.occurredOn.localeCompare(a.expense.occurredOn))
       .slice(0, 6)
-      .map(({ expense, voided }) => ({ expense, voided, category: state.categories.find(category => category.id === expense.categoryId), date: fmt.date(expense.occurredOn), amount: fmt.money(expense.amountCents),
-        merchant: expense.merchantId ? merchantById.get(expense.merchantId) ?? null : null,
-        sources: expense.funding.some(part => part.source !== "fun") ? expense.funding.map(part => part.source === "category" ? copy.categorySource : part.source === "savings" ? copy.savingsSource : part.source === "buffer" ? copy.bufferSource : copy.fun).join(" · ") : "" }))
+      .map(entry => expenseRowModel(entry, state, merchantById, fmt, copy))
     const savingsSpentCents = inPeriod.reduce((sum, { expense }) => sum + sourceCents(expense, "savings"), 0)
     const totalSpentCents = inPeriod.reduce((sum, { expense }) => sum + (expense.kind === "refund" ? -expense.amountCents : expense.amountCents), 0)
     const expenseCount = inPeriod.filter(({ expense }) => expense.kind === "expense").length

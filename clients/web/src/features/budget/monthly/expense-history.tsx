@@ -140,10 +140,10 @@ export function MonthlyExpenseHistory({
 
   return (
     <div className="space-y-4">
-      {/* The topbar search lands here with ?q=. Reading the URL opts a subtree out of
-          static rendering, hence the boundary. */}
+      {/* The topbar search lands here with ?q=, a category's details with ?category=.
+          Reading the URL opts a subtree out of static rendering, hence the boundary. */}
       <Suspense fallback={null}>
-        <SearchFromUrl onSearch={setSearch} />
+        <FiltersFromUrl onSearch={setSearch} onCategory={setCategoryKey} />
       </Suspense>
       {metrics}
 
@@ -376,11 +376,16 @@ function sourceName(source: MonthlyExpense["funding"][number]["source"], copy: M
   return source === "category" ? copy.categorySource : source === "savings" ? copy.savingsSource : source === "buffer" ? copy.bufferSource : copy.fun
 }
 
-/** Copies ?q= into the search field whenever it changes, including on the page itself. */
-function SearchFromUrl({ onSearch }: { onSearch: (value: string) => void }) {
-  const query = useSearchParams().get("q")
+/** Copies ?q= into the search field and ?category= into the category filter whenever they change, including on the page itself. */
+function FiltersFromUrl({ onSearch, onCategory }: { onSearch: (value: string) => void; onCategory: (id: string) => void }) {
+  const params = useSearchParams()
+  const query = params.get("q")
+  const category = params.get("category")
   useEffect(() => {
     if (query !== null) onSearch(query)
   }, [query, onSearch])
+  useEffect(() => {
+    if (category !== null) onCategory(category)
+  }, [category, onCategory])
   return null
 }

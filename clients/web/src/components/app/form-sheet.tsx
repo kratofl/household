@@ -38,10 +38,7 @@ export function FormSheet(props: {
   return (
     <Sheet open={props.open} onOpenChange={(open) => { if (!open && !pending) close() }}>
       <SheetContent>
-        <div className="shrink-0 space-y-0.5 border-b border-separator px-4 py-3">
-          <SheetTitle>{props.title}</SheetTitle>
-          <SheetDescription>{props.description}</SheetDescription>
-        </div>
+        <SheetHead title={props.title} description={props.description} />
         <form
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={async (event) => {
@@ -74,6 +71,48 @@ export function FormSheet(props: {
             </Button>
           </div>
         </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+/** The header both sheets share: title over a one-line description, above a separator. */
+function SheetHead({ title, description, leading }: { title: string; description: string; leading?: ReactNode }) {
+  return (
+    <div className="flex shrink-0 items-center gap-3 border-b border-separator px-4 py-3">
+      {leading}
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <SheetTitle className="truncate">{title}</SheetTitle>
+        <SheetDescription>{description}</SheetDescription>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A read-only sheet that inspects one thing: header (with an optional leading tile), the
+ * content, then its actions in the footer beside Close. Nothing in it needs saving.
+ */
+export function DetailSheet(props: {
+  open: boolean
+  title: string
+  description: string
+  leading?: ReactNode
+  closeLabel: string
+  close: () => void
+  /** Footer actions shown before Close, e.g. a link to the full list. */
+  actions?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <Sheet open={props.open} onOpenChange={(open) => { if (!open) props.close() }}>
+      <SheetContent>
+        <SheetHead title={props.title} description={props.description} leading={props.leading} />
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">{props.children}</div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-separator px-4 py-3">
+          {props.actions}
+          <Button type="button" variant="secondary" onClick={props.close}>{props.closeLabel}</Button>
+        </div>
       </SheetContent>
     </Sheet>
   )

@@ -5,7 +5,8 @@
 // Save and are saved together. The draft lives while this editor is mounted, which the
 // app shell keeps across the plan pages but not beyond; after a save it starts over
 // from the saved plan.
-// Categories and merchants themselves are saved right away from their sheets.
+// Category names, colours and icons edited in the table are part of the same draft;
+// adding, archiving and restoring a category, and merchants, are saved right away.
 // Each page puts its title, the "takes effect" segmented control, its date and the
 // page's action into the toolbar, and keeps hints, errors and the save summary inside
 // the card they belong to (DESIGN.md, Layout).
@@ -18,12 +19,12 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import {
-  IconCheck, IconDots, IconMoodSmile, IconPigMoney, IconPlus, IconReceipt, IconRepeat, IconTag, IconX,
+  IconArchive, IconCheck, IconChevronRight, IconListDetails, IconMoodSmile, IconPigMoney, IconPlus, IconReceipt, IconRepeat, IconRestore, IconTag, IconX,
 } from "@tabler/icons-react"
 
 import { BreakdownChart } from "@/components/app/charts"
 import { FormSelect } from "@/components/app/form-select"
-import { FormSheet, type FormSheetResult } from "@/components/app/form-sheet"
+import { DetailSheet, FormSheet, type FormSheetResult } from "@/components/app/form-sheet"
 import { SearchableSelect } from "@/components/app/searchable-select"
 import { Field } from "@/components/app/field"
 import { FormRow, Group, IconTile, listCardClass, Row } from "@/components/app/grouped"
@@ -33,8 +34,7 @@ import { Segmented } from "@/components/app/segmented"
 import { ToolbarButton, type ToolbarPrimaryAction } from "@/components/app/toolbar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
+import { Input, quietTextField, quietValueField } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { Locale } from "@/lib/i18n"
 import { budgetViews } from "@/lib/modules"
@@ -44,19 +44,20 @@ import { cn } from "@/lib/utils"
 import type { Merchant } from "../merchants"
 import { MerchantDirectory } from "../merchant-directory"
 import { cancelMonthlyPlan, previewMonthlyPlan, saveMonthlyCategory, saveMonthlyPlan } from "./api"
-import { CategoryAppearancePicker } from "./category-appearance-picker"
+import { CategoryAppearancePicker, CategoryLookButton } from "./category-appearance-picker"
 import { categoryVisual } from "./category-visuals"
-import { fill, formatters, moneyInput, parseMoney, periodMonth, type Formatters, type Run } from "./controller"
+import { expenseRowModel, fill, formatters, moneyInput, parseMoney, periodMonth, type Formatters, type Run } from "./controller"
 import { type MonthlyCopy, monthlyCopy, monthlyError } from "./copy"
+import { ExpenseRow } from "./expense-history"
 import type { MonthlyCategory, MonthlyCost, MonthlyForecast, MonthlyPlan, MonthlyState, SavePlan } from "./types"
-import { costTotal, nextYearlyDue, periodBreakdown, type CostDraft } from "./view-models"
+import { costTotal, nextYearlyDue, periodBreakdown, scopedCents, type CostDraft } from "./view-models"
 
 type Props = { section: string; serverError: string | null; state: MonthlyState; accessToken: string; locale: Locale; busy: boolean; isAdmin: boolean
   merchants: Merchant[]
   saveMerchant: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<void>
   run: Run }
-/** What the category sheet edits: a new category or an existing one. */
-type CategoryTarget = { kind: "new" } | { kind: "edit"; category: MonthlyCategory }
+/** What the categories table edits of a category; the reserve is part of the plan instead. */
+type CategoryLook = { name: string; color: string; icon: string }
 type Draft = ReturnType<typeof usePlanDraft>
 /** What every plan page needs besides its own section. */
 type PageProps = Props & { draft: Draft; copy: MonthlyCopy; fmt: Formatters }
@@ -100,6 +101,10 @@ function usePlanDraft({ state, accessToken, locale, run }: Props, copy: MonthlyC
   const [previewing, setPreviewing] = useState(false)
   // The cost row just added, so its name field takes focus.
   const [added, setAdded] = useState<string | null>(null)
+  // Categories edited in the table, by id. An entry goes away once it matches the saved category again.
+  const [categoryEdits, setCategoryEdits] = useState<Record<string, CategoryLook>>({})
+  const savedLook = (category: MonthlyCategory): CategoryLook => ({ name: category.name, color: category.color, icon: category.icon })
+  const invalidCategory = Object.values(categoryEdits).some(look => !look.name.trim())
 
   const payload = useMemo<SavePlan | null>(() => {
     const incomeCents = parseMoney(income), bufferCents = parseMoney(buffer), savingsCents = parseMoney(savings), openingSavingsCents = parseMoney(opening)
@@ -127,6 +132,9 @@ function usePlanDraft({ state, accessToken, locale, run }: Props, copy: MonthlyC
       applyToCurrentPeriod: scope === "current",
       plan: { incomeCents, bufferCents, savingsCents, costs: parsedCosts, reserves: parsedReserves } }
   }, [income, buffer, savings, opening, costs, reserves, scope, state])
+  // The plan as loaded, so a save that only touches categories writes no new plan version.
+  const planKey = payload && JSON.stringify([payload.plan, payload.openingSavingsCents])
+  const [loadedPlanKey] = useState(planKey)
   const [previewPayload, setPreviewPayload] = useState("")
   const previewCurrent = JSON.stringify(payload) === previewPayload
   useEffect(() => {
@@ -148,7 +156,16 @@ function usePlanDraft({ state, accessToken, locale, run }: Props, copy: MonthlyC
     forecast, previewCurrent, previewing, error, effectiveStart, added,
     /** Planned fun money from the effective date: with this draft, and with the saved plans. */
     fun: { draft: previewCurrent ? forecast[0]?.funCents ?? null : null, saved: state.forecast.find(period => period.start === effectiveStart)?.funCents ?? null },
-    canSave: payload !== null && previewCurrent && !previewing,
+    canSave: payload !== null && previewCurrent && !previewing && !invalidCategory,
+    invalidCategory,
+    /** The category as the table shows it: with its unsaved edits. */
+    category: (category: MonthlyCategory) => categoryEdits[category.id] ?? savedLook(category),
+    editCategory: (category: MonthlyCategory, update: Partial<CategoryLook>) => setCategoryEdits(current => {
+      const { [category.id]: edited = savedLook(category), ...others } = current
+      const next = { ...edited, ...update }
+      const saved = savedLook(category)
+      return next.name === saved.name && next.color === saved.color && next.icon === saved.icon ? others : { ...others, [category.id]: next }
+    }),
     updateCost: (id: string, update: Partial<CostDraft>) => setCosts(current => current.map(cost => cost.id === id ? { ...cost, ...update } : cost)),
     addCost: (kind: MonthlyCost["kind"]) => {
       const id = uuid()
@@ -159,7 +176,15 @@ function usePlanDraft({ state, accessToken, locale, run }: Props, copy: MonthlyC
     setReserve: (categoryId: string, value: string) => setReserves(current => ({ ...current, [categoryId]: value })),
     save: async () => {
       if (!payload) { setError(copy.invalid_input); return }
-      if ((await run(() => saveMonthlyPlan(accessToken, payload))).ok) setError(null)
+      if (invalidCategory) { setError(copy.categoryNameRequired); return }
+      const edited = state.categories.flatMap(category => categoryEdits[category.id] ? [{ category, look: categoryEdits[category.id] }] : [])
+      const result = await run(async () => {
+        for (const { category, look } of edited) {
+          await saveMonthlyCategory(accessToken, look.name.trim(), { id: category.id, archived: category.archived }, { color: look.color, icon: look.icon })
+        }
+        if (planKey !== loadedPlanKey || edited.length === 0) await saveMonthlyPlan(accessToken, payload)
+      })
+      if (result.ok) { setError(null); setCategoryEdits({}) }
     },
   }
 }
@@ -187,7 +212,7 @@ function PlanToolbar({ title, draft, copy, fmt, busy, primaryAction, actions }: 
  * period; and a pending plan with the way to discard it.
  */
 function PlanFooter({ draft, copy, fmt, state, busy, serverError, accessToken, run }: PageProps) {
-  const problem = serverError || draft.error || (!draft.payload ? copy.invalid_input : null)
+  const problem = serverError || draft.error || (!draft.payload ? copy.invalid_input : draft.invalidCategory ? copy.categoryNameRequired : null)
   const changed = draft.fun.draft !== null && draft.fun.saved !== null && draft.fun.draft !== draft.fun.saved
   return (
     <div className="space-y-1 border-t border-separator bg-fill px-4 py-2 text-footnote text-label-secondary">
@@ -229,8 +254,12 @@ function CardHeader({ title, hint, children }: { title: string; hint?: string; c
   )
 }
 
-function MoneyInput({ id, value, onChange, ariaLabel, autoFocus }: { id: string; value: string; onChange: (value: string) => void; ariaLabel?: string; autoFocus?: boolean }) {
-  return <Input id={id} className="w-28 text-right tabular-nums" inputMode="decimal" aria-label={ariaLabel} aria-invalid={parseMoney(value) === null || undefined}
+function MoneyInput({ id, value, onChange, ariaLabel, autoFocus, quiet = false }: {
+  id: string; value: string; onChange: (value: string) => void; ariaLabel?: string; autoFocus?: boolean
+  /** In an editable table row: a filled field without a border until focused (DESIGN.md, Lists). */
+  quiet?: boolean
+}) {
+  return <Input id={id} className={cn("w-28 text-right tabular-nums", quiet && cn(quietValueField, "max-sm:w-24"))} inputMode="decimal" aria-label={ariaLabel} aria-invalid={parseMoney(value) === null || undefined}
     autoFocus={autoFocus} value={value} onChange={event => onChange(event.target.value)} />
 }
 
@@ -383,31 +412,31 @@ function CostRows({ kind, draft, copy, merchants }: { kind: MonthlyCost["kind"];
       {rows.map(cost => (
         <div key={cost.id} className={cn("flex min-h-9 flex-wrap items-center gap-2 px-4 py-1 max-lg:min-h-12 max-lg:py-2", columns)}>
           <Label htmlFor={`name-${cost.id}`} className="sr-only">{copy.name}</Label>
-          <Input id={`name-${cost.id}`} className="min-w-0 flex-1" placeholder={copy.name} value={cost.name} maxLength={100} autoFocus={draft.added === cost.id}
+          <Input id={`name-${cost.id}`} className={cn("min-w-0 flex-1", quietTextField)} placeholder={copy.name} value={cost.name} maxLength={100} autoFocus={draft.added === cost.id}
             aria-invalid={!cost.name.trim() || undefined} onChange={event => draft.updateCost(cost.id, { name: event.target.value })} />
           {cost.kind === "yearly" ? (
             <>
               <span className="flex items-center gap-2">
                 <Label htmlFor={`month-${cost.id}`} className="text-caption text-label-secondary lg:sr-only">{copy.dueMonth}</Label>
-                <FormSelect id={`month-${cost.id}`} className="w-20" value={cost.month} onValueChange={month => draft.updateCost(cost.id, { month })} options={months} />
+                <FormSelect id={`month-${cost.id}`} className={cn("w-20", quietValueField)} value={cost.month} onValueChange={month => draft.updateCost(cost.id, { month })} options={months} />
               </span>
               <span className="flex items-center gap-2">
                 <Label htmlFor={`day-${cost.id}`} className="text-caption text-label-secondary lg:sr-only">{copy.dueDay}</Label>
-                <Input id={`day-${cost.id}`} className="w-16 lg:w-full" type="number" min={1} max={31} value={cost.day} onChange={event => draft.updateCost(cost.id, { day: event.target.value })} />
+                <Input id={`day-${cost.id}`} className={cn("w-16 lg:w-full", quietValueField)} type="number" min={1} max={31} value={cost.day} onChange={event => draft.updateCost(cost.id, { day: event.target.value })} />
               </span>
             </>
           ) : null}
-          <MoneyInput id={`amount-${cost.id}`} ariaLabel={`${copy.amount}: ${cost.name || copy.name}`} value={cost.amount} onChange={amount => draft.updateCost(cost.id, { amount })} />
+          <MoneyInput id={`amount-${cost.id}`} quiet ariaLabel={`${copy.amount}: ${cost.name || copy.name}`} value={cost.amount} onChange={amount => draft.updateCost(cost.id, { amount })} />
           <Button size="icon" variant="ghost" onClick={() => draft.removeCost(cost.id)} aria-label={`${copy.remove}: ${cost.name || copy.name}`} title={copy.remove}>
             <IconX />
           </Button>
           {subscription ? (
             <div className="flex w-full flex-wrap items-center gap-2 lg:col-span-full lg:pr-9">
               <Label htmlFor={`merchant-${cost.id}`} className="sr-only">{copy.merchant}</Label>
-              <SearchableSelect id={`merchant-${cost.id}`} className="w-48 max-lg:flex-1" value={cost.merchantId} onValueChange={merchantId => pickMerchant(cost, merchantId)}
+              <SearchableSelect id={`merchant-${cost.id}`} className={cn("w-48 max-lg:flex-1", quietValueField)} value={cost.merchantId} onValueChange={merchantId => pickMerchant(cost, merchantId)}
                 options={merchantOptions(cost.merchantId)} searchLabel={copy.merchantSearch} emptyLabel={copy.noResults} />
               <Label htmlFor={`description-${cost.id}`} className="sr-only">{copy.description}</Label>
-              <Input id={`description-${cost.id}`} className="min-w-40 flex-1" placeholder={copy.description} value={cost.description} maxLength={200}
+              <Input id={`description-${cost.id}`} className={cn("min-w-40 flex-1", quietTextField)} placeholder={copy.description} value={cost.description} maxLength={200}
                 onChange={event => draft.updateCost(cost.id, { description: event.target.value })} />
             </div>
           ) : null}
@@ -425,7 +454,8 @@ function CostRows({ kind, draft, copy, merchants }: { kind: MonthlyCost["kind"];
 
 function CategoriesPage(page: PageProps) {
   const { state, draft, copy, fmt, busy } = page
-  const [target, setTarget] = useState<CategoryTarget | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [inspected, setInspected] = useState<string | null>(null)
   const cells = useMemo<MetricCell[]>(() => {
     const active = state.categories.filter(category => !category.archived)
     const amounts = active.map(category => parseMoney(draft.reserves[category.id] ?? "0") ?? 0)
@@ -435,74 +465,101 @@ function CategoriesPage(page: PageProps) {
       { label: copy.categories, value: String(active.length), note: fill(copy.archivedCount, { count: state.categories.length - active.length }) },
     ]
   }, [state.categories, draft.reserves, copy, fmt])
+  const inspectedCategory = state.categories.find(category => category.id === inspected)
 
   return (
     <div className="space-y-4">
       <PlanToolbar title={copy.categories} draft={draft} copy={copy} fmt={fmt} busy={busy}
         actions={<ToolbarButton label={copy.saveChanges} onClick={() => void draft.save()} disabled={busy || !draft.canSave} />}
-        primaryAction={{ label: copy.addCategory, icon: <IconPlus />, onClick: () => setTarget({ kind: "new" }), disabled: busy }} />
+        primaryAction={{ label: copy.addCategory, icon: <IconPlus />, onClick: () => setAdding(true), disabled: busy }} />
       <MetricStrip cells={cells} />
       <section className={listCardClass}>
         <CardHeader title={copy.categories} hint={`${copy.reserve}: ${copy.noReserve}`} />
         <div className="hairline-rows border-t border-separator">
-          <CategoryRows {...page} edit={category => setTarget({ kind: "edit", category })} />
+          <CategoryRows {...page} inspect={category => setInspected(category.id)} />
         </div>
         <PlanFooter {...page} />
       </section>
-      {target ? <CategorySheet key={target.kind === "edit" ? target.category.id : "new"} target={target} copy={copy} locale={page.locale}
-        close={() => setTarget(null)}
-        save={(name, existing, appearance) => page.run(() => saveMonthlyCategory(page.accessToken, name, existing, appearance), "sheet")} /> : null}
+      {adding ? <CategorySheet copy={copy} locale={page.locale} close={() => setAdding(false)}
+        save={(name, appearance) => page.run(() => saveMonthlyCategory(page.accessToken, name, undefined, appearance), "sheet")} /> : null}
+      {inspectedCategory ? <CategoryDetails page={page} category={inspectedCategory} close={() => setInspected(null)} /> : null}
     </div>
   )
 }
 
-/** Each category with its monthly reserve field (active ones) and a menu to edit or archive it. */
-function CategoryRows({ state, draft, copy, busy, accessToken, locale, run, edit }: PageProps & { edit: (category: MonthlyCategory) => void }) {
+/** Archives or restores a category right away; the table and the details sheet share it. */
+function toggleArchived({ accessToken, run }: PageProps, category: MonthlyCategory) {
+  return run(() => saveMonthlyCategory(accessToken, category.name, { id: category.id, archived: !category.archived }))
+}
+
+// Written out so Tailwind sees them: look · name · reserve · details · archive.
+const categoryColumns = "grid grid-cols-[1.75rem_minmax(0,1fr)_auto_auto] items-center gap-x-2 sm:grid-cols-[1.75rem_minmax(0,1fr)_auto_auto_auto]"
+
+/**
+ * Every category as an editable row: the tile opens its colour and icon, the name and
+ * the monthly reserve are fields, all saved with the plan. Details opens the period
+ * sheet (`inspect`; the setup has no period and leaves it out), archive and restore
+ * act at once. On phones archiving moves into the details sheet when there is one.
+ */
+function CategoryRows(page: PageProps & { inspect?: (category: MonthlyCategory) => void }) {
+  const { state, draft, copy, busy, locale, inspect } = page
   if (state.categories.length === 0) return <p className="px-4 py-3 text-footnote text-label-secondary">{copy.emptyCategories}</p>
   return state.categories.map(category => {
-    const visual = categoryVisual(category.name, category)
+    const look = draft.category(category)
+    const archive = (
+      <Button variant="ghost" size="icon-sm" disabled={busy} className={cn(inspect && !category.archived && "max-sm:hidden")}
+        aria-label={`${category.archived ? copy.restore : copy.archive}: ${look.name}`} title={category.archived ? copy.restore : copy.archive}
+        onClick={() => void toggleArchived(page, category)}>
+        {category.archived ? <IconRestore /> : <IconArchive />}
+      </Button>
+    )
+    const details = inspect ? (
+      <Button variant="ghost" size="icon-sm" aria-label={`${copy.details}: ${look.name}`} title={copy.details} onClick={() => inspect(category)}>
+        <IconListDetails />
+      </Button>
+    ) : null
+    if (category.archived) {
+      const visual = categoryVisual(category.name, category)
+      return (
+        <div key={category.id} className={cn(categoryColumns, "min-h-11 px-4 py-1 text-label-secondary max-lg:min-h-12")}>
+          <IconTile icon={visual.icon} tone={visual.tone} size={28} />
+          <span className="flex min-w-0 items-center gap-2 px-2.5"><span className="truncate">{category.name}</span><Badge>{copy.archived}</Badge></span>
+          <span className={cn("max-sm:hidden", !inspect && "sm:col-span-2")} />
+          {details}
+          {archive}
+        </div>
+      )
+    }
     return (
-      <div key={category.id} className={cn("flex min-h-9 items-center gap-3 px-4 py-1 max-lg:min-h-12 max-lg:py-2", category.archived && "text-label-secondary")}>
-        <IconTile icon={visual.icon} tone={visual.tone} size={28} />
-        <Label className="min-w-0 flex-1 truncate text-callout font-normal" htmlFor={category.archived ? undefined : `reserve-${category.id}`}>
-          {category.name}
-        </Label>
-        {category.archived ? <Badge>{copy.archived}</Badge> : (
-          <fieldset disabled={busy}>
-            <MoneyInput id={`reserve-${category.id}`} ariaLabel={`${copy.reserve}: ${category.name}`} value={draft.reserves[category.id] ?? moneyInput(0, locale)}
-              onChange={value => draft.setReserve(category.id, value)} />
-          </fieldset>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" disabled={busy} aria-label={`${copy.actions}: ${category.name}`} title={copy.actions}><IconDots /></Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => edit(category)}>{copy.edit}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void run(() => saveMonthlyCategory(accessToken, category.name, { id: category.id, archived: !category.archived }))}>
-              {category.archived ? copy.restore : copy.archive}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div key={category.id} className={cn(categoryColumns, "min-h-11 px-4 py-1 max-lg:min-h-12")}>
+        <CategoryLookButton locale={locale} name={look.name} color={look.color} icon={look.icon} disabled={busy}
+          onColor={color => draft.editCategory(category, { color })} onIcon={icon => draft.editCategory(category, { icon })} />
+        <Input aria-label={`${copy.categoryName}: ${category.name}`} className={quietTextField} maxLength={100} value={look.name} disabled={busy}
+          aria-invalid={!look.name.trim() || undefined} onChange={event => draft.editCategory(category, { name: event.target.value })} />
+        <fieldset disabled={busy} className={cn(!inspect && "sm:col-span-2")}>
+          <MoneyInput id={`reserve-${category.id}`} quiet ariaLabel={`${copy.reserve}: ${look.name}`} value={draft.reserves[category.id] ?? moneyInput(0, locale)}
+            onChange={value => draft.setReserve(category.id, value)} />
+        </fieldset>
+        {details}
+        {archive}
       </div>
     )
   })
 }
 
-/** Add or edit a category in a sheet: its name with a preview tile, then its look. */
-function CategorySheet({ target, copy, locale, close, save }: {
-  target: CategoryTarget; copy: MonthlyCopy; locale: Locale; close: () => void
-  save: (name: string, existing: { id: string; archived: boolean } | undefined, appearance: { color: string | null; icon: string }) => Promise<FormSheetResult>
+/** Add a category in a sheet: its name with a preview tile, then its look. */
+function CategorySheet({ copy, locale, close, save }: {
+  copy: MonthlyCopy; locale: Locale; close: () => void
+  save: (name: string, appearance: { color: string | null; icon: string }) => Promise<FormSheetResult>
 }) {
-  const existing = target.kind === "edit" ? target.category : undefined
-  const [name, setName] = useState(existing?.name ?? "")
-  const [color, setColor] = useState<string | null>(existing?.color ?? null)
-  const [icon, setIcon] = useState(existing?.icon ?? "tag")
+  const [name, setName] = useState("")
+  const [color, setColor] = useState<string | null>(null)
+  const [icon, setIcon] = useState("tag")
   const preview = categoryVisual(name, { color: color ?? "", icon })
   return (
-    <FormSheet open title={existing ? copy.editCategory : copy.addCategory} description={copy.categoryNote}
-      submitLabel={existing ? copy.saveCategory : copy.add} cancelLabel={copy.cancel} submitDisabled={!name.trim()}
-      submit={() => save(name.trim(), existing, { color, icon })} close={close}>
+    <FormSheet open title={copy.addCategory} description={copy.categoryNote}
+      submitLabel={copy.add} cancelLabel={copy.cancel} submitDisabled={!name.trim()}
+      submit={() => save(name.trim(), { color, icon })} close={close}>
       <div className="flex items-end gap-3">
         <IconTile icon={preview.icon} tone={preview.tone} size={36} />
         <div className="min-w-0 flex-1">
@@ -511,8 +568,55 @@ function CategorySheet({ target, copy, locale, close, save }: {
           </Field>
         </div>
       </div>
-      <CategoryAppearancePicker allowAutomatic={!existing} locale={locale} color={color} icon={icon} onColor={setColor} onIcon={setIcon} />
+      <CategoryAppearancePicker locale={locale} color={color} icon={icon} onColor={setColor} onIcon={setIcon} />
     </FormSheet>
+  )
+}
+
+/**
+ * What one category did in the shown period, read-only: spent, what is left of its
+ * reserve, its latest expenses, and the way to all of them or to archive it.
+ */
+function CategoryDetails({ page, category, close }: { page: PageProps; category: MonthlyCategory; close: () => void }) {
+  const { state, copy, fmt, busy } = page
+  const summary = state.summary
+  const view = useMemo(() => {
+    const merchantById = new Map(page.merchants.map(merchant => [merchant.id, merchant]))
+    const entries = state.entries
+      .filter(({ expense }) => expense.categoryId === category.id && (!summary || (expense.occurredOn >= summary.start && expense.occurredOn <= summary.end)))
+      .sort((a, b) => b.expense.occurredOn.localeCompare(a.expense.occurredOn))
+    const spent = entries.reduce((sum, { expense, voided }) => (voided ? sum : sum + scopedCents(expense, { kind: "all" })), 0)
+    const pot = summary?.categories.find(item => item.categoryId === category.id && item.reservedCents > 0)
+    const used = pot ? Math.min(1, Math.max(0, 1 - pot.remainingCents / pot.reservedCents)) : 0
+    const cells: MetricCell[] = [{ label: copy.spent, value: fmt.money(spent) }]
+    cells.push(pot
+      ? { label: copy.reserveLeft, value: fmt.money(pot.remainingCents), negative: pot.remainingCents < 0,
+          note: fill(pot.remainingCents < 0 ? copy.overOf : copy.leftOf, { amount: fmt.money(pot.reservedCents) }),
+          meter: { fraction: used } }
+      : { label: copy.reserve, value: fmt.money(0), note: copy.noReserveNote })
+    return { cells, rows: entries.slice(0, 5).map(entry => expenseRowModel(entry, state, merchantById, fmt, copy)) }
+  }, [state, summary, category.id, page.merchants, copy, fmt])
+  const visual = categoryVisual(category.name, category)
+
+  return (
+    <DetailSheet open title={category.name} closeLabel={copy.close} close={close}
+      description={summary ? `${copy.period} ${fmt.date(summary.start)} – ${fmt.date(summary.end)}` : copy.categories}
+      leading={<IconTile icon={visual.icon} tone={visual.tone} size={36} />}
+      actions={(
+        <Button variant="secondary" disabled={busy} onClick={() => void toggleArchived(page, category)}>
+          {category.archived ? <IconRestore /> : <IconArchive />}{category.archived ? copy.restore : copy.archive}
+        </Button>
+      )}>
+      <MetricStrip cells={view.cells} />
+      <Group>
+        {view.rows.length === 0
+          ? <p className="px-4 py-3 text-footnote text-label-secondary">{copy.noCategoryExpenses}</p>
+          : view.rows.map(row => <ExpenseRow key={row.expense.id} row={row} copy={copy} showDate />)}
+        <Row href={`/budget/expenses?category=${category.id}`} className="justify-between font-medium text-link">
+          {copy.categoryExpenses}<IconChevronRight className="size-4" />
+        </Row>
+      </Group>
+    </DetailSheet>
   )
 }
 
@@ -522,7 +626,7 @@ function CategorySheet({ target, copy, locale, close, save }: {
 function PlanSetup(page: PageProps) {
   const { state, draft, copy, fmt, busy, serverError } = page
   const [step, setStep] = useState(0)
-  const [target, setTarget] = useState<CategoryTarget | null>(null)
+  const [adding, setAdding] = useState(false)
   const steps = [
     { title: copy.income, intro: `${copy.setupNote} ${copy.moneyHint}` },
     { title: copy.costs, intro: copy.moneyHint },
@@ -568,8 +672,8 @@ function PlanSetup(page: PageProps) {
           )) : null}
           {step === 2 ? (
             <>
-              <CategoryRows {...page} edit={category => setTarget({ kind: "edit", category })} />
-              <Row onClick={() => setTarget({ kind: "new" })}>
+              <CategoryRows {...page} />
+              <Row onClick={() => setAdding(true)}>
                 <IconPlus className="size-4 text-link [stroke-width:2]" />
                 <span className="font-medium text-link">{copy.addCategory}</span>
               </Row>
@@ -600,9 +704,8 @@ function PlanSetup(page: PageProps) {
         </div>
       </section>
       {step === 3 && draft.previewCurrent && draft.forecast.length > 0 ? <Forecast forecast={draft.forecast} locale={page.locale} currency={state.currency} /> : null}
-      {target ? <CategorySheet key={target.kind === "edit" ? target.category.id : "new"} target={target} copy={copy} locale={page.locale}
-        close={() => setTarget(null)}
-        save={(name, existing, appearance) => page.run(() => saveMonthlyCategory(page.accessToken, name, existing, appearance), "sheet")} /> : null}
+      {adding ? <CategorySheet copy={copy} locale={page.locale} close={() => setAdding(false)}
+        save={(name, appearance) => page.run(() => saveMonthlyCategory(page.accessToken, name, undefined, appearance), "sheet")} /> : null}
     </div>
   )
 }

@@ -18,4 +18,14 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   )
 }
 
-export { Input }
+/**
+ * Quiet fields for editable table rows (DESIGN.md Lists): no edge at rest, so a table of
+ * fields reads like a table. A text field shows as plain text and gains a fill on hover;
+ * a value field (amount, date part, select) keeps the fill. Focus brings back the
+ * border-control edge on surface. On phones a text field keeps the desktop inset, so a
+ * name next to an amount keeps its room. Pass one to `className` of an Input or a select trigger.
+ */
+const quietTextField = "border-transparent bg-transparent hover:bg-fill focus:border-border-control focus:bg-surface disabled:bg-transparent max-lg:px-2.5"
+const quietValueField = "border-transparent bg-fill focus:border-border-control focus:bg-surface disabled:bg-fill"
+
+export { Input, quietTextField, quietValueField }
