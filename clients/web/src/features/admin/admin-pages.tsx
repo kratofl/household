@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react"
 import { IconDots, IconRefresh, IconShieldCheck, IconShieldOff, IconUserCheck, IconUserOff, IconUserPlus } from "@tabler/icons-react"
 import type { Locale, Translator } from "@/lib/i18n"
 import type { CurrentUser } from "@/lib/session"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { StatusDot } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -29,7 +30,7 @@ import { ToolbarButton, ToolbarGroup } from "@/components/app/toolbar"
 import { Switch } from "@/components/ui/switch"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
 
-import type { AuditEvent, NewUser, UserChange } from "@/features/admin/types"
+import type { AuditEvent, CreateUserResult, NewUser, UserChange } from "@/features/admin/types"
 
 // The admin pages, one per sidebar entry under Admin. The app shell renders the one for the
 // current route and owns their data; these only render it and raise intent.
@@ -52,13 +53,13 @@ const emptyUser: NewUser = { name: "", email: "", password: "" }
 /**
  * Every account of the household. Provider sign-ins waiting for approval get their own list on top;
  * the admin's own account has no actions, so nobody locks themselves out. "New account" in the
- * toolbar opens a sheet; `createUser` resolves true when the account exists, which closes it.
+ * toolbar opens a sheet; it closes once `createUser` reports the account exists and shows the error otherwise.
  */
 export function AdminUsersPage(props: {
   currentUser: CurrentUser
   users: CurrentUser[]
   updateUser: (user: CurrentUser, change: UserChange) => Promise<void>
-  createUser: (user: NewUser) => Promise<boolean>
+  createUser: (user: NewUser) => Promise<CreateUserResult>
   t: Translator
 }) {
   const [creating, setCreating] = useState(false)
@@ -159,17 +160,19 @@ function UserActions(props: {
 function CreateUserSheet(props: {
   open: boolean
   close: () => void
-  createUser: (user: NewUser) => Promise<boolean>
+  createUser: (user: NewUser) => Promise<CreateUserResult>
   t: Translator
 }) {
   const formId = useId()
   const [draft, setDraft] = useState<NewUser>(emptyUser)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const nameInput = useRef<HTMLInputElement>(null)
   const t = props.t
 
   function close() {
     setDraft(emptyUser)
+    setError(null)
     props.close()
   }
 
@@ -192,14 +195,22 @@ function CreateUserSheet(props: {
           onSubmit={async (event) => {
             event.preventDefault()
             setBusy(true)
+            setError(null)
             try {
-              if (await props.createUser(draft)) close()
+              const result = await props.createUser(draft)
+              if (result.ok) close()
+              else setError(result.message)
             } finally {
               setBusy(false)
             }
           }}
         >
           <SheetDescription>{t("users.createDescription")}</SheetDescription>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
           <Field label={t("auth.username")}>
             <Input ref={nameInput} autoComplete="off" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
           </Field>

@@ -40,7 +40,7 @@ import { AccountPanel } from "@/features/account/account-panel"
 import { AdminAuditPage, AdminForbidden, AdminServicesPage, AdminUsersPage } from "@/features/admin/admin-pages"
 import { adminViewFromPath, adminViews } from "@/features/admin/views"
 import { SettingsPanel } from "@/features/settings/settings-panel"
-import type { AuditEvent, NewUser, UserChange } from "@/features/admin/types"
+import type { AuditEvent, CreateUserResult, NewUser, UserChange } from "@/features/admin/types"
 import { LoginScreen } from "@/features/auth/login-screen"
 import { OIDC_CALLBACK_PATH, completeOidc, loadOidcOffer, startOidc, type OidcOffer } from "@/features/auth/oidc"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
@@ -407,8 +407,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     await loadUsers()
   }
 
-  async function createUser(user: NewUser) {
-    if (!tokens) return false
+  // A failure goes back to the create sheet, which shows it; the page behind the sheet is covered.
+  async function createUser(user: NewUser): Promise<CreateUserResult> {
+    if (!tokens) return { ok: false, message: t("error.adminRequired") }
 
     setError(null)
     setMessage(null)
@@ -416,10 +417,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       await apiRequest("/users", { method: "PUT", accessToken: tokens.accessToken, body: user })
       setMessage(t("users.created", { name: user.name.trim().toLowerCase() }))
       await loadUsers()
-      return true
+      return { ok: true }
     } catch (err) {
-      setError(errorMessage(err, t))
-      return false
+      return { ok: false, message: errorMessage(err, t) }
     }
   }
 
