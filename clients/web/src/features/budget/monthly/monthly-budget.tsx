@@ -204,9 +204,8 @@ export function MonthlyBudget({
           locale={locale}
           busy={busy}
           merchants={controller.merchants}
-          serverError={controller.error}
           run={run}
-          close={() => { setIntent(null); controller.dismissError() }}
+          close={() => setIntent(null)}
           restoreFocus={() => intent.trigger?.focus()}
         />
       ) : null}

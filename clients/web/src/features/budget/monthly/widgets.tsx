@@ -18,7 +18,7 @@ import type { Locale } from "@/lib/i18n"
 import { budgetViews, moduleCatalog } from "@/lib/modules"
 
 import { categoryVisual } from "./category-visuals"
-import type { useMonthlyBudget } from "./controller"
+import type { UpcomingView, useMonthlyBudget } from "./controller"
 import type { MonthlyCopy } from "./copy"
 import type { ExpenseIntent } from "./expense-editor"
 import { ExpenseRow } from "./expense-history"
@@ -84,39 +84,11 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
       group,
       render: () => (
         <Group title={copy.upcoming} action={{ label: copy.plan, href: budgetViews.plan.route }} className={fullHeight}>
-          {upcoming.rows.length === 0 ? <Block className="text-label-secondary">{copy.emptyUpcoming}</Block> : null}
-          {upcoming.rows.map((row) => (
-            <Row key={row.id}>
-              <span className="flex w-[34px] shrink-0 justify-center">
-                {row.date ? (
-                  <span className="text-center leading-none">
-                    <span className="block text-headline font-bold">{row.date.day}</span>
-                    <span className="block text-caption text-label-secondary uppercase">{row.date.weekday}</span>
-                  </span>
-                ) : (
-                  <IconTile icon={row.kind === "fixed" ? IconReceipt : IconRepeat} tone="neutral" size={26} />
-                )}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{row.name}</span>
-                <span className="block truncate text-footnote text-label-secondary">{costKind(row.kind, copy)}</span>
-              </span>
-              <span className="font-semibold tabular-nums">{row.amount}</span>
-            </Row>
-          ))}
-          {upcoming.more ? (
-            <Row href={budgetViews.plan.route} className="text-label-secondary">
-              <span className="w-[34px] shrink-0" />
-              <span className="flex-1">{upcoming.more}</span>
-              <Disclosure />
-            </Row>
-          ) : null}
-          {upcoming.rows.length > 0 ? (
-            <Row className="bg-fill text-footnote text-label-secondary">
-              <span className="flex-1">{copy.upcomingFooter}</span>
-              <span className="font-semibold tabular-nums">{upcoming.total}</span>
-            </Row>
-          ) : null}
+          {upcoming.status === "closed" ? (
+            <Block className="text-label-secondary">{copy.upcomingClosed}</Block>
+          ) : (
+            <UpcomingRows upcoming={upcoming} copy={copy} />
+          )}
         </Group>
       ),
     },
@@ -127,12 +99,16 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
       h: 3,
       group,
       render: () => {
-        // The fun-money pot is the hero; the strip holds everything else.
+        // The fun-money pot is the hero; the strip holds everything else. A
+        // category pot is a button that books an expense against its reserve.
         const cells: MetricCell[] = [
-          ...view.pots.map((pot) => {
+          ...view.pots.map((pot): MetricCell => {
             const visual = categoryVisual(pot.category.name, pot.category)
-            return { label: pot.category.name, value: pot.value, negative: pot.negative, note: pot.note, meter: pot.meter,
+            const cell = { label: pot.category.name, value: pot.value, negative: pot.negative, note: pot.note, meter: pot.meter,
               icon: { glyph: visual.icon, tone: visual.tone } }
+            return spendable && !pot.category.archived
+              ? { ...cell, select: { label: pot.addLabel, onClick: () => spendable({ kind: "add", categoryId: pot.category.id, source: "category" }) } }
+              : cell
           }),
           {
             label: copy.savedPot,
@@ -195,6 +171,45 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
       render: () => <Forecast forecast={state.forecast} locale={context.locale} currency={state.currency} />,
     },
   ]
+}
+
+/** The open period's costs, the fold-away row for the rest, and their total. */
+function UpcomingRows({ upcoming, copy }: { upcoming: Extract<UpcomingView, { status: "open" }>; copy: MonthlyCopy }) {
+  if (upcoming.rows.length === 0) return <Block className="text-label-secondary">{copy.emptyUpcoming}</Block>
+  return (
+    <>
+      {upcoming.rows.map((row) => (
+        <Row key={row.id}>
+          <span className="flex w-[34px] shrink-0 justify-center">
+            {row.date ? (
+              <span className="text-center leading-none">
+                <span className="block text-headline font-bold">{row.date.day}</span>
+                <span className="block text-caption text-label-secondary uppercase">{row.date.weekday}</span>
+              </span>
+            ) : (
+              <IconTile icon={row.kind === "fixed" ? IconReceipt : IconRepeat} tone="neutral" size={26} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">{row.name}</span>
+            <span className="block truncate text-footnote text-label-secondary">{costKind(row.kind, copy)}</span>
+          </span>
+          <span className="font-semibold tabular-nums">{row.amount}</span>
+        </Row>
+      ))}
+      {upcoming.more ? (
+        <Row href={budgetViews.plan.route} className="text-label-secondary">
+          <span className="w-[34px] shrink-0" />
+          <span className="flex-1">{upcoming.more}</span>
+          <Disclosure />
+        </Row>
+      ) : null}
+      <Row className="bg-fill text-footnote text-label-secondary">
+        <span className="flex-1">{copy.upcomingFooter}</span>
+        <span className="font-semibold tabular-nums">{upcoming.total}</span>
+      </Row>
+    </>
+  )
 }
 
 function costKind(kind: "fixed" | "monthly" | "yearly", copy: MonthlyCopy) {

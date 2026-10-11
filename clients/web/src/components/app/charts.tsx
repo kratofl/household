@@ -35,14 +35,37 @@ function textWidth(text: string) {
   return text.length * 6.4
 }
 
-/** 3–5 round gridline values from 0 to at least `max`. */
-function niceTicks(max: number, intervals: number): number[] {
-  if (max <= 0) return [0]
-  const raw = max / intervals
-  const power = 10 ** Math.floor(Math.log10(raw))
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((candidate) => candidate >= raw) ?? 10 * power
-  const count = Math.ceil(max / step)
-  return Array.from({ length: count + 1 }, (_, index) => index * step)
+/**
+ * Round gridline values (cents) spanning 0 and every value, negatives included:
+ * the smallest step of 1, 2 or 5 × 10ⁿ whole euros that needs at most `intervals`
+ * intervals. Steps are never below 1 €, so ticks stay true when callers format them
+ * as whole euros. Always at least two ticks; the first and last are the y domain.
+ */
+function niceTicks(values: number[], intervals: number): number[] {
+  const finite = values.filter(Number.isFinite)
+  const low = Math.min(0, ...finite)
+  const high = Math.max(0, low + 1, ...finite)
+  const most = Math.max(2, intervals)
+  for (let power = 100; ; power *= 10) {
+    for (const step of [power, 2 * power, 5 * power]) {
+      const below = Math.ceil(-low / step)
+      const above = Math.ceil(high / step)
+      if (below + above <= most) return Array.from({ length: below + above + 1 }, (_, index) => (index - below) * step)
+    }
+  }
+}
+
+/** Maps cents to a y coordinate on the ticks' domain, top tick at `top`, bottom tick at `top + height`. */
+function yScale(ticks: number[], top: number, height: number) {
+  const low = ticks[0] ?? 0
+  const high = ticks[ticks.length - 1] ?? 1
+  const span = high > low ? high - low : 1
+  return (cents: number) => top + height - ((cents - low) / span) * height
+}
+
+/** Left margin that fits the widest y tick label. */
+function axisMargin(ticks: number[], format: FormatMoney) {
+  return Math.max(32, ...ticks.map((tick) => textWidth(format(tick)) + 12))
 }
 
 /** A column with radius-xs top corners, square at the baseline. */
@@ -263,9 +286,8 @@ export function PaceChart({
   height?: number
 }) {
   const current = cumulative[today - 1] ?? 0
-  const ticks = niceTicks(Math.max(budget, ...cumulative), 4)
-  const top = ticks[ticks.length - 1] || 1
-  const margin = { left: Math.max(32, textWidth(formatTick(top)) + 12), right: Math.max(48, textWidth(formatMoney(budget)) + 16), top: 18, bottom: 24 }
+  const ticks = niceTicks([budget, ...cumulative], 4)
+  const margin = { left: axisMargin(ticks, formatTick), right: Math.max(48, textWidth(formatMoney(budget)) + 16), top: 18, bottom: 24 }
   const plot = (width: number) => ({ left: margin.left, right: width - margin.right })
   const plannedBy = (day: number) => Math.round((budget * day) / days)
 
@@ -306,7 +328,7 @@ export function PaceChart({
         const { left, right } = plot(width)
         const plotHeight = height - margin.top - margin.bottom
         const x = (day: number) => left + (day / days) * (right - left)
-        const y = (cents: number) => margin.top + plotHeight - (cents / top) * plotHeight
+        const y = yScale(ticks, margin.top, plotHeight)
         const points = [`${x(0)},${y(0)}`, ...cumulative.map((cents, index) => `${x(index + 1)},${y(cents)}`)].join(" ")
         const currentLabel = formatMoney(current)
         // The amount sits left of the end dot unless that runs into the axis.
@@ -380,13 +402,12 @@ export function PeriodTrendChart({
   labels: { title: string; spent: string; budget: string; running: string; overBudget: string; leftOver: string }
   height?: number
 }) {
-  const ticks = niceTicks(Math.max(1, ...periods.flatMap((period) => [period.spent, period.budget])), 2)
-  const top = ticks[ticks.length - 1] || 1
+  const ticks = niceTicks(periods.flatMap((period) => [period.spent, period.budget]), 3)
   const last = periods[periods.length - 1]
   const sameBudget = periods.every((period) => period.budget === periods[0]?.budget)
   const labelLines = Math.max(0, ...periods.map((period) => (period.spent > period.budget ? 1 : 0) + (period.running ? 1 : 0)))
   const margin = {
-    left: Math.max(32, textWidth(formatTick(top)) + 12),
+    left: axisMargin(ticks, formatTick),
     right: last ? Math.max(48, textWidth(formatMoney(last.budget)) + 16) : 48,
     top: Math.max(18, labelLines * 14 + 10),
     bottom: 24,
@@ -430,7 +451,7 @@ export function PeriodTrendChart({
         const plotHeight = height - margin.top - margin.bottom
         const slot = (right - left) / Math.max(1, periods.length)
         const barWidth = Math.min(24, slot * 0.5)
-        const y = (cents: number) => margin.top + plotHeight - (cents / top) * plotHeight
+        const y = yScale(ticks, margin.top, plotHeight)
         const base = y(0)
         return (
           <>
@@ -449,14 +470,17 @@ export function PeriodTrendChart({
               const labelled = (other: TrendPeriod | undefined) => other !== undefined && (other.running || other.spent > other.budget)
               const room = labelled(periods[index - 1]) || labelled(periods[index + 1]) ? slot : slot * 1.6
               const showAmount = textWidth(overLabel) + 16 <= room
-              const labelTop = y(period.spent) - 8
+              // Labels sit above the column, which for a negative amount ends at the baseline.
+              const labelTop = y(Math.max(0, period.spent)) - 8
+              // The overspend starts at the budget, or at 0 when the budget itself is negative.
+              const split = Math.max(0, period.budget)
               return (
                 <g key={period.label}>
                   {over > 0 ? (
                     <>
                       {/* A 2px surface gap separates the in-budget part from the overspend. */}
-                      <path d={columnPath(x0, barWidth, y(period.budget) + 1, base, 0)} className={fill} />
-                      <path d={columnPath(x0, barWidth, y(period.spent), y(period.budget) - 1)} className="fill-danger-text" />
+                      {split > 0 ? <path d={columnPath(x0, barWidth, y(split) + 1, base, 0)} className={fill} /> : null}
+                      <path d={columnPath(x0, barWidth, y(period.spent), split > 0 ? y(split) - 1 : base)} className="fill-danger-text" />
                       <OverLabel center={center} y={labelTop} text={showAmount ? overLabel : null} />
                     </>
                   ) : (
@@ -540,9 +564,8 @@ export function DailyBarChart({
 }) {
   const max = Math.max(0, ...amounts)
   const maxIndex = max > 0 ? amounts.indexOf(max) : -1
-  const ticks = niceTicks(Math.max(1, max), 2)
-  const top = ticks[ticks.length - 1] || 1
-  const margin = { left: Math.max(32, textWidth(formatTick(top)) + 12), right: 8, top: 22, bottom: 24 }
+  const ticks = niceTicks(amounts, 3)
+  const margin = { left: axisMargin(ticks, formatTick), right: 8, top: 22, bottom: 24 }
   const plot = (width: number) => ({ left: margin.left, right: width - margin.right })
 
   return (
@@ -571,7 +594,7 @@ export function DailyBarChart({
         const plotHeight = height - margin.top - margin.bottom
         const slot = (right - left) / days
         const barWidth = Math.min(18, Math.max(2, slot * 0.6))
-        const y = (cents: number) => margin.top + plotHeight - (cents / top) * plotHeight
+        const y = yScale(ticks, margin.top, plotHeight)
         const base = y(0)
         const centerOf = (day: number) => left + (day - 0.5) * slot
         // Weekly ticks give way to „today“ when they would collide with it.
@@ -584,7 +607,7 @@ export function DailyBarChart({
             <YGrid ticks={ticks} y={y} left={left} right={right} format={formatTick} />
             {active !== null ? <rect x={left + active * slot} y={margin.top} width={slot} height={plotHeight} rx={Math.min(4, slot / 2)} className="fill-fill" /> : null}
             {amounts.map((amount, index) =>
-              amount > 0 ? (
+              amount !== 0 ? (
                 <path
                   key={index}
                   d={columnPath(centerOf(index + 1) - barWidth / 2, barWidth, y(amount), base, Math.min(4, barWidth / 2))}
@@ -641,32 +664,33 @@ export function BreakdownChart({
   remainder: BreakdownPart
   formatMoney: FormatMoney
 }) {
-  const scale = Math.max(1, whole.amount, deductions.reduce((sum, part) => sum + part.amount, 0))
-  const percent = (cents: number) => `${(Math.max(0, cents) / scale) * 100}%`
   // Each deduction floats where the previous ones left off, counting down from the whole.
   const rows = deductions.map((part, index) => {
     const to = whole.amount - deductions.slice(0, index).reduce((sum, earlier) => sum + earlier.amount, 0)
     return { part, from: to - part.amount, to }
   })
+  // The domain spans 0 and every running total, so a whole eaten below zero moves 0 right.
+  const ends = [whole.amount, remainder.amount, ...rows.flatMap((row) => [row.from, row.to])]
+  const low = Math.min(0, ...ends)
+  const span = Math.max(1, Math.max(0, ...ends) - low)
+  /** Absolute position of the bar between two amounts, in either order. */
+  const bar = (a: number, b: number) => ({ left: `${((Math.min(a, b) - low) / span) * 100}%`, width: `${(Math.abs(b - a) / span) * 100}%` })
 
   return (
     <figure className="m-0">
       <figcaption className="sr-only">{title}</figcaption>
       <ul className="hairline-rows">
         <BreakdownRow label={whole.label} amount={formatMoney(whole.amount)}>
-          <span className="absolute inset-y-0 left-0 rounded-xs bg-chart-muted-strong" style={{ width: percent(whole.amount) }} />
+          <span className="absolute inset-y-0 rounded-xs bg-chart-muted-strong" style={bar(0, whole.amount)} />
         </BreakdownRow>
         {rows.map(({ part, from, to }) => (
           <BreakdownRow key={part.label} label={part.label} amount={formatMoney(-part.amount)}>
-            <span
-              className="absolute inset-y-0 rounded-xs bg-chart-muted"
-              style={{ left: percent(from), width: percent(Math.min(to, scale) - Math.max(0, from)) }}
-            />
+            <span className="absolute inset-y-0 rounded-xs bg-chart-muted" style={bar(from, to)} />
           </BreakdownRow>
         ))}
         <BreakdownRow label={remainder.label} amount={formatMoney(remainder.amount)} total negative={remainder.amount < 0}>
           {remainder.amount > 0 ? (
-            <span className="absolute inset-y-0 left-0 rounded-xs bg-brand-500" style={{ width: percent(remainder.amount) }} />
+            <span className="absolute inset-y-0 rounded-xs bg-brand-500" style={bar(0, remainder.amount)} />
           ) : null}
         </BreakdownRow>
       </ul>

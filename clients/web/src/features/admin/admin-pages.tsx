@@ -1,10 +1,9 @@
 "use client"
 
-import { useId, useRef, useState } from "react"
+import { useState } from "react"
 import { IconDots, IconRefresh, IconShieldCheck, IconShieldOff, IconUserCheck, IconUserOff, IconUserPlus } from "@tabler/icons-react"
 import type { Locale, Translator } from "@/lib/i18n"
 import type { CurrentUser } from "@/lib/session"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { StatusDot } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,8 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Field } from "@/components/app/field"
+import { FormSheet } from "@/components/app/form-sheet"
 import { listCardClass } from "@/components/app/grouped"
 import { PageHeader } from "@/components/app/page-header"
 import {
@@ -156,83 +155,49 @@ function UserActions(props: {
   )
 }
 
-/** The create-account form in a sheet: Cancel, title and Create in its header, the fields below. */
+/** The create-account form in a sheet; the draft is emptied whenever the sheet closes. */
 function CreateUserSheet(props: {
   open: boolean
   close: () => void
   createUser: (user: NewUser) => Promise<CreateUserResult>
   t: Translator
 }) {
-  const formId = useId()
   const [draft, setDraft] = useState<NewUser>(emptyUser)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const nameInput = useRef<HTMLInputElement>(null)
   const t = props.t
 
-  function close() {
-    setDraft(emptyUser)
-    setError(null)
-    props.close()
-  }
-
   return (
-    <Sheet open={props.open} onOpenChange={(open) => { if (!open && !busy) close() }}>
-      {/* Focus starts in the first field, not on Cancel. */}
-      <SheetContent onOpenAutoFocus={(event) => { event.preventDefault(); nameInput.current?.focus() }}>
-        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-separator px-4 max-lg:h-16">
-          <Button type="button" variant="secondary" disabled={busy} onClick={close}>
-            {t("users.cancel")}
-          </Button>
-          <SheetTitle className="truncate">{t("users.createTitle")}</SheetTitle>
-          <Button type="submit" form={formId} disabled={busy}>
-            {t("users.create")}
-          </Button>
-        </div>
-        <form
-          id={formId}
-          className="space-y-4 overflow-y-auto p-4"
-          onSubmit={async (event) => {
-            event.preventDefault()
-            setBusy(true)
-            setError(null)
-            try {
-              const result = await props.createUser(draft)
-              if (result.ok) close()
-              else setError(result.message)
-            } finally {
-              setBusy(false)
-            }
-          }}
-        >
-          <SheetDescription>{t("users.createDescription")}</SheetDescription>
-          {error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
-          <Field label={t("auth.username")}>
-            <Input ref={nameInput} autoComplete="off" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-          </Field>
-          <Field label={t("auth.email")}>
-            <Input
-              type="email"
-              autoComplete="off"
-              value={draft.email}
-              onChange={(event) => setDraft({ ...draft, email: event.target.value })}
-            />
-          </Field>
-          <Field label={t("auth.password")}>
-            <Input
-              type="password"
-              autoComplete="new-password"
-              value={draft.password}
-              onChange={(event) => setDraft({ ...draft, password: event.target.value })}
-            />
-          </Field>
-        </form>
-      </SheetContent>
-    </Sheet>
+    <FormSheet
+      open={props.open}
+      title={t("users.createTitle")}
+      description={t("users.createDescription")}
+      submitLabel={t("users.create")}
+      cancelLabel={t("users.cancel")}
+      submit={() => props.createUser(draft)}
+      close={() => {
+        setDraft(emptyUser)
+        props.close()
+      }}
+    >
+      <Field label={t("auth.username")}>
+        <Input autoComplete="off" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+      </Field>
+      <Field label={t("auth.email")}>
+        <Input
+          type="email"
+          autoComplete="off"
+          value={draft.email}
+          onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+        />
+      </Field>
+      <Field label={t("auth.password")}>
+        <Input
+          type="password"
+          autoComplete="new-password"
+          value={draft.password}
+          onChange={(event) => setDraft({ ...draft, password: event.target.value })}
+        />
+      </Field>
+    </FormSheet>
   )
 }
 
@@ -330,7 +295,7 @@ export function AdminAuditPage(props: {
                   <td className={`${auditCell} text-label-secondary max-lg:hidden`}>{event.actorRole || t("audit.systemActor")}</td>
                   <td className={`${auditCell} text-right lg:text-left`}>
                     <StatusDot status={event.outcome === "success" ? "green" : "red"} className="text-footnote">
-                      {event.outcome === "success" ? t("audit.outcomeSuccess") : event.outcome}
+                      {t(event.outcome === "success" ? "audit.outcomeSuccess" : "audit.outcomeFailure")}
                     </StatusDot>
                   </td>
                 </tr>

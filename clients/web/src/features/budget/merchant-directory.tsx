@@ -11,6 +11,7 @@ import { useMemo, useState } from "react"
 import { IconDots, IconPlus } from "@tabler/icons-react"
 
 import { Field } from "@/components/app/field"
+import { FormSheet, type FormSheetResult } from "@/components/app/form-sheet"
 import { listCardClass } from "@/components/app/grouped"
 import { PageHeader } from "@/components/app/page-header"
 import { SearchInput } from "@/components/app/search-input"
@@ -20,7 +21,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
 import { MerchantTile } from "./merchant-tile"
@@ -60,8 +60,8 @@ export function MerchantDirectory({
   merchants: Merchant[]
   isAdmin: boolean
   busy: boolean
-  /** Resolves true once saved, so the sheet can close. */
-  save: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<boolean>
+  /** Saves a merchant; a failure comes back for the sheet to show. */
+  save: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<FormSheetResult>
 }) {
   const [target, setTarget] = useState<Target | null>(null)
   const [search, setSearch] = useState("")
@@ -121,7 +121,6 @@ export function MerchantDirectory({
           target={target}
           copy={copy}
           isAdmin={isAdmin}
-          busy={busy}
           close={() => setTarget(null)}
           save={save}
         />
@@ -130,52 +129,38 @@ export function MerchantDirectory({
   )
 }
 
-/** The name form in a solid sheet: Cancel, title and Save on top; admins may publish a new merchant to everyone. */
-function MerchantSheet({ target, copy, isAdmin, busy, close, save }: {
+/** The name form in a sheet; admins may publish a new merchant to everyone. */
+function MerchantSheet({ target, copy, isAdmin, close, save }: {
   target: Target
   copy: MerchantDirectoryCopy
   isAdmin: boolean
-  busy: boolean
   close: () => void
-  save: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<boolean>
+  save: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<FormSheetResult>
 }) {
   const [name, setName] = useState(target.kind === "rename" ? target.merchant.name : "")
   const [publish, setPublish] = useState(false)
-  const formId = "merchant-form"
-  const title = target.kind === "rename" ? copy.renameMerchant : copy.addMerchant
   return (
-    <Sheet open onOpenChange={(open) => { if (!open && !busy) close() }}>
-      <SheetContent>
-        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-separator px-4 max-lg:h-16">
-          <Button type="button" variant="secondary" disabled={busy} onClick={close}>{copy.cancel}</Button>
-          <SheetTitle className="truncate">{title}</SheetTitle>
-          <Button type="submit" form={formId} disabled={busy || !name.trim()}>
-            {target.kind === "rename" ? copy.rename : copy.addMerchant}
-          </Button>
+    <FormSheet
+      open
+      title={target.kind === "rename" ? copy.renameMerchant : copy.addMerchant}
+      description={copy.merchantsNote}
+      submitLabel={target.kind === "rename" ? copy.rename : copy.addMerchant}
+      cancelLabel={copy.cancel}
+      submitDisabled={!name.trim()}
+      submit={() => save(name.trim(), target.kind === "rename"
+        ? { id: target.merchant.id, archived: target.merchant.archived }
+        : { global: isAdmin && publish })}
+      close={close}
+    >
+      <Field label={copy.merchantName}>
+        <Input autoComplete="off" maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
+      </Field>
+      {isAdmin && target.kind === "new" ? (
+        <div className="flex items-center gap-2">
+          <Checkbox id="merchant-publish" checked={publish} onCheckedChange={(checked) => setPublish(checked === true)} />
+          <Label htmlFor="merchant-publish" className="text-callout font-normal">{copy.publishMerchant}</Label>
         </div>
-        <form
-          id={formId}
-          className="space-y-4 overflow-y-auto p-4"
-          onSubmit={async (event) => {
-            event.preventDefault()
-            const trimmed = name.trim()
-            if (!trimmed) return
-            const options = target.kind === "rename" ? { id: target.merchant.id, archived: target.merchant.archived } : { global: isAdmin && publish }
-            if (await save(trimmed, options)) close()
-          }}
-        >
-          <SheetDescription>{copy.merchantsNote}</SheetDescription>
-          <Field label={copy.merchantName}>
-            <Input autoFocus autoComplete="off" maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
-          {isAdmin && target.kind === "new" ? (
-            <div className="flex items-center gap-2">
-              <Checkbox id="merchant-publish" checked={publish} onCheckedChange={(checked) => setPublish(checked === true)} />
-              <Label htmlFor="merchant-publish" className="text-callout font-normal">{copy.publishMerchant}</Label>
-            </div>
-          ) : null}
-        </form>
-      </SheetContent>
-    </Sheet>
+      ) : null}
+    </FormSheet>
   )
 }

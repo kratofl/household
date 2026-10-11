@@ -27,6 +27,23 @@ public sealed class MonthlyCategoryAppearanceMigration : Migration
         UPDATE budget.monthly_categories AS category
         SET color = (ARRAY['brand', 'green', 'blue', 'purple', 'yellow'])[colors.n::integer + 1]
         FROM colors WHERE category.id = colors.id;
+        -- Existing categories keep the glyph the web client used to guess from their name.
+        UPDATE budget.monthly_categories SET icon = CASE
+            WHEN name ~* 'tank|benzin|sprit|diesel' THEN 'fuel'
+            WHEN name ~* 'lebensmittel|einkauf|supermarkt|rewe|edeka|aldi|lidl' THEN 'cart'
+            WHEN name ~* 'essen|restaurant|café|cafe|bäcker|lieferando' THEN 'food'
+            WHEN name ~* 'kleid|mode|schuh' THEN 'shirt'
+            WHEN name ~* 'freizeit|kino|hobby|sport|spiel' THEN 'movie'
+            WHEN name ~* 'haushalt|wohn|möbel|baumarkt' THEN 'home'
+            WHEN name ~* 'drogerie|pflege|apotheke' THEN 'bottle'
+            WHEN name ~* 'auto|kfz|werkstatt|parken' THEN 'car'
+            WHEN name ~* 'elektro|technik|computer|handy' THEN 'laptop'
+            WHEN name ~* 'geschenk' THEN 'gift'
+            WHEN name ~* 'gesund|arzt|medi' THEN 'heart'
+            WHEN name ~* 'kind|baby|schule' THEN 'baby'
+            WHEN name ~* 'tier|hund|katze' THEN 'paw'
+            WHEN name ~* 'reise|urlaub|flug|hotel' THEN 'plane'
+            ELSE 'tag' END;
         """);
 
     protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("""

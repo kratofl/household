@@ -29,7 +29,7 @@ export function SearchableSelect({ id, value, options, onValueChange, searchLabe
   return (
     <Popover.Root open={open} onOpenChange={next => { setOpen(next); setQuery(""); setActive(0) }}>
       <Popover.Trigger asChild>
-        <Button id={id} type="button" variant="outline" disabled={disabled} className={cn("justify-between gap-2", className)}>
+        <Button id={id} type="button" variant="outline" disabled={disabled} className={cn("justify-between gap-2 border-border-control", className)}>
           <span className="truncate">{options.find(option => option.value === value)?.label}</span><IconChevronDown />
         </Button>
       </Popover.Trigger>

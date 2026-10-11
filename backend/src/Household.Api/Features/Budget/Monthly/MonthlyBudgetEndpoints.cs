@@ -144,7 +144,7 @@ public static class MonthlyBudgetEndpoints
         MonthlyCategoryRow category = new()
         {
             Id = Guid.NewGuid(), OwnerUserId = user.Id, Name = request.Name.Trim(),
-            Color = request.Color ?? MonthlyCategoryAppearance.Colors.MinBy(color => colors.Count(used => used == color))!,
+            Color = request.Color ?? MonthlyCategoryAppearance.Colors.OrderBy(color => colors.Count(used => used == color)).First(),
             Icon = request.Icon ?? "tag",
         };
         database.MonthlyCategories.Add(category);

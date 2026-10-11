@@ -11,6 +11,7 @@ import { ApiError, apiRequest } from "@/lib/api"
 import {
   fallbackModules,
   budgetViewEntries,
+  budgetViewFromPath,
   budgetViews,
   moduleCatalog,
   moduleHref,
@@ -574,7 +575,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </Alert>
                 ) : null}
 
-                <div key={pathname} className="rise">
+                <div key={contentKey(pathname, inBudget)} className="rise">
                   {isHome ? (
                     <DashboardPage
                       accessToken={tokens?.accessToken}
@@ -657,6 +658,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       />
     </div>
   )
+}
+
+/**
+ * Navigating to a new key remounts the content: its entrance animation plays again and its
+ * state starts fresh. The budget plan pages share one key, because they edit one unsaved
+ * plan draft together (plan-editor.tsx) that a remount would throw away.
+ */
+function contentKey(pathname: string, inBudget: boolean) {
+  const view = inBudget ? budgetViewFromPath(pathname) : null
+  return view && view !== "overview" && view !== "expenses" && view !== "savings" ? "budget-plan" : pathname
 }
 
 function selectedSectionFromPath(pathname: string) {

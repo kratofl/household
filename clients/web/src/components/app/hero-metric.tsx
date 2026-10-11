@@ -42,8 +42,7 @@ export function HeroMetric({
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 pt-4 pb-1">
         <div className="min-w-0">
           <h2 className="text-callout font-medium text-label-secondary">{label}</h2>
-          {/* Not through cn(): tailwind-merge does not know `text-display` as a size. */}
-          <p className={negative ? "text-display text-danger-text" : "text-display"}>{value}</p>
+          <p className={cn("text-display", negative && "text-danger-text")}>{value}</p>
           {supporting ? (
             <p className="mt-0.5 text-body text-label-secondary [&_strong]:font-semibold [&_strong]:text-label">{supporting}</p>
           ) : null}

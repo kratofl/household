@@ -16,7 +16,7 @@ import { uuid } from "@/lib/uuid"
 
 import type { Merchant } from "../merchants"
 import { addMonthlyExpense, loadMonthlyBudget, refundMonthlyExpense } from "./api"
-import { formatters, moneyInput, parseMoney } from "./controller"
+import { formatters, moneyInput, parseMoney, type Run } from "./controller"
 import { monthlyCopy, monthlyError } from "./copy"
 import type { Funding, MonthlyExpense, MonthlyState } from "./types"
 
@@ -26,7 +26,7 @@ export type ExpenseIntent =
   | { kind: "refund"; expense: MonthlyExpense }
 type Source = "auto" | "fun" | "savings" | "category" | "buffer"
 type Props = { intent: ExpenseIntent; state: MonthlyState; accessToken: string; locale: Locale; busy: boolean; merchants: Merchant[];
-  serverError: string | null; run: (action: () => Promise<unknown>) => Promise<boolean>; close: () => void; restoreFocus: () => void }
+  run: Run; close: () => void; restoreFocus: () => void }
 
 function useExpenseEditor(props: Props) {
   const { intent, state, accessToken, locale, run, close } = props
@@ -80,10 +80,11 @@ function useExpenseEditor(props: Props) {
     if (calculated.cents === null || calculated.cents <= 0 || !category || !date || !calculated.ready) { setError(copy.invalid_input); return }
     if (intent.kind !== "refund" && calculated.funding.length === 0) { setError(copy.insufficient_funds); return }
     const cents = calculated.cents
-    const saved = await run(() => intent.kind === "refund" ? refundMonthlyExpense(accessToken, intent.expense.id, { requestKey, occurredOn: date, amountCents: cents }) :
+    const result = await run(() => intent.kind === "refund" ? refundMonthlyExpense(accessToken, intent.expense.id, { requestKey, occurredOn: date, amountCents: cents }) :
       addMonthlyExpense(accessToken, { requestKey, occurredOn: date, description, categoryId: category, amountCents: cents,
-        funding: calculated.funding, correctsId: intent.kind === "edit" ? intent.expense.id : null, merchantId: merchant || null }))
-    if (saved) {
+        funding: calculated.funding, correctsId: intent.kind === "edit" ? intent.expense.id : null, merchantId: merchant || null }), "sheet")
+    if (!result.ok) setError(result.message)
+    else {
       if (another) {
         setAmount(""); setDescription(""); setCover(false); setRequestKey(uuid())
         try { setContext({ date, data: await loadMonthlyBudget(accessToken, date) }) }
@@ -118,7 +119,7 @@ export function MonthlyExpenseEditor(props: Props) {
         </div>
         <form id={formId} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5" onSubmit={event => { event.preventDefault(); void editor.submit(false) }}>
           <fieldset disabled={props.busy} className="space-y-4">
-            <FormFeedback error={editor.error || props.serverError} />
+            <FormFeedback error={editor.error} />
 
             <div className={`${listCardClass} px-4 py-5 text-center`}>
               <Label htmlFor="expense-amount" className="sr-only">{props.intent.kind === "refund" ? copy.refundAmount : copy.amount}</Label>

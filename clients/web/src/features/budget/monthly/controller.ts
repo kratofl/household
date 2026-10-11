@@ -67,26 +67,30 @@ async function loadPeriod(accessToken: string, date: string) {
 }
 export type Formatters = ReturnType<typeof formatters>
 
+/** What a write did; a failure carries the translated message. */
+export type RunResult = { ok: true } | { ok: false; message: string }
+/**
+ * Runs a write, reloads the period and toasts. A failure goes to the page's error
+ * banner, or with "sheet" only back to the caller, so a sheet shows it above the page.
+ */
+export type Run = (action: () => Promise<unknown>, report?: "page" | "sheet") => Promise<RunResult>
+
 /** One expense prepared for a list row, merchant already looked up. */
 export type ExpenseRowModel = { expense: MonthlyExpense; voided: boolean; date: string; amount: string; sources: string
   merchant: Merchant | null; category?: MonthlyCategory }
 
-/** Groups prepared rows by calendar day, newest first, with a signed day total (refunds count negative). */
-export function groupRowsByDay(rows: ExpenseRowModel[], fmt: Formatters) {
-  const byDay = new Map<string, ExpenseRowModel[]>()
-  for (const row of [...rows].sort((a, b) => b.expense.occurredOn.localeCompare(a.expense.occurredOn))) {
-    const list = byDay.get(row.expense.occurredOn) ?? []
-    list.push(row)
-    byDay.set(row.expense.occurredOn, list)
-  }
-  return [...byDay.entries()].map(([date, list]) => ({
-    date, label: fmt.day(date), rows: list,
-    total: fmt.money(list.filter(row => !row.voided).reduce((sum, row) => sum + (row.expense.kind === "refund" ? -row.expense.amountCents : row.expense.amountCents), 0)),
-  }))
-}
-
 function daysBetween(from: string, to: string) {
   return Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000)
+}
+
+/**
+ * The month a period is named after: the one most of its days fall in, the earlier
+ * one on a tie. With a late start day a period spans two months, so 25 Sep – 24 Oct
+ * is October and 10 Sep – 9 Oct is September. Returns a day inside that month for
+ * the `month`, `monthName` and `monthShort` formatters; every period label uses it.
+ */
+export function periodMonth(start: string, end: string) {
+  return shiftDay(start, Math.floor(daysBetween(start, end) / 2))
 }
 
 /**
@@ -99,7 +103,7 @@ function periodView(state: MonthlyState, summary: MonthlySummary, through: strin
   const range = fmt.range(summary.start, summary.end)
   const previous = shiftDay(summary.start, -1)
   return {
-    label: fmt.month(summary.start),
+    label: fmt.month(periodMonth(summary.start, summary.end)),
     caption: running ? `${range} · ${fill(copy.dayOfPeriod, { day: daysBetween(summary.start, through) + 1, days })}` : range,
     previous: state.firstDate && previous >= state.firstDate ? previous : null,
     next: running ? null : shiftDay(summary.end, 1),
@@ -138,7 +142,7 @@ function heroView(state: MonthlyState, summary: MonthlySummary, expenses: Monthl
       dayLabel: (day: number) => fmt.dayShort(dayOf(day)),
       tickLabel: (day: number) => day === 1 ? fmt.dayMonth(dayOf(day)) : fmt.dayOnly(dayOf(day)),
       // A closed period ends at the plan line, where a marker label would collide with "Plan".
-      labels: { title: fill(copy.paceTitle, { month: fmt.monthName(summary.start) }), today: running ? copy.today : "", plan: copy.planLine, spent: copy.spent },
+      labels: { title: fill(copy.paceTitle, { month: fmt.monthName(periodMonth(summary.start, summary.end)) }), today: running ? copy.today : "", plan: copy.planLine, spent: copy.spent },
     },
   }
 }
@@ -158,13 +162,20 @@ const costOrder: Record<CostDue["kind"], number> = { yearly: 0, fixed: 1, monthl
 /** How many costs the overview lists before it folds the rest into one row. */
 const upcomingRows = 5
 
+type UpcomingRow = { id: string; name: string; kind: CostDue["kind"]; amount: string; date: { day: string; weekday: string } | null }
+/** A closed period has nothing left to come; an open one lists its costs. */
+export type UpcomingView = { status: "closed" } | { status: "open"; rows: UpcomingRow[]; more: string | null; total: string }
+
 /**
  * The costs the plan already covers this period. Only yearly costs have a due day,
  * so they lead, by date; fixed costs and monthly subscriptions follow by kind and
  * amount, labelled by kind instead of a date the model does not have. The total
- * covers every cost, including the ones folded into `more`.
+ * covers every cost, including the ones folded into `more`. A closed period shows
+ * no list: its costs are behind it, and `currentPlan` is today's plan, whose due
+ * days need not be the ones that period used.
  */
-function upcomingView(state: MonthlyState, summary: MonthlySummary, fmt: Formatters, copy: MonthlyCopy) {
+function upcomingView(state: MonthlyState, summary: MonthlySummary, fmt: Formatters, copy: MonthlyCopy): UpcomingView {
+  if (summary.end < state.today) return { status: "closed" }
   const rows = summary.costs.map(cost => {
     const planned = state.currentPlan?.costs.find(item => item.id === cost.id)
     const date = cost.kind === "yearly" && planned?.dueMonth && planned.dueDay ? dueDate(planned.dueMonth, planned.dueDay, summary.start, summary.end) : null
@@ -172,14 +183,14 @@ function upcomingView(state: MonthlyState, summary: MonthlySummary, fmt: Formatt
       date: date ? { day: fmt.dayOnly(date), weekday: fmt.weekday(date) } : null }
   }).sort((a, b) => costOrder[a.kind] - costOrder[b.kind] || a.sortDate.localeCompare(b.sortDate) || b.amountCents - a.amountCents)
   const hidden = rows.length - upcomingRows
-  return { rows: rows.slice(0, upcomingRows), more: hidden > 0 ? fill(copy.moreCosts, { count: hidden }) : null,
+  return { status: "open", rows: rows.slice(0, upcomingRows), more: hidden > 0 ? fill(copy.moreCosts, { count: hidden }) : null,
     total: fmt.money(rows.reduce((sum, row) => sum + row.amountCents, 0)) }
 }
 
 /** Fun money spent against the allowance in each of the last periods (up to six). */
 function trendView(state: MonthlyState, fmt: Formatters, copy: MonthlyCopy) {
   const periods = state.history.map(period => ({
-    label: fmt.monthShort(period.start), spent: period.startingFunCents - period.funRemainingCents, budget: period.startingFunCents,
+    label: fmt.monthShort(periodMonth(period.start, period.end)), spent: period.startingFunCents - period.funRemainingCents, budget: period.startingFunCents,
     running: period.start <= state.today && state.today <= period.end,
   }))
   return {
@@ -225,17 +236,18 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
     else await createMerchant(accessToken, name, options.global ?? false)
     setMerchants(await loadMerchants(accessToken))
   }, [accessToken])
-  const run = useCallback(async (action: () => Promise<unknown>) => {
-    if (busy || !accessToken) return false
+  const run: Run = useCallback(async (action, report = "page") => {
+    if (busy || !accessToken) return { ok: false, message: copy.errors }
     setBusy(true); setError(null)
     try {
       await action()
       setResource({ status: "ready", data: await loadPeriod(accessToken, selectedDate) })
       notify?.(copy.saved)
-      return true
+      return { ok: true }
     } catch (reason: unknown) {
-      setError(monthlyError(reason, copy))
-      return false
+      const message = monthlyError(reason, copy)
+      if (report === "page") setError(message)
+      return { ok: false, message }
     } finally { setBusy(false) }
   }, [accessToken, busy, copy, notify, selectedDate])
 
@@ -266,15 +278,14 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
     const expenseCount = inPeriod.filter(({ expense }) => expense.kind === "expense").length
     const countLabel = (count: number) => count === 1 ? copy.expenseCountOne : fill(copy.expensesCount, { count })
     const savingsCount = inPeriod.filter(({ expense }) => expense.kind === "expense" && expense.funding.some(part => part.source === "savings")).length
-    return { fmt, categories, reserveCards: categories.filter(category => category.reservedCents > 0), through,
-      nextStart: fmt.date(state.nextStart), spent: fmt.money(spentCents), usedFraction, pace, recent,
+    return { fmt, categories, through, spent: fmt.money(spentCents), usedFraction, pace, recent,
       nextFun: fmt.money(state.forecast[1]?.funCents ?? state.forecast[0]?.funCents ?? 0),
       nextFrom: fill(copy.funFrom, { date: fmt.dayMonth(state.nextStart) }),
       fun: fmt.money(state.summary?.funRemainingCents ?? 0), starting: fmt.money(state.summary?.startingFunCents ?? 0),
       savings: fmt.money(state.summary?.savingsBalanceCents ?? 0), buffer: fmt.money(state.summary?.bufferBalanceCents ?? 0),
       contribution: fmt.money(state.summary?.savingsContributionCents ?? 0),
       contributionDelta: `+${fmt.money(state.summary?.savingsContributionCents ?? 0)}`,
-      deficit: fmt.money(state.summary?.deficitCarryoverCents ?? 0), shortfall: fmt.money(state.summary?.fundingShortfallCents ?? 0),
+      shortfall: fmt.money(state.summary?.fundingShortfallCents ?? 0),
       totals: { spent: fmt.money(totalSpentCents), fromFun: fill(copy.fromFun, { amount: fmt.money(spentCents) }), count: String(expenseCount),
         since: summary ? fill(copy.since, { date: fmt.dayMonth(summary.start) }) : "", usedLabel: fill(copy.usedPercent, { percent: Math.round(usedFraction * 100) }),
         savingsSpent: fmt.money(savingsSpentCents), savingsCount: countLabel(savingsCount) },
@@ -284,7 +295,7 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
       pots: categories.filter(category => category.reservedCents > 0).map(category => {
         const usedCents = category.reservedCents - category.remainingCents
         const used = Math.min(1, Math.max(0, usedCents / category.reservedCents))
-        return { category, value: category.remaining, negative: category.remainingCents < 0,
+        return { category, value: category.remaining, negative: category.remainingCents < 0, addLabel: fill(copy.spendFromPot, { name: category.name }),
           note: fill(category.remainingCents < 0 ? copy.overOf : copy.leftOf, { amount: category.reserved }),
           meter: { fraction: used, marker: pace, label: fill(copy.usedPercent, { percent: Math.round(used * 100) }) } }
       }),

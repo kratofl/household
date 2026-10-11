@@ -11,9 +11,10 @@
 
   Soft and flat: cards are surface with a separator border and the faint
   shadow-e1 (none in dark); controls are flat with a border-control edge.
-  Floating layers lift by elevation (e2 sticky or dragged, e3 menus and
-  tooltips, e4 dialogs). Only the toolbar band and small floating chrome (menus,
-  toasts, notifications, the phone tab bar) are frosted glass, close to opaque.
+  Floating layers lift by elevation (e2 the stuck toolbar and dragged items, e3
+  menus and tooltips, e4 dialogs, sheets and panels). Only the toolbar band and
+  small floating chrome (menus, toasts, notifications, the phone tab bar) are
+  frosted glass, close to opaque; no layer has a specular highlight.
   brand-500 is the only brand colour; text on it is always on-brand.
 
   Type and radii have two scales: the base values below are the phone's, and
@@ -248,8 +249,8 @@
   /* Dark relies on lighter surfaces; shadows only below floating layers. */
   --shadow-e1: none;
   --shadow-e2: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-e3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 32px rgba(0, 0, 0, 0.5);
-  --shadow-e4: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 64px rgba(0, 0, 0, 0.6);
+  --shadow-e3: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-e4: 0 24px 64px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
 
@@ -289,7 +290,7 @@
     box-shadow: var(--shadow-e3);
   }
 
-  /* Solid floating layers: chart tooltips (e3) and dialogs or sheets (e4). */
+  /* Solid floating layers: dragged items (e2), chart tooltips (e3), dialogs, sheets and panels (e4). */
   .floating {
     background: var(--surface-floating);
     border: 1px solid var(--floating-border);

@@ -71,7 +71,8 @@ investing setup.
 - Expense corrections, voids, and partial or full refunds preserve the original
   records. Reverse linked refunds before correcting or voiding their expense.
 - German and English, mobile layouts, keyboard submission and focus restoration,
-  expense filtering, and historical date selection.
+  expense filtering, and stepping back through closed periods, which show as
+  they closed.
 
 Income and scheduled bills are planning assumptions. They do not require
 monthly confirmation and must not be mistaken for verified bank transactions.
@@ -124,12 +125,12 @@ existing bearer session. Errors use problem JSON with a stable error code in
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /?date=YYYY-MM-DD` | Current or historical state, categories, history, pending plan, outlook |
+| `GET /?date=YYYY-MM-DD` | Current or historical state, categories, expense history, the last six periods' fun money, pending plan, outlook |
 | `POST /plan/preview` | Validate and calculate an unsaved plan's next twelve periods |
 | `PUT /plan` | First setup, a new next-period version, or with `applyToCurrentPeriod` a version that replaces the running period |
 | `DELETE /plan/pending?revision=N` | Append a version retaining the current plan next period |
-| `POST /categories` | Create a category immediately |
-| `PATCH /categories/{id}` | Rename, archive, or restore |
+| `POST /categories` | Create a category immediately, with an optional color and icon |
+| `PATCH /categories/{id}` | Rename, recolor, change the icon, archive, or restore |
 | `POST /expenses` | Record an expense, or append a correction using `correctsId` |
 | `POST /expenses/{id}/refunds` | Record a dated partial or full refund |
 | `POST /expenses/{id}/void` | Reverse an entry while keeping its history |

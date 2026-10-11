@@ -1,6 +1,6 @@
 // Pure derivations behind the Budget list and plan pages: the expense filter, daily
-// totals for the chart, the plan breakdown and the cost-list totals. No React, no I/O;
-// views call these and render the result. All money is integer cents.
+// totals for the chart, day groups, the plan breakdown and the cost-list totals. No
+// React, no I/O; views call these and render the result. All money is integer cents.
 
 import type { Locale } from "@/lib/i18n"
 
@@ -9,25 +9,31 @@ import type { MonthlyCategory, MonthlyCost, MonthlyExpense, MonthlyState, Monthl
 // ---------- Expenses: filter row, chart, rows ----------
 
 /**
- * What the Expenses filter row scopes to: everything, the fun budget, or the money of
- * one reserved category. Its string form is the segment value: "all", "fun", or the
- * category id (ids are UUIDs, so they never collide with the two words).
+ * Which money the Expenses filter row scopes to: everything, one funding source (fun
+ * budget, savings, buffer), or the reserve of one category. Its string form is the
+ * segment value: "all", the source name, or the category id (ids are UUIDs, so they
+ * never collide with the words).
  */
-export type ExpenseScope = { kind: "all" } | { kind: "fun" } | { kind: "category"; categoryId: string }
+export type ExpenseScope = { kind: "all" } | { kind: "source"; source: PotSource } | { kind: "category"; categoryId: string }
+type PotSource = "fun" | "savings" | "buffer"
+
+const potSources: PotSource[] = ["fun", "savings", "buffer"]
 
 export function scopeFromKey(key: string): ExpenseScope {
-  return key === "all" ? { kind: "all" } : key === "fun" ? { kind: "fun" } : { kind: "category", categoryId: key }
+  if (key === "all") return { kind: "all" }
+  const source = potSources.find((candidate) => candidate === key)
+  return source ? { kind: "source", source } : { kind: "category", categoryId: key }
 }
 
-/** The filter options: All, each category with a reserve in the period, then the fun budget. */
-export function scopeOptions(summary: MonthlySummary | null, categories: MonthlyCategory[], labels: { all: string; fun: string }) {
+/** The filter options: All, each category with a reserve in the period, then fun budget, savings and buffer. */
+export function scopeOptions(summary: MonthlySummary | null, categories: MonthlyCategory[], labels: Record<"all" | PotSource, string>) {
   const reserved = (summary?.categories ?? [])
     .filter((item) => item.reservedCents > 0)
     .flatMap((item) => {
       const category = categories.find((candidate) => candidate.id === item.categoryId)
       return category ? [{ value: category.id, label: category.name }] : []
     })
-  return [{ value: "all", label: labels.all }, ...reserved, { value: "fun", label: labels.fun }]
+  return [{ value: "all", label: labels.all }, ...reserved, ...potSources.map((source) => ({ value: source, label: labels[source] }))]
 }
 
 /** Whether any of the expense's money came from the scope. */
@@ -46,7 +52,7 @@ export function scopedCents(expense: MonthlyExpense, scope: ExpenseScope) {
 
 function scopedParts(expense: MonthlyExpense, scope: ExpenseScope) {
   if (scope.kind === "all") return expense.funding
-  if (scope.kind === "fun") return expense.funding.filter((part) => part.source === "fun")
+  if (scope.kind === "source") return expense.funding.filter((part) => part.source === scope.source)
   return expense.funding.filter((part) => part.source === "category" && part.categoryId === scope.categoryId)
 }
 
@@ -58,20 +64,39 @@ export function matchesSearch(expense: MonthlyExpense, merchantName: string, sea
 }
 
 /**
- * The entries the Expenses list shows, newest last as stored: the shown period up to
- * `through`, narrowed by the filter row and the search. The savings page instead lists
- * every purchase paid from savings, across all periods, and ignores the scope.
+ * The entries a list page shows, newest last as stored: up to `through`, narrowed by the
+ * scope, the category (null = every category) and the search. The Expenses page shows
+ * the shown period only; the Savings page passes the savings scope and `allPeriods`, so
+ * it lists every purchase paid from savings.
  */
 export function expenseEntries(
   state: Pick<MonthlyState, "entries" | "summary">,
-  filter: { through: string; savingsOnly: boolean; scope: ExpenseScope; search: string; locale: Locale; merchantName: (id: string | null) => string },
+  filter: { through: string; allPeriods: boolean; scope: ExpenseScope; categoryId: string | null; search: string; locale: Locale; merchantName: (id: string | null) => string },
 ) {
   return state.entries.filter(({ expense }) =>
     expense.occurredOn <= filter.through &&
-    (filter.savingsOnly
-      ? expense.funding.some((part) => part.source === "savings")
-      : (!state.summary || expense.occurredOn >= state.summary.start) && matchesScope(expense, filter.scope)) &&
+    (filter.allPeriods || !state.summary || expense.occurredOn >= state.summary.start) &&
+    matchesScope(expense, filter.scope) &&
+    (filter.categoryId === null || expense.categoryId === filter.categoryId) &&
     matchesSearch(expense, filter.merchantName(expense.merchantId), filter.search, filter.locale))
+}
+
+/**
+ * Rows grouped by calendar day, newest day first. A day's total is what its non-voided
+ * rows move within the scope, so it agrees with the chart and the filter.
+ */
+export function groupByDay<Row extends { expense: MonthlyExpense; voided: boolean }>(rows: Row[], scope: ExpenseScope) {
+  const byDay = new Map<string, Row[]>()
+  for (const row of [...rows].sort((a, b) => b.expense.occurredOn.localeCompare(a.expense.occurredOn))) {
+    const day = byDay.get(row.expense.occurredOn) ?? []
+    day.push(row)
+    byDay.set(row.expense.occurredOn, day)
+  }
+  return [...byDay].map(([date, dayRows]) => ({
+    date,
+    rows: dayRows,
+    totalCents: dayRows.reduce((sum, row) => (row.voided ? sum : sum + scopedCents(row.expense, scope)), 0),
+  }))
 }
 
 /** Whole days from one ISO date to another; negative when `to` is earlier. */

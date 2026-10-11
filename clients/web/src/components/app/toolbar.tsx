@@ -10,11 +10,13 @@
 // icon actions · search · the page's one primary action, last.
 // When the band runs out of room the caption truncates first, then the title.
 // On phones the caption is hidden and the scope moves to a second row of the band.
+// Once content has scrolled under it, the band lifts to shadow-e2.
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 type SlotName = "title" | "scope" | "caption" | "actions" | "primary"
 type Slots = Record<SlotName, HTMLElement | null>
@@ -36,9 +38,17 @@ export function ToolbarFrame({
   const [caption, setCaption] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
   const [primary, setPrimary] = useState<HTMLElement | null>(null)
+  const { ref: sentinel, past: stuck } = useScrolledPast()
   return (
     <ToolbarSlots.Provider value={{ title, scope, caption, actions, primary }}>
-      <header className="toolbar-band sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-5 max-lg:h-auto max-lg:min-h-16 max-lg:flex-wrap max-lg:content-center max-lg:gap-y-2 max-lg:py-2.5">
+      {/* 1px sentinel above the band (its margin cancels the height): out of view means content scrolled under. */}
+      <div ref={sentinel} aria-hidden className="-mb-px h-px" />
+      <header
+        className={cn(
+          "toolbar-band sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-5 transition-shadow duration-200 motion-reduce:transition-none max-lg:h-auto max-lg:min-h-16 max-lg:flex-wrap max-lg:content-center max-lg:gap-y-2 max-lg:py-2.5",
+          stuck && "shadow-(--shadow-e2)",
+        )}
+      >
         {/* Shrinks after the caption: the title truncates once the caption is gone. */}
         <div className="flex min-w-0 shrink items-center gap-1">
           <div ref={setTitle} className="min-w-0" />
@@ -55,6 +65,22 @@ export function ToolbarFrame({
       {children}
     </ToolbarSlots.Provider>
   )
+}
+
+/**
+ * Whether the element given to `ref` has left the viewport, i.e. its scroll
+ * container has scrolled past it. One IntersectionObserver, no scroll handler.
+ */
+function useScrolledPast() {
+  const [node, setNode] = useState<HTMLElement | null>(null)
+  const [past, setPast] = useState(false)
+  useEffect(() => {
+    if (!node) return
+    const observer = new IntersectionObserver(([entry]) => setPast(entry ? !entry.isIntersecting : false))
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [node])
+  return { ref: setNode, past }
 }
 
 /** The page's one primary action: a Primär M button on desktop, a 44px icon button on phones. */

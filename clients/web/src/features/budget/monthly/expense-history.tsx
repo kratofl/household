@@ -3,7 +3,8 @@
 // The Expenses page (DESIGN.md, page type "List"): the hub's metric strip, one filter
 // row that scopes both the chart and the table, spending per day, then one table card
 // grouped by day beside a narrow column of related summaries. The savings page reuses
-// the table alone. Filtering and totals live in view-models.ts; this file renders.
+// the filter row (category and search; its scope is always savings) and the table.
+// Filtering and totals live in view-models.ts; this file renders.
 
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react"
@@ -24,14 +25,18 @@ import { cn } from "@/lib/utils"
 import { categoryVisual } from "./category-visuals"
 import type { Merchant } from "../merchants"
 import { MerchantTile } from "../merchant-tile"
-import { type ExpenseRowModel, fill, formatters, groupRowsByDay } from "./controller"
+import { type ExpenseRowModel, fill, formatters } from "./controller"
 import { type MonthlyCopy, monthlyCopy } from "./copy"
 import type { ExpenseIntent } from "./expense-editor"
 import type { MonthlyExpense, MonthlyState } from "./types"
-import { addDays, budgetTags, dailyTotals, daysBetween, expenseEntries, scopedCents, scopeFromKey, scopeOptions } from "./view-models"
+import {
+  addDays, budgetTags, dailyTotals, daysBetween, expenseEntries, type ExpenseScope, groupByDay, scopedCents, scopeFromKey, scopeOptions,
+} from "./view-models"
 
 // Written out so Tailwind sees them: merchant · category · budget · amount · actions.
 const tableColumns = "lg:grid lg:grid-cols-[minmax(0,1fr)_7.5rem_8.5rem_6.5rem_1.5rem] lg:gap-x-4"
+
+const savingsScope: ExpenseScope = { kind: "source", source: "savings" }
 
 export function MonthlyExpenseHistory({
   state,
@@ -59,14 +64,26 @@ export function MonthlyExpenseHistory({
   const fmt = useMemo(() => formatters(locale, state.currency), [locale, state.currency])
   const [search, setSearch] = useState("")
   const [scopeKey, setScopeKey] = useState("all")
+  const [categoryKey, setCategoryKey] = useState("all")
   const summary = state.summary
-  const options = useMemo(() => scopeOptions(summary, state.categories, { all: copy.scopeAll, fun: copy.fun }), [summary, state.categories, copy])
-  // A category whose reserve is not part of the shown period falls back to All.
-  const scope = useMemo(() => scopeFromKey(options.some((option) => option.value === scopeKey) ? scopeKey : "all"), [options, scopeKey])
+  const options = useMemo(
+    () => scopeOptions(summary, state.categories, { all: copy.scopeAll, fun: copy.fun, savings: copy.tagSavings, buffer: copy.tagBuffer }),
+    [summary, state.categories, copy],
+  )
+  const categoryOptions = useMemo(
+    () => [{ value: "all", label: copy.allCategories }, ...state.categories.map((category) => ({ value: category.id, label: category.name }))],
+    [state.categories, copy],
+  )
+  // A category whose reserve is not part of the shown period, or that no longer exists,
+  // falls back to All; the controls show the key that actually applies.
+  const selectedScope = options.some((option) => option.value === scopeKey) ? scopeKey : "all"
+  const selectedCategory = categoryOptions.some((option) => option.value === categoryKey) ? categoryKey : "all"
+  const scope = useMemo(() => (savingsOnly ? savingsScope : scopeFromKey(selectedScope)), [savingsOnly, selectedScope])
+  const categoryId = selectedCategory === "all" ? null : selectedCategory
 
   const view = useMemo(() => {
     const merchantName = (id: string | null) => (id ? merchantById.get(id)?.name ?? "" : "")
-    const entries = expenseEntries(state, { through, savingsOnly, scope, search, locale, merchantName })
+    const entries = expenseEntries(state, { through, allPeriods: savingsOnly, scope, categoryId, search, locale, merchantName })
     const tagLabels = { fun: copy.fun, savings: copy.tagSavings, buffer: copy.tagBuffer }
     const rows: ExpenseRowModel[] = entries.map(({ expense, voided }) => ({
       expense,
@@ -103,10 +120,11 @@ export function MonthlyExpenseHistory({
           return category ? [{ category, reserved: item.reservedCents, remaining: item.remainingCents }] : []
         })
       : []
-    return { groups: groupRowsByDay(rows, fmt), tags, chart, pots, costs: summary?.costs ?? [] }
-  }, [state, through, savingsOnly, scope, search, locale, copy, fmt, merchantById, summary])
+    const groups = groupByDay(rows, scope).map((group) => ({ ...group, label: fmt.day(group.date), total: fmt.money(group.totalCents) }))
+    return { groups, tags, chart, pots, costs: summary?.costs ?? [] }
+  }, [state, through, savingsOnly, scope, categoryId, search, locale, copy, fmt, merchantById, summary])
 
-  const filtered = search.trim() !== "" || scope.kind !== "all"
+  const filtered = search.trim() !== "" || categoryId !== null || (!savingsOnly && selectedScope !== "all")
   const table = (
     <ExpenseTable
       groups={view.groups}
@@ -128,18 +146,24 @@ export function MonthlyExpenseHistory({
       </Suspense>
       {metrics}
 
-      {savingsOnly ? table : (
-        <>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {savingsOnly ? null : (
+          <>
             {/* Segments while they fit (desktop, at most five), a select otherwise. */}
             {options.length <= 5 ? (
-              <Segmented ariaLabel={`${copy.colBudget}: ${copy.scopeLabel}`} value={scopeKey} options={options} onChange={setScopeKey} className="max-lg:hidden" />
+              <Segmented ariaLabel={`${copy.colBudget}: ${copy.scopeLabel}`} value={selectedScope} options={options} onChange={setScopeKey} className="max-lg:hidden" />
             ) : null}
             <FormSelect className={cn("w-auto min-w-44 max-lg:flex-1", options.length <= 5 && "lg:hidden")} aria-label={`${copy.colBudget}: ${copy.scopeLabel}`}
-              value={scope.kind === "category" ? scope.categoryId : scope.kind} onValueChange={setScopeKey} options={options} />
-            <span className="text-footnote text-label-secondary">{copy.scopeLabel}</span>
-            <SearchInput className="w-full sm:ml-auto sm:w-64" aria-label={copy.search} placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
-          </div>
+              value={selectedScope} onValueChange={setScopeKey} options={options} />
+          </>
+        )}
+        <FormSelect className="w-auto min-w-44 max-lg:flex-1" aria-label={copy.category} value={selectedCategory} onValueChange={setCategoryKey} options={categoryOptions} />
+        {savingsOnly ? null : <span className="text-footnote text-label-secondary">{copy.scopeLabel}</span>}
+        <SearchInput className="w-full sm:ml-auto sm:w-64" aria-label={copy.search} placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
+      </div>
+
+      {savingsOnly ? table : (
+        <>
 
           {view.chart ? (
             <Group title={copy.spentPerDay}>
