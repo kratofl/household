@@ -313,8 +313,20 @@ switch on the right. Renders `role="switch"` with `aria-checked`.
 - Section headers `caption` in `label-secondary`. Top-level destinations
   (the dashboard, single-page areas) sit first, without a header; a header only
   heads a group of several items.
-- A long section splits into clusters of related items by an 8px gap, never by
-  sub-headers. The collapsed rail keeps the gaps.
+- Every section header is a button that folds its section. Its 12px chevron
+  shows on hover and focus and stays, turned left, while the section is folded.
+- A long section splits into groups of related items. A group is a parent row
+  (16px icon, label, trailing 12px chevron) whose items hang beneath it,
+  indented to 32px along a 1px `separator` line under the parent's icon. The
+  parent row folds the group. The section's everyday items come first, ungrouped.
+- Folding animates the height once (150ms ease-out; none under reduced motion).
+  Folded items are inert, so Tab skips them. Folded state is kept per device,
+  and the section and group holding the current page always open.
+- Collapsed rail: section headers become a 16px gap and sections never fold.
+  A parent row is an icon that opens its items as a menu to its right, and it
+  takes the active look while one of its items is the current page.
+- On phones the view menu shows the same groups, each under a `caption` label
+  with a separator between them.
 - Favourites use a 10px status-coloured dot instead of an icon.
 
 ### ContextMenu

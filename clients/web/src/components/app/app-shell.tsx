@@ -24,14 +24,16 @@ import { type Locale, isLocale, translate } from "@/lib/i18n"
 import {
   MobileTabBar,
   Sidebar,
-  SidebarGroupLabel,
   SidebarLink,
   SidebarModuleNav,
+  SidebarSection,
   ViewMenu,
-  budgetViewMenuItems,
+  budgetViewMenuSections,
+  currentSidebarIds,
   hasSidebarSection,
   moduleIcons,
   useSidebarCollapsed,
+  useSidebarFolds,
 } from "@/components/app/sidebar"
 import { SearchField, SearchTab, type SearchDestination } from "@/components/app/global-search"
 import { ProfileMenu } from "@/components/app/profile-menu"
@@ -97,6 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const selectedModule = selectedModuleKey
     ? activeModules.find((module) => module.key === selectedModuleKey)
     : undefined
+  const sidebarFolds = useSidebarFolds(currentSidebarIds(pathname, selectedModule?.key === "budget", inAdmin))
 
   const staticRoutes = useMemo(
     () => [
@@ -527,6 +530,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarModuleNav
             key={module.id}
             collapsed={collapsed}
+            folds={sidebarFolds}
             locale={locale}
             module={module}
             pathname={pathname}
@@ -534,14 +538,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           />
         ))}
         {isAdmin ? (
-          <>
-            <SidebarGroupLabel collapsed={collapsed}>{t("nav.admin")}</SidebarGroupLabel>
+          <SidebarSection collapsed={collapsed} open={sidebarFolds.isOpen("admin")} onToggle={() => sidebarFolds.toggle("admin")} label={t("nav.admin")}>
             {adminViews.map((view) => (
               <SidebarLink key={view.key} collapsed={collapsed} href={view.route} active={adminView === view.key} icon={<view.icon />}>
                 {t(view.labelKey)}
               </SidebarLink>
             ))}
-          </>
+          </SidebarSection>
         ) : null}
       </Sidebar>
 
@@ -551,17 +554,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <ToolbarFrame
               leading={
                 inBudget ? (
-                  <ViewMenu label={t("nav.budgetViews")} items={budgetViewMenuItems(pathname, t)} />
+                  <ViewMenu label={t("nav.budgetViews")} sections={budgetViewMenuSections(pathname, t)} />
                 ) : inAdmin && isAdmin ? (
                   <ViewMenu
                     label={t("nav.adminViews")}
-                    items={adminViews.map((view) => ({
-                      key: view.key,
-                      href: view.route,
-                      label: t(view.labelKey),
-                      icon: view.icon,
-                      current: adminView === view.key,
-                    }))}
+                    sections={[{
+                      key: "admin",
+                      label: null,
+                      items: adminViews.map((view) => ({
+                        key: view.key,
+                        href: view.route,
+                        label: t(view.labelKey),
+                        icon: view.icon,
+                        current: adminView === view.key,
+                      })),
+                    }]}
                   />
                 ) : null
               }

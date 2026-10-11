@@ -98,16 +98,24 @@ export const budgetViews = {
 type BudgetView = { route: string; labelKey: TranslationKey }
 export type BudgetViewKey = keyof typeof budgetViews
 
-// Navigation order: everyday pages, then the plan's parts, then reference data.
-// The sidebar separates the clusters with a small gap; every other list
-// (phone view menu, search) follows the flattened order.
-export const budgetViewClusters: BudgetViewKey[][] = [
-  ["overview", "expenses", "savings"],
-  ["plan", "fixed", "monthly", "yearly"],
-  ["categories", "merchants"],
-]
+// Budget's navigation: the everyday pages, then groups of related pages that the
+// sidebar shows as fold-away rows. The phone view menu follows the same groups;
+// search uses the flattened order.
+export const budgetNav = {
+  main: ["overview", "expenses", "savings"],
+  groups: [
+    { key: "planning", labelKey: "budget.nav.groupPlanning", views: ["plan", "fixed", "monthly", "yearly"] },
+    { key: "manage", labelKey: "budget.nav.groupManage", views: ["categories", "merchants"] },
+  ],
+} as const satisfies {
+  main: readonly BudgetViewKey[]
+  groups: readonly { key: string; labelKey: TranslationKey; views: readonly BudgetViewKey[] }[]
+}
 
-export const budgetViewEntries: [BudgetViewKey, BudgetView][] = budgetViewClusters.flat().map((key) => [key, budgetViews[key]])
+export type BudgetNavGroup = (typeof budgetNav.groups)[number]
+
+export const budgetViewEntries: [BudgetViewKey, BudgetView][] = [...budgetNav.main, ...budgetNav.groups.flatMap((group) => group.views)]
+  .map((key) => [key, budgetViews[key]])
 
 export function budgetViewFromPath(pathname: string): BudgetViewKey {
   const match = budgetViewEntries.find(([, view]) => view.route === pathname)
