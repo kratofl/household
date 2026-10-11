@@ -77,6 +77,7 @@ const en = {
   plan_changed: "The plan changed in another window. Reload before saving again.", plan_unaffordable: "The plan exceeds your income in at least one of the next 12 periods. Adjust the amounts.",
   opening_balance_locked: "Opening savings and timezone are fixed after setup.", request_key_reused: "That request was already used with different details. Close and reopen the form.",
   reverse_refunds_first: "Void the linked refunds before editing or voiding this expense.", refund_exceeds_expense: "The refund exceeds the amount not yet refunded.",
+  merchant_exists: "This merchant already exists.", invalid_merchant: "Choose an existing merchant.",
   date_outside_history: "That date is outside your recorded budget history.", setup_required: "Set up the monthly plan first.",
 }
 export type MonthlyCopy = Record<keyof typeof en, string>
@@ -154,6 +155,7 @@ const de: MonthlyCopy = {
   plan_changed: "Der Plan wurde in einem anderen Fenster geändert. Lade ihn vor dem Speichern neu.", plan_unaffordable: "Der Plan übersteigt dein Einkommen in mindestens einer der nächsten 12 Perioden. Passe die Beträge an.",
   opening_balance_locked: "Anfängliches Erspartes und Zeitzone stehen nach der Einrichtung fest.", request_key_reused: "Diese Anfrage wurde bereits mit anderen Angaben verwendet. Schließe das Formular und öffne es erneut.",
   reverse_refunds_first: "Storniere zuerst die verknüpften Erstattungen, bevor du diese Ausgabe änderst oder stornierst.", refund_exceeds_expense: "Die Erstattung übersteigt den noch nicht erstatteten Betrag.",
+  merchant_exists: "Diesen Händler gibt es schon.", invalid_merchant: "Wähle einen vorhandenen Händler.",
   date_outside_history: "Dieses Datum liegt außerhalb deiner Budgethistorie.", setup_required: "Richte zuerst den Monatsplan ein.",
 }
 export function monthlyCopy(locale: Locale): MonthlyCopy { return locale === "de" ? de : en }

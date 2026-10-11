@@ -39,9 +39,9 @@ public static class IdentityEndpoints
         string username = request.Username?.Trim().ToLowerInvariant() ?? "";
         User? user = await database.Users.SingleOrDefaultAsync(x => x.Name == username, cancellationToken);
         if (user is null || !PasswordMatches(user, request.Password))
-            return HttpResults.Problem(401, "Invalid login", "Username or password incorrect");
+            return HttpResults.Problem(401, "Invalid login", "Username or password incorrect", "invalid_login");
         if (user.Status != UserStatuses.Active)
-            return HttpResults.Problem(403, "User inactive", "User is not active");
+            return HttpResults.Problem(403, "User inactive", "User is not active", "user_inactive");
 
         return Results.Ok(await IdentitySessions.StartAsync(database, user.Id, timeProvider.GetUtcNow().UtcDateTime, cancellationToken));
     }
@@ -57,7 +57,7 @@ public static class IdentityEndpoints
             .SingleOrDefaultAsync(x => x.RefreshTokenHash == hash && x.RevokedAt == null, cancellationToken);
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
         if (session is null || session.User.Status != UserStatuses.Active || AsUtc(session.RefreshExpiresAt) <= now)
-            return HttpResults.Problem(401, "Unauthorized", "Invalid refresh token");
+            return HttpResults.Problem(401, "Unauthorized", "Invalid refresh token", "session_expired");
 
         TokenPair pair = TokenFactory.Create(now);
         session.AccessTokenHash = TokenFactory.Hash(pair.AccessToken);
@@ -117,7 +117,7 @@ public static class IdentityEndpoints
         string name = request.Name?.Trim().ToLowerInvariant() ?? "";
         string email = request.Email?.Trim().ToLowerInvariant() ?? "";
         if (name.Length == 0 || email.Length == 0 || string.IsNullOrEmpty(request.Password))
-            return HttpResults.Problem(422, "Validation failed", "Name, email and password are required");
+            return HttpResults.Problem(422, "Validation failed", "Name, email and password are required", "user_fields_required");
 
         User user = new User
         {
@@ -134,7 +134,7 @@ public static class IdentityEndpoints
         }
         catch (DbUpdateException)
         {
-            return HttpResults.Problem(409, "User exists", "A user with this name or email already exists");
+            return HttpResults.Problem(409, "User exists", "A user with this name or email already exists", "user_exists");
         }
         await audit.RecordAsync(context, admin, "create_user", "identity", "user", "success", new
         {
@@ -161,12 +161,12 @@ public static class IdentityEndpoints
         if (admin.Role != Roles.Admin) return Forbidden();
         if (request.Status is not (null or UserStatuses.Active or UserStatuses.Blocked) ||
             request.Role is not (null or Roles.Admin or Roles.User))
-            return HttpResults.Problem(422, "Validation failed", "Status must be active or blocked, role admin or user");
+            return HttpResults.Problem(422, "Validation failed", "Status must be active or blocked, role admin or user", "invalid_user_change");
         if (id == admin.Id)
-            return HttpResults.Problem(409, "Own account", "Admins cannot change their own status or role");
+            return HttpResults.Problem(409, "Own account", "Admins cannot change their own status or role", "own_account");
 
         User? user = await database.Users.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-        if (user is null) return HttpResults.Problem(404, "Not found", "User not found");
+        if (user is null) return HttpResults.Problem(404, "Not found", "User not found", "user_not_found");
         user.Status = request.Status ?? user.Status;
         user.Role = request.Role ?? user.Role;
         await database.SaveChangesAsync(cancellationToken);
@@ -202,7 +202,7 @@ public static class IdentityEndpoints
         CurrentUser? current = await identity.CurrentUserAsync(context, cancellationToken);
         if (current is null) return Unauthorized();
         if (request.Theme is null || !Themes.All.Contains(request.Theme))
-            return HttpResults.Problem(422, "Validation failed", "Unknown theme");
+            return HttpResults.Problem(422, "Validation failed", "Unknown theme", "unknown_theme");
         User user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
         user.Theme = request.Theme;
         await database.SaveChangesAsync(cancellationToken);
@@ -219,10 +219,10 @@ public static class IdentityEndpoints
         CurrentUser? current = await identity.CurrentUserAsync(context, cancellationToken);
         if (current is null) return Unauthorized();
         if (string.IsNullOrEmpty(request.NewPassword))
-            return HttpResults.Problem(422, "Validation failed", "New password is required");
+            return HttpResults.Problem(422, "Validation failed", "New password is required", "new_password_required");
         User user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
         if (!PasswordMatches(user, request.CurrentPassword))
-            return HttpResults.Problem(403, "Invalid password", "Current password is incorrect");
+            return HttpResults.Problem(403, "Invalid password", "Current password is incorrect", "current_password_incorrect");
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, 14);
         await database.SaveChangesAsync(cancellationToken);
         return Results.NoContent();
@@ -242,7 +242,7 @@ public static class IdentityEndpoints
         if (current is null) return Unauthorized();
         User user = await database.Users.SingleAsync(x => x.Id == current.Id, cancellationToken);
         if (user.PasswordHash.Length == 0)
-            return HttpResults.Problem(409, "Only sign-in method", "This account has no password, so the provider is its only way in");
+            return HttpResults.Problem(409, "Only sign-in method", "This account has no password, so the provider is its only way in", "only_sign_in_method");
         user.OidcIssuer = null;
         user.OidcSubject = null;
         await database.SaveChangesAsync(cancellationToken);
@@ -268,7 +268,7 @@ public static class IdentityEndpoints
         if (admin is null) return Unauthorized();
         if (admin.Role != Roles.Admin) return Forbidden();
         if (request.ModuleIds is null)
-            return HttpResults.Problem(400, "Invalid module id", "A module id could not be parsed");
+            return HttpResults.Problem(400, "Invalid module id", "A module id could not be parsed", "invalid_module");
 
         List<AppModule> modules = await database.Modules.Where(x => x.Enabled).ToListAsync(cancellationToken);
         HashSet<Guid> selected = request.ModuleIds.ToHashSet();
@@ -282,8 +282,8 @@ public static class IdentityEndpoints
         return Results.NoContent();
     }
 
-    private static IResult Unauthorized() => HttpResults.Problem(401, "Unauthorized", "Invalid bearer token");
-    private static IResult Forbidden() => HttpResults.Problem(403, "Forbidden", "Admin role required");
+    private static IResult Unauthorized() => HttpResults.Problem(401, "Unauthorized", "Invalid bearer token", "session_expired");
+    private static IResult Forbidden() => HttpResults.Problem(403, "Forbidden", "Admin role required", "admin_required");
     private static DateTime AsUtc(DateTime value) => DateTime.SpecifyKind(value, DateTimeKind.Utc);
 
     private sealed record AuthorizeRequest(string? Username, string? Password);

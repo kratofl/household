@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace Household.Api.Tests;
 
@@ -81,6 +82,10 @@ public sealed class UserAdministrationHttpTests(OidcFixture fixture) : IClassFix
             password = "other-password",
         });
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        // The web client translates the code; the English detail stays for other API readers.
+        JsonElement problem = await duplicate.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("user_exists", problem.GetProperty("code").GetString());
+        Assert.Equal("A user with this name or email already exists", problem.GetProperty("detail").GetString());
         using HttpResponseMessage incomplete = await admin.PutAsJsonAsync("/api/v1/users/", new { name = "zoe" });
         Assert.Equal(HttpStatusCode.UnprocessableEntity, incomplete.StatusCode);
 
