@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/app/page-header"
 import { cn } from "@/lib/utils"
 
 // Settings pages: the title in the toolbar, then list cards with a headline and
-// 48px rows separated by hairlines, the same shape as every other list.
+// 36px rows (48px on phones) separated by hairlines, the same shape as every other list.
 
 export function SettingsSurface({
   title,
@@ -40,7 +40,7 @@ export function SettingsSection({
   return (
     <section>
       <div className={listCardClass}>
-        <div className="flex min-h-12 items-center justify-between gap-3 border-b border-separator px-4 pt-3 pb-2">
+        <div className="flex min-h-10 items-center justify-between gap-3 border-b border-separator px-4 py-2 max-lg:min-h-12 max-lg:pt-3">
           <h2 className="text-headline">{title}</h2>
           {aside}
         </div>
@@ -63,7 +63,7 @@ export function SettingsRow({
   className?: string
 }) {
   return (
-    <div className={cn("flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5", className)}>
+    <div className={cn("flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2.5", className)}>
       <div className="min-w-0">
         <p>{title}</p>
         {description ? <p className="text-footnote text-label-secondary">{description}</p> : null}
@@ -81,7 +81,7 @@ export function SettingsField({
   value: string
 }) {
   return (
-    <div className="flex min-h-12 items-center justify-between gap-4 px-4 py-2.5">
+    <div className="flex min-h-9 items-center justify-between gap-4 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2.5">
       <span>{label}</span>
       <span className="truncate text-label-secondary">{value}</span>
     </div>

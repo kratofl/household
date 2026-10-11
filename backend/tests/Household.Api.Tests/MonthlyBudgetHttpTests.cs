@@ -116,6 +116,41 @@ public sealed class MonthlyBudgetHttpTests(LegacyParityFixture fixture) : IClass
         Assert.Equal(2, (await this.State(client)).Revision);
     }
 
+    [Fact]
+    public async Task Category_appearance_is_assigned_persisted_validated_and_user_owned()
+    {
+        using HttpClient client = this.Fixture.Client;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.TimelineAccessToken);
+        List<MonthlyCategoryRow> categories = [];
+        for (int index = 0; index < 5; index++)
+        {
+            using HttpResponseMessage created = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory($"Color {index}"));
+            categories.Add(await Read<MonthlyCategoryRow>(created));
+        }
+        Assert.Equal(5, categories.Select(category => category.Color).Distinct().Count());
+        MonthlyCategoryRow category = categories[0];
+        using HttpResponseMessage updated = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}",
+            new SaveMonthlyCategory("Groceries", Color: "purple", Icon: "cart"));
+        Assert.Equal("cart", (await Read<MonthlyCategoryRow>(updated)).Icon);
+        // Older clients omit appearance during rename/archive; their requests must preserve it.
+        using HttpResponseMessage archived = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Food", true));
+        Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
+        MonthlyCategoryRow saved = Assert.Single((await this.State(client)).Categories, row => row.Id == category.Id);
+        Assert.Equal("purple", saved.Color);
+        Assert.Equal("cart", saved.Icon);
+        Assert.True(saved.Archived);
+        using HttpResponseMessage restored = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Food"));
+        Assert.False((await Read<MonthlyCategoryRow>(restored)).Archived);
+        using HttpResponseMessage invalid = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Food", Color: "invalid"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalid.StatusCode);
+        using HttpResponseMessage invalidIcon = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory("Bad icon", Icon: "invalid"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalidIcon.StatusCode);
+        using HttpClient other = this.Fixture.Client;
+        other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.LedgerAccessToken);
+        using HttpResponseMessage foreign = await other.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Foreign", Color: "blue"));
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+    }
+
     private async Task<MonthlyBudgetState> State(HttpClient client)
     {
         using HttpResponseMessage response = await client.GetAsync("/api/v1/budget/monthly/");

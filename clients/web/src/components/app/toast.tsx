@@ -29,7 +29,7 @@ export function Toast({ message, onDismiss }: { message: string; onDismiss: () =
       <span aria-hidden className="grid size-[22px] shrink-0 place-items-center rounded-full bg-green-500 text-green-900">
         <IconCheck className="size-[13px] [stroke-width:3]" />
       </span>
-      <span className="min-w-0 truncate text-[14px] font-semibold">{message}</span>
+      <span className="min-w-0 truncate text-[13px] font-semibold max-lg:text-[14px]">{message}</span>
     </div>
   )
 }

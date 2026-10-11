@@ -7,10 +7,15 @@ Binding for every Household surface. Token values live in
 
 ## Platforms
 
-- **Web is the primary CI.** It follows an Apple look (macOS / Apple web apps):
-  system font, calm neutrals, flat content, Liquid Glass only on floating chrome.
+- **Web is the primary CI.** It looks like a calm web application: system font,
+  calm neutrals, soft cards, small controls, frosted glass only on small floating
+  chrome.
   Never use Material Design patterns (FABs with elevation, ripple, filled text
   fields, app bars with shadows).
+- **Two sizes on web.** From `lg` (1024px) the desktop scale is dense: 28px
+  controls, 36px rows, smaller type and radii. Below `lg` the phone scale keeps
+  touch sizes: pill controls ≥ 44px and the larger type. Where a value below has
+  two forms, the desktop one comes first and the phone one follows.
 - **Native apps follow their platform** (see [Native clients](#native-clients)).
   Only the brand tokens (`brand-500`, status colours, content) carry across;
   component shapes are native.
@@ -18,27 +23,36 @@ Binding for every Household surface. Token values live in
 
 ## Visual rules
 
-- **Flat first.** Cards (`surface` on `bg`), lists, tables, inputs, buttons and
-  the sidebar are flat: `shadow-none`, no gradients. Only glass elements get depth.
-- **Glass only on chrome:** context menus, the toolbar, notifications/alerts,
-  toasts, popovers, dialogs, the phone tab bar, and mobile controls. Glass =
-  `glass-bg` (55 % opacity in both themes) +
-  `backdrop-filter: blur(var(--glass-blur)) saturate(180%)` +
-  `1px solid var(--glass-border)` + `shadow-glass` (inner specular edge
-  `glass-highlight`). In the web client this is the `.glass` class.
+- **Borders at rest, shadows for what floats.** Cards and list cards are
+  `surface` on `bg` with a 1px `separator` border and `shadow-e1`, a faint lift
+  that is `none` in dark, where the `surface`/`bg` contrast carries the depth.
+  Inputs, buttons, tables and the sidebar are flat: no shadow, no gradients.
+- **Elevation** has four steps. `shadow-e1` cards at rest · `shadow-e2` sticky or
+  dragged items · `shadow-e3` menus, popovers, tooltips, toasts, notifications ·
+  `shadow-e4` dialogs and sheets. Every layer at e2 or above also has a 1px
+  `floating-border`, so it keeps an edge where shadows disappear.
+- **Glass only on small floating chrome:** the toolbar band, context menus,
+  select lists, popovers, toasts, notifications, the phone tab bar and the
+  phone's floating controls. Glass = `glass-bg` (`surface-floating` at 85 %) +
+  `backdrop-filter: blur(var(--glass-blur)) saturate(180%)` + `1px solid
+  var(--floating-border)` + `shadow-e3`, no specular highlight. In the web client
+  this is the `.glass` class.
+- **Solid where it carries content:** chart tooltips, dialogs and sheets are
+  `surface-floating` + `floating-border` (`.floating`), never glass: numbers and
+  forms do not sit on blur. Sheets and dialogs dim the page behind them.
 - **The toolbar is one uniform frosted band** across the content area
-  (`toolbar-bg`, `toolbar-blur`, `separator` underneath; `.toolbar-band`).
+  (`toolbar-bg`, `glass-blur`, `separator` underneath; `.toolbar-band`).
   Controls inside it sit on `toolbar-fill`, not on separate glass capsules.
 - **Flat fallback:** with `prefers-reduced-transparency: reduce` or without
-  `backdrop-filter` support, glass becomes `surface` + `1px solid var(--border)`,
-  no blur, no shadow. The flat variant is a complete, supported option; each
-  glass component below names its flat form.
+  `backdrop-filter` support, glass becomes solid `surface-floating` with its
+  border and shadow, and the toolbar a solid `bg` band. With `forced-colors`,
+  every floating layer is opaque `Canvas` with a `CanvasText` edge.
 - **Buttons never glow.** No coloured or outer shadows on buttons – ever.
 
 ## Colour
 
-- `brand-500` is the only brand colour: the primary button, active icons,
-  progress, the highlighted chart bar and the menu highlight. Text on it is
+- `brand-500` is the only brand colour: the primary button, the active sidebar
+  icon, meters, the highlighted chart series and the menu highlight. Text on it is
   always `on-brand` (dark) – white on `brand-500` fails contrast (2.9:1).
 - Brand as text uses `link` / `brand-700` (5.6:1 on `surface`), never
   `brand-500` on white.
@@ -47,9 +61,7 @@ Binding for every Household surface. Token values live in
   (`success-text`, `danger-text` in dark).
 - Tints (-100) are backgrounds for tags and inline banners. Tag text uses -700,
   banner text -900.
-- Charts: series in `brand-500` at `track-tint` alpha (higher in dark), the
-  highlighted value in full `brand-500`; further series in `blue-500`,
-  `purple-500`, `green-500`, `yellow-500`.
+- Charts follow [Charts](#charts): one series in `brand-500`, context in grey.
 
 **Scales** (`brand`, `green`, `red`, `yellow`, `blue`, `purple`; the same in both
 themes):
@@ -58,7 +70,7 @@ themes):
 | --- | --- |
 | -100 | Tag, inline-banner and tint backgrounds. `brand-100`: selected chips, empty-state icon tiles, focus halo fill (sparingly in dark). `red-100`: also the destructive button. `purple-100`: the „Neu“ tag, avatar fill. |
 | -300 | Graphics (chart series, illustrations). Never text on light surfaces; the dark-mode tints use -300 text (see Status). `yellow-300`: warning icon disc on `yellow-100`. |
-| -500 | Status dots, icons, chart series. Not for text on white (2.9:1). `red-500`: notification badge fill (white text), destructive dialog button. `blue-500`: utilisation meter. |
+| -500 | Status dots, icons, categorical chart series. Not for text on white (2.9:1). `red-500`: notification badge fill (white text), destructive dialog button. `blue-500`: utilisation meter. |
 | -700 | Text on `surface` and on the -100 tint. |
 | -900 | Text on -100 banners; ink on -500 icon discs. |
 
@@ -68,11 +80,16 @@ themes):
 | --- | --- |
 | `bg` | Page background (web, iOS grouped screens). |
 | `surface` | Cards, lists, tables, inputs. Sits on `bg`. |
+| `surface-floating` | Menus, popovers, tooltips, dialogs and sheets; under glass at 85 %. White in light, one step lighter than `surface` in dark. |
 | `sidebar-bg` | Web sidebar (`bg-sidebar`). |
-| `fill` | Secondary button, meter/progress track, selected table row, S icon button inside fields. |
+| `fill` | Secondary button, selected table row, S icon button inside fields. |
 | `fill-strong` | Active sidebar item, segmented-control track in content. |
-| `separator` | Hairlines between rows, sidebar edge, toolbar bottom edge. |
-| `border` | Input and outlined-button borders; flat overlay borders. |
+| `separator` | Hairlines between rows, card borders, search-field border, sidebar edge, toolbar bottom edge. |
+| `border` | Outlined-button borders. |
+| `border-control` | The edge of inputs, selects, search fields, checkboxes and the off switch: ≥ 3:1 on `surface` and `bg`. |
+| `floating-border` | The 1px edge of every layer at e2 or above, glass or solid. |
+| `meter-track` | The unfilled part of a `brand-500` meter (a brand tint). |
+| `chart-muted`, `chart-muted-strong` | Context series in charts: past or comparison values, and the one still running. |
 | `label` | Primary text and icons on `bg`, `surface`, `fill`, `glass-bg`. |
 | `label-secondary` | Secondary text (labels, metadata, column heads), ≥ 4.5:1 on `surface` and `bg`. The lightest allowed text colour. |
 | `label-disabled` | Disabled text only – never readable content. |
@@ -82,24 +99,27 @@ themes):
 | `segment-selected` | The selected segment of a segmented control (text `label`, white in dark). |
 | `focus-ring` | The focus ring; ≥ 3:1 on all surfaces (`brand-500` itself is too light on white). |
 | `toolbar-bg`, `toolbar-fill` | The frosted toolbar band and the fill of controls inside it. |
-| `glass-bg`, `glass-border`, `glass-highlight` | Glass fill, its darkened outer edge, its inner 1px specular edge. |
+| `glass-bg`, `glass-blur` | Glass fill (`surface-floating` at 85 %) and its blur (14px). |
+| `shadow-e1` … `shadow-e4` | Elevation (see [Visual rules](#visual-rules)); e1 is `none` in dark. |
 
 ## Type
 
-One family, `sans`: SF Pro on Apple devices, Figtree elsewhere.
+One family, `sans`: SF Pro on Apple devices, Figtree elsewhere. Every style has a
+desktop size (from `lg`) and a phone size; the tokens switch at the breakpoint.
 
-| Style | Size / line, weight | Use |
-| --- | --- | --- |
-| `large-title` | 34/41 bold | iOS page titles. |
-| `title-1` | 28/34 bold | Section headings. |
-| `kpi` | 32/38 bold | KPI numbers. |
-| `title-2` | 22/28 bold | Page title in the web toolbar. |
-| `title-3` | 20/25 semibold | Dialog titles, large card titles. |
-| `headline` | 17/22 semibold | Card titles, list titles. |
-| `body` | 15/21 | Body copy. |
-| `callout` | 14/20 | Web default: tables, sidebar items, buttons, inputs. |
-| `footnote` | 13/18 | Help text, metadata, menu items, segmented labels. |
-| `caption` | 12/16 semibold | Column heads, field labels, tags, sidebar section headers. |
+| Style | Desktop | Phone | Weight | Use |
+| --- | --- | --- | --- | --- |
+| `display` | 52/56 | 40/44 | bold | A page's one hero number. |
+| `large-title` | 24/30 | 34/41 | bold | Login and stand-alone page titles. |
+| `title-1` | 22/28 | 28/34 | bold | Section headings. |
+| `kpi` | 22/28 | 32/38 (28 in KpiCard) | bold | KPI numbers. |
+| `title-2` | 17/22 | 22/28 | bold | Page title in the web toolbar. |
+| `title-3` | 15/20 | 20/25 | semibold | Dialog titles, large card titles. |
+| `headline` | 14/20 | 17/22 | semibold | Card titles, list titles. |
+| `body` | 13/18 | 15/21 | regular | Body copy. |
+| `callout` | 13/18 | 14/20 | regular | Web default: tables, sidebar items, buttons, inputs. |
+| `footnote` | 12/16 | 13/18 | regular | Help text, metadata, menu items, segmented labels. |
+| `caption` | 11/14 | 12/16 | semibold | Column heads, field labels, tags, sidebar section headers. |
 
 ## Spacing
 
@@ -113,34 +133,57 @@ No CSS variables; use these values. Component internals use `xs`–`xl`, layout
 | `space-md` | 10px | Sidebar item gap, menu item padding. |
 | `space-lg` | 12px | Input horizontal padding, toolbar gaps. |
 | `space-xl` | 14px | Search-field padding, list-row vertical padding. |
-| `space-2xl` | 16px | Gap between cards; card padding on mobile. |
-| `space-3xl` | 20px | Card padding on desktop; mobile screen gutter. |
-| `space-4xl` | 24px | Web content gutter; gap between sections in cards. |
+| `space-2xl` | 16px | Gap between cards; card padding. |
+| `space-3xl` | 20px | Web content gutter (desktop and phone). |
+| `space-4xl` | 24px | Gap between sections in cards. |
 | `space-5xl` | 32px | Large section spacing. |
 | `space-6xl` | 64px | Page padding of documentation pages. |
 
 ## Shape
 
-| Token | Value | Use |
-| --- | --- | --- |
-| `radius-xs` | 6px | Tags, checkboxes, chart bar tops. |
-| `radius-sm` | 8px | S buttons, icon buttons inside fields, menu items, tooltips. |
-| `radius-md` | 12px | Desktop M/L buttons, inputs, selects, segmented tracks in content. |
-| `radius-lg` | 16px | macOS cards, popovers. |
-| `radius-xl` | 18px | Web and iOS cards, notifications, sidebar-free panels. |
-| `radius-pill` | 999px (`rounded-full`) | XL buttons, search fields, chips, toolbar groups, segmented controls in the toolbar, toasts, all mobile controls. |
+| Token | Desktop | Phone | Use |
+| --- | --- | --- | --- |
+| `radius-xs` | 4px | 6px | Tags, checkboxes, the select's trigger box, `kbd` hints, chart bar tops. |
+| `radius-sm` | 6px | 8px | Every desktop control: buttons S/M/L, inputs, selects, search fields, segments, sidebar items, menu items. |
+| `radius-md` | 8px | 12px | Containers of controls (toolbar groups, segmented tracks), tooltips, banners. |
+| `radius-lg` | 10px | 16px | Cards, list cards, context menus, popovers, notifications. |
+| `radius-xl` | 14px | 18px | Dialogs and sheets. |
+| `radius-pill` | 999px (`rounded-full`) | | XL buttons, chips, segmented controls in the toolbar, toasts, all phone controls. |
 
-- Desktop controls in S/M/L use `radius-sm` / `radius-md`; **XL controls are pill**.
-- **Search fields are always pill** when they stand alone.
-- Chart bars: `radius-xs` on top only, square at the baseline, with a
-  `separator` baseline.
-- Mobile: all controls are pill from the start and larger (min 44px tall);
-  mobile controls may use glass.
+- Desktop controls in S/M/L use `radius-sm`; **XL controls are pill**.
+- **Concentric corners:** a container around controls is the inner radius plus
+  its padding (`radius-sm` items + 2px track = `radius-md`; + 4px menu padding =
+  `radius-lg`).
+- **Search fields** are `radius-sm` bordered fields on desktop and pills on phones.
+- No squircles (`corner-shape`) until every supported browser ships them.
+- Phones: all controls are pill from the start and larger (min 44px tall);
+  phone controls may use glass.
 
 ## Layout
 
-Web: a 256px sidebar (edge-to-edge, `sidebar-bg`) beside the content, with the
-64px frosted toolbar on top, then KPI row, charts, list.
+Web: a 224px sidebar (edge-to-edge, `sidebar-bg`) beside the content, with the
+48px frosted toolbar on top (64px on phones). Content has a 20px gutter and a
+16px gap between cards.
+
+- **Everything belongs somewhere.** Page actions, the period or scope control
+  and its caption live in the toolbar. Hints, notes and empty values live inside
+  the card they explain. Nothing sits loose between cards.
+- **Composed, not stacked.** Desktop content is a grid of columns (2fr + 1fr,
+  or 1fr + 1fr), not a full-width stack of equal cards. Cards in a row share
+  their height. Phones stack the same cards in reading order.
+- **One answer first.** A page leads with the one thing the user opened it for:
+  a hero metric on an overview, the table on a list page, the form on an edit
+  page. At most one `display` number per page.
+- **Lists are flat rows inside one card**, never cards inside cards.
+
+**Page types**, by shape:
+
+| Type | Shape |
+| --- | --- |
+| Overview | Row 1: hero card (hero metric over its chart, 2fr) beside the most time-critical list (1fr). Row 2: a full-width metric strip. Row 3: a secondary chart beside the most recent items. |
+| List | A metric strip with the list's totals, one filter row that scopes both the chart and the table, an optional chart, then one table card; a narrow side column only for related summaries. |
+| Plan | A breakdown chart of where the whole flows, then the parts as a metric strip, then the editable items. |
+| Settings | One column, max 720px, grouped lists; no metrics. |
 
 ## Components
 
@@ -155,9 +198,9 @@ Web: a 256px sidebar (edge-to-edge, `sidebar-bg`) beside the content, with the
 | Löschen | `red-100` / `red-700` |
 | Deaktiviert | `fill` / `label-disabled` |
 
-Sizes: S 28px, `radius-sm`, 12px semibold · M 40px, `radius-md`, 14px semibold ·
-L 48px, `radius-md`, 15px · XL 56px, pill, 17px. Mobile buttons are always pill
-and ≥ 44px.
+Desktop sizes: S 24px, `radius-sm`, 12px semibold · M 28px, `radius-md`, 13px
+semibold · L 32px, `radius-md`, 13px · XL 36px, pill, 14px. Phone buttons are
+always pill: S/M 44px (14px), L 48px (15px), XL 56px (17px).
 
 - One primary button per view, never for a destructive action.
 - Label is a verb or verb phrase; optional leading 16px line icon (gap `space-sm`).
@@ -167,16 +210,21 @@ and ≥ 44px.
 
 ### Toolbar
 
-One uniform frosted band across the top of the content area, grouped per Apple
-HIG. 64px, full content width, 1px `separator` below; content scrolls underneath.
-Controls inside sit on `toolbar-fill` pill fills.
+One uniform frosted band across the top of the content area. 48px (64px on
+phones), full content width, 1px `separator` below; content scrolls underneath.
+Icon actions sit in a `toolbar-fill` group (`radius-md`, pill on phones) as 28px
+borderless buttons with 16px icons.
 
 - **Max three groups:** leading = page title (`title-2`, ≤ 15 characters, never
-  the app name) · centre = segmented control for view options · trailing =
-  borderless icon actions (Neu, Filter, Teilen, Mitteilungen) in one pill group,
-  then the search field last.
+  the app name), then the page's scope control (a period stepper or segmented
+  control) and its caption in `footnote` `label-secondary` · trailing =
+  borderless icon actions (Filter, Teilen, Mitteilungen) in one group, the search
+  field, then the page's primary action last.
+- The primary action is the page's one Primär M button (verb + 16px icon). It
+  is the only orange control in the toolbar; on phones it becomes a 44px icon
+  button.
 - Icons over text; a text-labelled action stands apart from the icon actions.
-- No tinted or orange controls in the toolbar.
+- No native date inputs in the toolbar: periods step with chevrons.
 - Every toolbar action is also reachable from a menu.
 - The sidebar collapse button lives in the sidebar, not here.
 - Flat variant: solid `bg` band + `separator`, fills `fill-strong`.
@@ -184,12 +232,13 @@ Controls inside sit on `toolbar-fill` pill fills.
 ### SegmentedControl
 
 2–5 closely related options that change the current view (Woche / Monat /
-Quartal). Lives in the toolbar's centre group.
+Quartal). Lives in the toolbar's leading group, or in content as a filter row.
 
-- Text-only nouns in `footnote`; equal-width segments (≈ 84–88px on desktop,
-  flex on mobile), 32px tall, 4px track padding (48px track on mobile).
+- Text-only nouns in `footnote`; equal-width segments (≥ 72px on desktop, flex
+  on phones), 24px tall with `radius-sm`, 2px track padding (40px segments on a
+  48px track on phones).
 - Track: pill on `toolbar-fill` in the toolbar; in content a flat `fill-strong`
-  track with `radius-md`.
+  track with `radius-md`, concentric with the `radius-sm` segments.
 - Selected: `segment-selected` + `shadow-segment`, semibold.
 - Renders as `radiogroup` with `radio` segments.
 - Not for navigation (that is the sidebar / tab bar); never mixes icons and text,
@@ -200,10 +249,11 @@ Quartal). Lives in the toolbar's centre group.
 The full field shows the value; only the trigger on the right is an S secondary
 icon button with a chevron-down.
 
-- Field: 40px, `surface`, 1px `border`, `radius-md`, padding 0 5px 0 `space-lg`,
-  value in `callout`. Label above in `caption`/13px semibold, linked with
+- Field: 28px, `surface`, 1px `border-control`, `radius-sm`, padding 0 3px 0 10px,
+  value in `callout` (phones: 44px pill). Label above in `caption`, linked with
   `aria-labelledby`.
-- Trigger: 28×28px, `fill`, `radius-sm`, 12px chevron-down in `label`.
+- Trigger: 20×20px, `fill`, `radius-xs`, 12px chevron-down in `label` (phones:
+  28px circle).
 - Options open in a context-menu-styled list.
 - States: focus = 2px `focus-ring` · error = `red-500` border + `danger-text`
   message · disabled = `bg` fill, `label-disabled`.
@@ -211,16 +261,17 @@ icon button with a chevron-down.
 
 ### SearchField
 
-Always pill, leading magnifier. 40px tall, `fill` background (`toolbar-fill`
-inside the toolbar), padding `space-xl`, placeholder „Suchen“ in
-`label-secondary`, text `callout`, an `aria-label`, optional keyboard hint (⌘K)
-as a pill `kbd` on the right. On web it is the last item of the toolbar. Never
-square or medium-rounded.
+Leading 14px magnifier, placeholder „Suchen“ in `label-secondary`, text
+`callout`, an `aria-label`. Desktop: a 28px `surface` field with a 1px
+`border-control` edge and `radius-sm`, optional keyboard hint (⌘K) as a bordered
+`radius-xs` `kbd` on the right; in the toolbar it sits just before the primary
+action. Phones: a 44px pill on `fill`.
 
 ### Switch
 
-On/off for settings that apply immediately. 44×26px pill track, 22px white knob;
-on = `brand-500` track, off = `fill-strong`. Label on the left in `callout`,
+On/off for settings that apply immediately. 32×18px pill track, 14px white knob
+(51×31px with a 27px knob on phones); on = `brand-500` track, off = `fill-strong`
+with a 1px inner `border-control` edge. Label on the left in `callout`,
 switch on the right. Renders `role="switch"` with `aria-checked`.
 
 - Not for actions that need a Save button (use a checkbox).
@@ -228,15 +279,16 @@ switch on the right. Renders `role="switch"` with `aria-checked`.
 
 ### Sidebar and SidebarItem
 
-- Container: 256px, edge-to-edge (full height, no floating or inset, no shadow),
-  `sidebar-bg`, 1px `separator` on the right. The collapse button sits in the
-  sidebar's top row, right-aligned.
-- Item: 36px tall, padding 0 10px, radius 10px, gap `space-md`, 18px line icon,
+- Container: 224px (56px collapsed), edge-to-edge (full height, no floating or
+  inset, no shadow), `sidebar-bg`, 1px `separator` on the right. The 48px top
+  row holds the logo, the app name and, right-aligned, the collapse button.
+- Item: 28px tall, padding 0 8px, `radius-sm`, gap `space-sm`, 16px line icon,
   label `callout` 500 (active 600). Optional trailing count (`label-secondary`)
   or badge (`red-500`, white).
-- **Icons always `brand-500`, text always `label`**, active and inactive. Never
-  colour the active row orange; never grey out inactive icons.
-- Active = `fill-strong` background + semibold + `aria-current="page"`.
+- **Icons `label-secondary`, text `label`.** Only the active item's icon is
+  `brand-500`; never colour the active row or its text orange.
+- Active = `fill-strong` background + semibold + `brand-500` icon +
+  `aria-current="page"`.
 - Section headers `caption` in `label-secondary`. Favourites use a 10px
   status-coloured dot instead of an icon.
 
@@ -245,14 +297,14 @@ switch on the right. Renders `role="switch"` with `aria-checked`.
 Glass menu for actions on the current item (right-click, "…" buttons, select
 option lists).
 
-- 220–240px wide, 6px padding, radius 14px.
-- Items 28–30px, `radius-sm`, `footnote` 500 in `label`; shortcuts right-aligned
-  in `label-secondary`.
+- At least 200px wide, 4px padding, `radius-lg`, `shadow-e3`.
+- Items 26px, `radius-sm`, `footnote` 500 in `label`, 14px icons; shortcuts
+  right-aligned in `label-secondary`.
 - Highlighted item `brand-500` + `on-brand`.
 - Destructive action last, after a `separator`, in `danger-text`.
 - Opens upward when there is no room below.
 - Mobile: 48px items, radius 24px, pill highlights.
-- Flat variant: `surface` + 1px `border`.
+- Flat variant: solid `surface-floating`.
 
 ### Notification
 
@@ -265,7 +317,7 @@ information.
 - Optional two actions (primary dark `label` fill + secondary `fill`) and dismiss.
 - Persistent page-level states use a flat inline banner instead (-100 tint +
   -900 text, `radius-md`).
-- Flat variant: `surface` + 1px `border`.
+- Flat variant: solid `surface-floating`.
 
 ### Toast
 
@@ -274,7 +326,7 @@ area.
 
 - Pill, padding 10px 18px 10px 12px.
 - 22px status disc (success: `green-500` with a `green-900` check), one line in
-  14px semibold, optional undo button (`fill`, pill, 28px).
+  13px semibold (14px on phones), optional undo button (`fill`, pill, 28px).
 - Auto-dismiss after ~4 s; `role="status"`.
 - Flat variant: a solid inverse pill (light: `label` background with white text;
   dark: a light pill with `label` text).
@@ -282,29 +334,67 @@ area.
 ### StatusBadge
 
 - **Dots:** 8px + the word (see [Colour](#colour)).
-- **Tags:** 3px 10px padding, `radius-xs`, `caption`; -100 background, -700
+- **Tags:** 1px 6px padding (3px 10px on phones), `radius-xs`, `caption`; -100 background, -700
   text: Erledigt green, In Arbeit blue, Wartet yellow, Blockiert red, Neu purple.
   Mobile risk chip: pill.
 - **Counter badge:** `red-500` pill, white 12px bold, min 20px. Neutral counts are
   `label-secondary` text without a pill.
 - Dark: keep the -500 dots; tags use the -500 at 20 % with -300 text (`clients/web/src/lib/tone.ts`).
 
-### KpiCard
+### Metrics
 
-Flat metric card: label, large number, and a delta line or a meter.
+A metric is a label, a number, and a delta line or a meter.
 
-- `surface` on `bg`, `radius-xl`, padding 18px 20px, no shadow.
-- Label 13px `label-secondary`; value `kpi` (mobile 28px); delta 12px semibold
-  in `success-text` / `danger-text`.
-- Meter: 6px pill, track `fill`, value `brand-500` (budget) or `blue-500`
-  (utilisation).
-- Four in a row on desktop (gap `space-2xl`), 2×2 on mobile.
+- **Hero metric:** the page's one lead number. Label `callout` 500 in
+  `label-secondary`, value `display`, one supporting line in `body`
+  `label-secondary` with the key figure in `label` semibold. A status chip
+  (warning tint) may sit top-right. Its chart follows directly under it in the
+  same card.
+- **Metric strip:** several metrics side by side are one card, cells divided by
+  `separator` hairlines, never a row of separate cards. Each cell: a 26px icon
+  tile + label `callout` 500 in `label`, value `kpi`, a `footnote` line in
+  `label-secondary`, then an optional meter. Up to five cells on desktop; phones
+  wrap to two columns.
+- **KpiCard:** one metric on its own soft card (`surface`, `separator` border,
+  `shadow-e1`, `radius-lg`), padding 12px 16px (18px 20px on phones). Only where
+  the metric stands alone. Label `footnote` `label-secondary`, value `kpi`,
+  delta `caption` in `success-text` / `danger-text`.
+- Meter: 6px pill, value `brand-500` on `meter-track`, or `blue-500`
+  (utilisation) on `fill`. An optional 2px `label` tick marks where the value
+  should be by now.
 - Never invent sample numbers in production; never colour the whole card.
+
+### Charts
+
+- **One series in colour.** The series the chart is about is `brand-500`;
+  context (past periods, comparisons) is `chart-muted`, the still-running value
+  `chart-muted-strong`. Categorical charts that must tell categories apart use
+  the -500 scales (`blue`, `purple`, `green`, `yellow`), never more than five.
+- **Over budget** is `danger-text`-coloured with an icon and a label, and never
+  shares a chart with `brand-500`: the two are too close to tell apart.
+- Lines 2px with round joins; a 10 % area fill under a single line at most.
+  Bars ≤ 24px wide with `radius-xs` tops, square at a `separator` baseline.
+- Grid: solid `separator` hairlines, 3–5 of them. Dashed lines only for a plan,
+  budget or target reference, in `label-secondary`, labelled at its end.
+- Label selectively: the current value, the maximum, the reference. Text is
+  `label` or `label-secondary`, never the series colour. Everything else is in
+  a solid tooltip (`surface-floating`, `shadow-e3`, `radius-md`).
+- Every chart has a text or table equivalent for screen readers.
+
+### Sheets and dialogs
+
+Solid `surface-floating` panels with `floating-border`, `shadow-e4` and
+`radius-xl`, over the page dimmed to 30 % black (50 % in dark). A sheet slides
+in from the right, inset 8px from the window edges; on phones it fills the
+screen. Never glass.
 
 ### Tables and lists
 
-Column heads `caption` in `label-secondary`, rows 48–50px, `separator`
-hairlines, selected row = `fill` with `radius-md`.
+Column heads `caption` in `label-secondary`, rows 36px (48px on phones),
+`separator` hairlines, selected row = `fill` with `radius-md`. Card headers are
+40px (48px on phones): `headline` title, an optional `link` text action on the
+right. A list may end in a summary footer row on `fill` in `footnote`. Rows are
+flat inside their one card; a card never contains another card.
 
 ## States
 
@@ -324,14 +414,16 @@ hairlines, selected row = `fill` with `radius-md`.
 - Line icons on a 24px grid, 1.8px stroke (2px at 16px), round caps and joins,
   `currentColor`. The web client uses Tabler icons.
 - No brand icon set: use one consistent stroke set per platform (e.g. SF Symbols
-  on Apple platforms, Fluent icons on Windows). Sidebar icons stay `brand-500`.
+  on Apple platforms, Fluent icons on Windows).
 
 ## Accessibility
 
-- Text meets 4.5:1 on its grounds in both themes.
+- Text meets 4.5:1 on its grounds in both themes; control edges
+  (`border-control`) meet 3:1.
 - Focus: 2px solid `focus-ring`, offset 2px, on every focusable control.
 - Touch targets ≥ 44px on mobile.
 - Status is never colour-only.
+- Floating layers keep a border and turn opaque under `forced-colors`.
 
 ## Native clients
 

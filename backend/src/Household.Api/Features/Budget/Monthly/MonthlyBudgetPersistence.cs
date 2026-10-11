@@ -34,6 +34,8 @@ public sealed partial class BudgetDbContext
         category.Property(row => row.OwnerUserId).HasColumnName("owner_user_id");
         category.Property(row => row.Name).HasColumnName("name");
         category.Property(row => row.Archived).HasColumnName("archived");
+        category.Property(row => row.Color).HasColumnName("color");
+        category.Property(row => row.Icon).HasColumnName("icon");
         category.HasIndex(row => new { row.OwnerUserId, row.Name }).IsUnique();
 
         EntityTypeBuilder<MonthlyEntryRow> entry = model.Entity<MonthlyEntryRow>();

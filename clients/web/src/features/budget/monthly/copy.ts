@@ -1,12 +1,19 @@
 import type { Locale } from "@/lib/i18n"
 
 const en = {
+  continue: "Continue", back: "Back", review: "Review and start", costs: "Costs", step: "Step",
+  setupCategories: "Add at least one category so you can record expenses. Reserves are optional.",
+  setupReview: "Check your amounts. Your budget starts in the current period when you confirm below.",
+  color: "Color", icon: "Icon", automaticColor: "Assign automatically", saveCategory: "Save category",
+  merchantSearch: "Search merchants", noResults: "No matching merchants",
+  moneyHint: "Use a comma or point for decimals, for example 12,50 or 12.50.",
+  incomeReserves: "Income & reserves",
   overview: "Overview", expenses: "Expenses", plan: "Monthly plan", savings: "Savings",
   remaining: "Fun money left", starting: "Starting allowance", reserved: "Reserved categories", buffer: "Protected buffer",
   addExpense: "Add expense", spendSavings: "Spend from savings", spendCategory: "Add expense here",
-  emptyCategories: "Add categories in your monthly plan to organize purchases.",
+  emptyCategories: "Add a category to organize your purchases.",
   emptyExpenses: "No expenses yet. Add your first purchase when you're ready.",
-  emptyReserves: "No category reserves. Set a monthly amount for a category in your plan.",
+  emptyReserves: "No category reserves. Set a monthly amount on the Categories page.",
   setupTitle: "Set up your monthly budget", setupNote: "Enter the amounts once. Budget handles each new period automatically.",
   income: "Monthly income", fixed: "Fixed costs", monthly: "Monthly subscriptions", yearly: "Yearly subscriptions",
   savingsRate: "Monthly saving", opening: "Already saved", bufferRate: "Monthly buffer", category: "Category",
@@ -52,11 +59,18 @@ const en = {
 }
 export type MonthlyCopy = Record<keyof typeof en, string>
 const de: MonthlyCopy = {
+  continue: "Weiter", back: "Zurück", review: "Prüfen und starten", costs: "Kosten", step: "Schritt",
+  setupCategories: "Lege mindestens eine Kategorie an, damit du Ausgaben erfassen kannst. Reserven sind optional.",
+  setupReview: "Prüfe deine Beträge. Mit der Bestätigung unten startet dein Budget in der aktuellen Periode.",
+  color: "Farbe", icon: "Icon", automaticColor: "Automatisch zuweisen", saveCategory: "Kategorie speichern",
+  merchantSearch: "Händler suchen", noResults: "Keine passenden Händler",
+  moneyHint: "Komma oder Punkt sind erlaubt, zum Beispiel 12,50 oder 12.50.",
+  incomeReserves: "Einkommen & Rücklagen",
   overview: "Übersicht", expenses: "Ausgaben", plan: "Monatsplan", savings: "Sparen",
   remaining: "Spaßbudget übrig", starting: "Budget zum Periodenstart", reserved: "Reservierte Kategorien", buffer: "Geschützter Puffer",
   addExpense: "Ausgabe erfassen", spendSavings: "Aus Erspartem bezahlen", spendCategory: "Ausgabe hier erfassen",
-  emptyCategories: "Lege im Monatsplan Kategorien für deine Einkäufe an.", emptyExpenses: "Noch keine Ausgaben. Erfasse deinen ersten Einkauf, sobald du möchtest.",
-  emptyReserves: "Keine Kategorien reserviert. Lege im Monatsplan einen monatlichen Betrag für eine Kategorie fest.",
+  emptyCategories: "Lege eine Kategorie für deine Einkäufe an.", emptyExpenses: "Noch keine Ausgaben. Erfasse deinen ersten Einkauf, sobald du möchtest.",
+  emptyReserves: "Keine Kategorien reserviert. Lege unter Kategorien einen monatlichen Betrag fest.",
   setupTitle: "Richte dein Monatsbudget ein", setupNote: "Trage die Beträge einmal ein. Budget übernimmt jede neue Periode automatisch.",
   income: "Monatliches Einkommen", fixed: "Fixkosten", monthly: "Monatliche Abos", yearly: "Jährliche Abos", savingsRate: "Monatlich sparen",
   opening: "Bereits gespart", bufferRate: "Monatlicher Puffer", category: "Kategorie", categoryName: "Kategoriename", addCategory: "Kategorie hinzufügen",

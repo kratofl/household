@@ -83,11 +83,16 @@ export const moduleCatalog = {
 export const moduleKeys = Object.keys(moduleCatalog) as Array<keyof typeof moduleCatalog>
 
 // The Budget module's pages. The monthly budget is the Budget; the sidebar
-// lists these four in this order.
+// lists them in this order.
 export const budgetViews = {
   overview: { route: "/budget", labelKey: "budget.nav.overview" },
   expenses: { route: "/budget/expenses", labelKey: "budget.nav.expenses" },
   plan: { route: "/budget/plan", labelKey: "budget.nav.plan" },
+  fixed: { route: "/budget/fixed", labelKey: "budget.nav.fixed" },
+  monthly: { route: "/budget/monthly", labelKey: "budget.nav.monthly" },
+  yearly: { route: "/budget/yearly", labelKey: "budget.nav.yearly" },
+  categories: { route: "/budget/categories", labelKey: "budget.nav.categories" },
+  merchants: { route: "/budget/merchants", labelKey: "budget.nav.merchants" },
   savings: { route: "/budget/savings", labelKey: "budget.nav.savings" },
 } as const satisfies Record<string, BudgetView>
 

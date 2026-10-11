@@ -41,6 +41,8 @@ public sealed record MonthlyCategoryRow
     public Guid OwnerUserId { get; init; }
     public string Name { get; set; } = "";
     public bool Archived { get; set; }
+    public string Color { get; set; } = "brand";
+    public string Icon { get; set; } = "tag";
 }
 
 public sealed record MonthlyEntryRow

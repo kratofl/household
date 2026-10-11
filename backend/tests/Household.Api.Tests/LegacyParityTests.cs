@@ -108,33 +108,14 @@ public sealed class LegacyParityTests(LegacyParityFixture fixture) : IClassFixtu
     }
 
     [Fact]
-    public async Task Identity_registration_listing_password_and_authorization_boundaries_are_preserved()
+    public async Task Identity_listing_password_and_authorization_boundaries_are_preserved()
     {
-        HttpResponseMessage registration = await fixture.Client.PutAsJsonAsync("/api/v1/users/", new
-        {
-            name = "new-user",
-            email = "new-user@household.local",
-            password = "initial-password",
-        });
-        Assert.Equal(HttpStatusCode.Created, registration.StatusCode);
-
-        HttpResponseMessage pendingLogin = await fixture.Client.PostAsJsonAsync("/api/v1/auth/authorize", new
-        {
-            username = "new-user",
-            password = "initial-password",
-        });
-        Assert.Equal(HttpStatusCode.Forbidden, pendingLogin.StatusCode);
-
         HttpResponseMessage anonymousUsers = await fixture.Client.GetAsync("/api/v1/users/");
         Assert.Equal(HttpStatusCode.Unauthorized, anonymousUsers.StatusCode);
 
         using HttpRequestMessage usersRequest = Authenticated(HttpMethod.Get, "/api/v1/users/");
         HttpResponseMessage usersResponse = await fixture.Client.SendAsync(usersRequest);
-        JsonElement users = await usersResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(HttpStatusCode.OK, usersResponse.StatusCode);
-        Assert.Contains(users.EnumerateArray(), user =>
-            user.GetProperty("name").GetString() == "new-user" &&
-            user.GetProperty("status").GetString() == "pending");
 
         using HttpRequestMessage wrongPassword = Authenticated(HttpMethod.Put, "/api/v1/users/me/password");
         wrongPassword.Content = JsonContent.Create(new { currentPassword = "wrong", newPassword = "changed-password" });

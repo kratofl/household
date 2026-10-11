@@ -13,5 +13,8 @@ export type AuditEvent = {
   errorCode: string
 }
 
+/** What an admin enters to create an account; it starts active with the user role. */
+export type NewUser = { name: string; email: string; password: string }
+
 /** What an admin can change about another account: one status or role change at a time. */
 export type UserChange = { status: "active" | "blocked" } | { role: "admin" | "user" }

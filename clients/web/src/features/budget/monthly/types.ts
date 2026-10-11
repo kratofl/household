@@ -16,7 +16,7 @@ export type MonthlyPlan = {
 export type Funding =
   | { source: "fun" | "savings" | "buffer"; categoryId: null; amountCents: number }
   | { source: "category"; categoryId: string; amountCents: number }
-export type MonthlyCategory = { id: string; name: string; archived: boolean }
+export type MonthlyCategory = { id: string; name: string; archived: boolean; color: string; icon: string }
 export type MonthlyExpense = {
   id: string
   occurredOn: string

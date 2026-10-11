@@ -2,13 +2,13 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-// A flat card: surface on bg, radius-xl, 20px padding, no border and no shadow.
-// Titles are headline, descriptions footnote in label-secondary.
+// A soft card: surface on bg, radius-lg, 16px padding, a separator border and
+// shadow-e1. Titles are headline, descriptions footnote in label-secondary.
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
-      className={cn("flex flex-col gap-4 rounded-xl bg-surface p-5 text-label", className)}
+      className={cn("flex flex-col gap-4 rounded-lg border border-separator bg-surface p-4 text-label shadow-(--shadow-e1)", className)}
       {...props}
     />
   )

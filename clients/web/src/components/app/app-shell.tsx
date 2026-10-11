@@ -39,7 +39,7 @@ import { AccountPanel } from "@/features/account/account-panel"
 import { AdminAuditPage, AdminForbidden, AdminServicesPage, AdminUsersPage } from "@/features/admin/admin-pages"
 import { adminViewFromPath, adminViews } from "@/features/admin/views"
 import { SettingsPanel } from "@/features/settings/settings-panel"
-import type { AuditEvent, UserChange } from "@/features/admin/types"
+import type { AuditEvent, NewUser, UserChange } from "@/features/admin/types"
 import { LoginScreen } from "@/features/auth/login-screen"
 import { OIDC_CALLBACK_PATH, completeOidc, loadOidcOffer, startOidc, type OidcOffer } from "@/features/auth/oidc"
 import { DashboardPanel } from "@/features/dashboard/module-panel"
@@ -60,9 +60,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<CurrentUser[]>([])
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [registerName, setRegisterName] = useState("")
-  const [registerEmail, setRegisterEmail] = useState("")
-  const [registerPassword, setRegisterPassword] = useState("")
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [loading, setLoading] = useState(true)
@@ -313,27 +310,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function register() {
-    setError(null)
-    setMessage(null)
-    try {
-      await apiRequest("/users", {
-        method: "PUT",
-        body: {
-          name: registerName,
-          email: registerEmail,
-          password: registerPassword,
-        },
-      })
-      setRegisterName("")
-      setRegisterEmail("")
-      setRegisterPassword("")
-      setMessage(t("auth.registerDone"))
-    } catch (err) {
-      setError(errorMessage(err, t))
-    }
-  }
-
   async function loginWithOidc() {
     setError(null)
     setMessage(null)
@@ -430,6 +406,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     await loadUsers()
   }
 
+  async function createUser(user: NewUser) {
+    if (!tokens) return false
+
+    setError(null)
+    setMessage(null)
+    try {
+      await apiRequest("/users", { method: "PUT", accessToken: tokens.accessToken, body: user })
+      setMessage(t("users.created", { name: user.name.trim().toLowerCase() }))
+      await loadUsers()
+      return true
+    } catch (err) {
+      setError(errorMessage(err, t))
+      return false
+    }
+  }
+
   async function toggleModule(module: AppModule, active: boolean) {
     if (!tokens || currentUser?.role !== "admin") {
       setError(t("error.adminRequired"))
@@ -476,8 +468,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <CardDescription>{t("loading.session")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-3/4" />
+            <Skeleton className="h-7 w-full" />
+            <Skeleton className="h-7 w-3/4" />
           </CardContent>
         </Card>
       </main>
@@ -493,16 +485,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         message={message}
         username={username}
         password={password}
-        registerName={registerName}
-        registerEmail={registerEmail}
-        registerPassword={registerPassword}
         setUsername={setUsername}
         setPassword={setPassword}
-        setRegisterName={setRegisterName}
-        setRegisterEmail={setRegisterEmail}
-        setRegisterPassword={setRegisterPassword}
         login={login}
-        register={register}
         oidcName={oidcOffer.name}
         loginWithOidc={loginWithOidc}
         t={t}
@@ -519,8 +504,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     t,
   }
 
+  // Desktop pins the sidebar and scrolls only the content pane. Phones scroll the document itself,
+  // so iOS Safari can collapse its address bar; the toolbar is sticky and the tab bar fixed either way.
   return (
-    <div className="flex h-screen overflow-hidden bg-bg text-label">
+    <div className="flex min-h-screen bg-bg text-label lg:h-screen lg:overflow-hidden">
       <Sidebar
         appName={t("app.name")}
         collapsed={collapsed}
@@ -558,7 +545,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         <ToastContext.Provider value={setMessage}>
-          <main className="min-h-0 flex-1 overflow-y-auto">
+          <main className="flex-1 lg:min-h-0 lg:overflow-y-auto">
             <ToolbarFrame
               leading={
                 inBudget ? (
@@ -578,7 +565,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               }
               search={<SearchField {...search} />}
             >
-              <div className="space-y-4 px-6 pt-6 pb-10 max-lg:px-5 max-lg:pt-5 max-lg:pb-32">
+              <div className="space-y-4 px-5 pt-5 pb-10 max-lg:pb-32">
                 {error ? (
                   <Alert variant="destructive">
                     <AlertTitle>{t("error.title")}</AlertTitle>
@@ -612,7 +599,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   ) : inAdmin && !isAdmin ? (
                     <AdminForbidden t={t} />
                   ) : adminView === "users" ? (
-                    <AdminUsersPage currentUser={currentUser} users={users} updateUser={updateUser} t={t} />
+                    <AdminUsersPage
+                      currentUser={currentUser}
+                      users={users}
+                      updateUser={updateUser}
+                      createUser={createUser}
+                      t={t}
+                    />
                   ) : adminView === "services" ? (
                     <AdminServicesPage modules={modules} locale={locale} toggleModule={toggleModule} t={t} />
                   ) : adminView === "audit" ? (
@@ -644,7 +637,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </ToastContext.Provider>
 
         {/* Toasts sit at the bottom centre of the content area, above the phone tab bar. */}
-        <div role="status" className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-4 max-lg:bottom-[96px]">
+        <div role="status" className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-4 max-lg:fixed max-lg:bottom-[96px]">
           {message ? <Toast key={message} message={message} onDismiss={clearMessage} /> : null}
         </div>
       </div>

@@ -1,8 +1,10 @@
 # Monthly Budget
 
-This is the Budget. The module has four pages: Overview at `/budget`, plus
-Expenses, Planning, and Savings below it. The Overview is a widget board the
-user arranges; the global dashboard draws from the same widgets.
+This is the Budget. Overview at `/budget` is a widget board the user arranges;
+the global dashboard draws from the same widgets. Expenses and Savings have
+their own pages. Planning is split into Income & reserves, Fixed costs, Monthly
+subscriptions, Yearly subscriptions, Categories, and Merchants. First-time
+setup walks through income, costs, categories, and a review before starting.
 
 The older Budget screens were removed from the web client. Their tables and
 endpoints are untouched, and that data has never been converted into this
@@ -57,7 +59,9 @@ investing setup.
   cannot be saved.
 - Categories can be created, renamed, archived, and restored. A category with
   a current or pending reserve must have that reserve removed before archival.
-  Expense records retain their historical category names.
+  Expense records retain their historical category names. Categories have a
+  selectable color and icon; new categories automatically receive a palette
+  color if none is selected. These visual labels do not affect budget amounts.
 - Expenses default to the category reserve when one exists, otherwise to fun
   money. Savings and buffer are explicit alternative sources. A protected-source
   shortfall offers an explicit split with fun money.

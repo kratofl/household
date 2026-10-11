@@ -12,7 +12,7 @@ namespace Household.Api.Features.Identity;
 ///
 /// A provider account reaches a Household account in one of two ways: a signed-in user links it
 /// (start with <c>link: true</c>), or an unknown provider user signs in and is registered as
-/// pending for an admin to approve, like a password registration.
+/// pending for an admin to approve.
 /// </summary>
 public static class OidcEndpoints
 {
@@ -148,7 +148,7 @@ public static class OidcEndpoints
     }
 
     /// <summary>
-    /// An unknown provider user gets a pending account, like a password registration. It never takes
+    /// An unknown provider user gets a pending account. It never takes
     /// over an existing account with the same name or email: that one has to sign in and link.
     /// </summary>
     private static async Task<IResult> RegisterPending(

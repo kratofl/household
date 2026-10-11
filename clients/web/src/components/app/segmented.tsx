@@ -1,7 +1,7 @@
 "use client"
 
 // The segmented control from DESIGN.md: 2–5 closely related options, text only,
-// equal-width segments of at least 88px with 2px between them. The selected
+// equal-width 24px segments of at least 72px with 2px between them. The selected
 // segment itself carries segment-selected, shadow-segment and semibold; there is
 // no separate sliding thumb.
 // Shape follows its context. In content it is a flat desktop control: a
@@ -45,7 +45,7 @@ export function Segmented<T extends string>({
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
       className={cn(
-        "grid w-fit auto-cols-fr grid-flow-col gap-0.5 rounded-md bg-fill-strong p-1 in-[.toolbar-band]:rounded-full in-[.toolbar-band]:bg-toolbar-fill max-lg:w-full max-lg:rounded-full",
+        "grid w-fit auto-cols-fr grid-flow-col gap-0.5 rounded-md bg-fill-strong p-0.5 in-[.toolbar-band]:rounded-full in-[.toolbar-band]:bg-toolbar-fill max-lg:w-full max-lg:rounded-full max-lg:p-1",
         className,
       )}
     >
@@ -60,7 +60,7 @@ export function Segmented<T extends string>({
             tabIndex={selected || (index < 0 && position === 0) ? 0 : -1}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-8 min-w-[88px] rounded-sm px-3 in-[.toolbar-band]:rounded-full max-lg:rounded-full text-footnote font-medium whitespace-nowrap text-label transition-[background-color,box-shadow] duration-200 motion-reduce:transition-none max-lg:h-10 max-lg:min-w-0",
+              "h-6 min-w-[72px] rounded-sm px-2.5 in-[.toolbar-band]:rounded-full max-lg:rounded-full text-footnote font-medium whitespace-nowrap text-label transition-[background-color,box-shadow] duration-200 motion-reduce:transition-none max-lg:h-10 max-lg:min-w-0 max-lg:px-3",
               selected && "bg-segment-selected font-semibold shadow-(--shadow-segment)",
             )}
           >

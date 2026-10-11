@@ -79,7 +79,7 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
           delta={{ text: `${copy.plannedSavings}: ${view.contribution}`, tone: "neutral" }}
           action={
             spendable ? (
-              <Button size="sm" variant="secondary" className="h-auto min-h-7 max-w-full py-1.5 whitespace-normal" onClick={() => spendable({ kind: "add", source: "savings" })}>
+              <Button size="sm" variant="secondary" className="h-auto min-h-6 max-w-full py-1 whitespace-normal max-lg:py-1.5" onClick={() => spendable({ kind: "add", source: "savings" })}>
                 {copy.spendSavings}
               </Button>
             ) : null
@@ -110,9 +110,9 @@ export function budgetWidgets(context: BudgetWidgetContext): WidgetDefinition[] 
       h: 5,
       group,
       render: () => (
-        <Group title={copy.reserved} action={{ label: copy.openPlan, href: budgetViews.plan.route }}>
+        <Group title={copy.reserved} action={{ label: copy.categories, href: budgetViews.categories.route }}>
           {view.reserveCards.map((category) => {
-            const visual = categoryVisual(category.name)
+            const visual = categoryVisual(category.name, category)
             return (
               <Row
                 key={category.id}

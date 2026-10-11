@@ -11,7 +11,7 @@ The project is early-stage. Budget is the first complete feature; the other hous
 - **Home-server first:** designed for trusted local networks, NAS boxes, small VMs, and homelabs.
 - **One Compose stack:** web UI, .NET modular-monolith API, and PostgreSQL.
 - **Public-image installs:** normal installs use published container images, not local source builds.
-- **Admin-gated identity:** users can register, remain pending, and be approved by an admin.
+- **Admin-gated identity:** admins create accounts; sign-ins through an OIDC provider stay pending until an admin approves them.
 - **Modular foundation:** one backend process with feature-owned modules and Postgres schemas.
 - **Operational basics:** backups, stable and unstable release channels, optional observability, and documented configuration.
 
@@ -20,7 +20,7 @@ The project is early-stage. Budget is the first complete feature; the other hous
 | Area | Status |
 | --- | --- |
 | Install and operations | Docker Compose stack, env template, backup/restore and update docs. |
-| Identity | Login, refresh/logout, OIDC, pending users, admin user management (approve, block, admin role), password change. |
+| Identity | Login, refresh/logout, OIDC, pending users, admin user management (create, approve, block, admin role), password change. |
 | Modules | Enabled/active module toggles drive navigation visibility. |
 | Budget | Monthly plan, append-only ledger with corrections and voids, recurring income and commitments, savings goals, investments, wishlist, reports, and reviewed CSV import/export. |
 | Web UI | Next.js App Router UI in German and English, desktop and mobile, with a local-network backend proxy. |

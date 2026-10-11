@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 // Inline banner for persistent page-level states: a -100 tint with -900 text and
 // radius-md. Short-lived confirmations are toasts, not banners.
 const alertVariants = cva(
-  "grid w-full gap-0.5 rounded-md px-4 py-3 text-left text-footnote",
+  "grid w-full gap-0.5 rounded-md px-3 py-2 text-left text-footnote max-lg:px-4 max-lg:py-3",
   {
     variants: {
       variant: {

@@ -376,9 +376,9 @@ export function WidgetBoard({
                 onPointerDown={editing && !widget.repeatable ? (event) => startMove(event, item) : undefined}
                 className={cn(
                   "relative min-w-0",
-                  editing && "rounded-xl ring-1 ring-brand-500/50",
+                  editing && "rounded-lg ring-1 ring-brand-500/50",
                   editing && !compact && !widget.repeatable && "cursor-grab active:cursor-grabbing",
-                  moving && "rounded-xl border-2 border-dashed border-brand-500 bg-brand-500/10 ring-0",
+                  moving && "rounded-lg border-2 border-dashed border-brand-500 bg-brand-500/10 ring-0",
                 )}
               >
                 {editing ? (
@@ -529,7 +529,7 @@ function WidgetTray({
   return createPortal(
     <aside
       aria-label={t("widgets.add")}
-      className="glass fixed inset-x-2 bottom-24 z-30 flex max-h-[44vh] flex-col rounded-xl animate-in fade-in-0 slide-in-from-bottom-4 duration-200 motion-reduce:animate-none lg:inset-x-auto lg:right-3 lg:bottom-3 lg:top-[76px] lg:max-h-none lg:w-[272px] lg:slide-in-from-bottom-0 lg:slide-in-from-right-4"
+      className="glass fixed inset-x-2 bottom-24 z-30 flex max-h-[44vh] flex-col rounded-lg animate-in fade-in-0 slide-in-from-bottom-4 duration-200 motion-reduce:animate-none lg:inset-x-auto lg:right-3 lg:bottom-3 lg:top-[76px] lg:max-h-none lg:w-[272px] lg:slide-in-from-bottom-0 lg:slide-in-from-right-4"
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <IconLayoutGrid className="size-[18px] shrink-0 text-brand-500" />

@@ -84,7 +84,7 @@ export function MerchantDirectory({
       ) : null}
 
       {shown.map((merchant) => (
-        <div key={merchant.id} className={cn("flex min-h-12 flex-wrap items-center gap-3 px-4 py-2", merchant.archived && "text-label-secondary")}>
+        <div key={merchant.id} className={cn("flex min-h-9 flex-wrap items-center gap-3 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2", merchant.archived && "text-label-secondary")}>
           <MerchantTile merchant={merchant} />
           <span className="min-w-0 flex-1 truncate">{merchant.name}</span>
           {merchant.catalog ? <Badge tone="blue">{copy.published}</Badge> : null}

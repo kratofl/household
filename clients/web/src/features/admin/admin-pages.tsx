@@ -1,17 +1,20 @@
 "use client"
 
-import { IconRefresh } from "@tabler/icons-react"
+import { useState } from "react"
+import { IconRefresh, IconUserPlus } from "@tabler/icons-react"
 import type { Locale, Translator } from "@/lib/i18n"
 import type { CurrentUser } from "@/lib/session"
 import { StatusDot } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Field } from "@/components/app/field"
 import { SettingsBlock, SettingsRow, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
 import { ToolbarContent } from "@/components/app/toolbar"
 import { Switch } from "@/components/ui/switch"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
 
-import type { AuditEvent, UserChange } from "@/features/admin/types"
+import type { AuditEvent, NewUser, UserChange } from "@/features/admin/types"
 
 // The admin pages, one per sidebar entry under Admin. The app shell renders the one for the
 // current route and owns their data; these only render it and raise intent.
@@ -34,15 +37,18 @@ export function AdminForbidden({ t }: { t: Translator }) {
 const statusDot = { pending: "yellow", active: "green", blocked: "red" } as const
 
 /**
- * Every account of the household. Registrations waiting for approval get their own list on top;
- * the admin's own account has no actions, so nobody locks themselves out.
+ * Every account of the household. Provider sign-ins waiting for approval get their own list on top;
+ * the admin's own account has no actions, so nobody locks themselves out. New accounts are created
+ * at the bottom; `createUser` resolves true when the account exists, which clears the form.
  */
 export function AdminUsersPage(props: {
   currentUser: CurrentUser
   users: CurrentUser[]
   updateUser: (user: CurrentUser, change: UserChange) => Promise<void>
+  createUser: (user: NewUser) => Promise<boolean>
   t: Translator
 }) {
+  const [draft, setDraft] = useState<NewUser>({ name: "", email: "", password: "" })
   const pending = props.users.filter((user) => user.status === "pending")
   const accounts = props.users.filter((user) => user.status !== "pending")
   return (
@@ -87,6 +93,46 @@ export function AdminUsersPage(props: {
             </UserRow>
           ),
         )}
+      </SettingsSection>
+
+      <SettingsSection title={props.t("users.createTitle")} description={props.t("users.createDescription")}>
+        <SettingsBlock>
+          <form
+            className="grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end"
+            onSubmit={async (event) => {
+              event.preventDefault()
+              if (await props.createUser(draft)) setDraft({ name: "", email: "", password: "" })
+            }}
+          >
+            <Field label={props.t("auth.username")}>
+              <Input
+                autoComplete="off"
+                value={draft.name}
+                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              />
+            </Field>
+            <Field label={props.t("auth.email")}>
+              <Input
+                type="email"
+                autoComplete="off"
+                value={draft.email}
+                onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+              />
+            </Field>
+            <Field label={props.t("auth.password")}>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={draft.password}
+                onChange={(event) => setDraft({ ...draft, password: event.target.value })}
+              />
+            </Field>
+            <Button type="submit">
+              <IconUserPlus />
+              {props.t("users.create")}
+            </Button>
+          </form>
+        </SettingsBlock>
       </SettingsSection>
     </SettingsSurface>
   )
@@ -159,7 +205,7 @@ export function AdminAuditPage(props: {
           <SettingsBlock className="text-label-secondary">{props.t("audit.empty")}</SettingsBlock>
         ) : (
           props.auditEvents.map((event) => (
-            <div key={event.id} className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
+            <div key={event.id} className="flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2.5">
               <div className="min-w-0">
                 <p className="font-medium">{event.action}</p>
                 <p className="text-footnote text-label-secondary">

@@ -1,14 +1,15 @@
 "use client"
 
 // The frosted toolbar: one uniform band across the top of the content area,
-// 64px tall, sticky, with content scrolling underneath. The leading group is the
-// page title (title-2), the trailing group holds the page's icon actions and,
-// last, the search. The shell renders the band; pages fill it with PageHeader,
+// 48px tall (64px on phones), sticky, with content scrolling underneath. The leading group is the
+// page title (title-2), the trailing group holds the page's icon actions, the
+// search and, last, the page's one primary action. The shell renders the band; pages fill it with PageHeader,
 // which portals the title and actions into the slots below, so a page declares
 // its toolbar where it renders and its handlers stay live.
 //
-// Rules from DESIGN.md: icons over text, borderless icon actions in one pill
-// group, a text-labelled action stands apart, nothing tinted or orange in here.
+// Rules from DESIGN.md: icons over text, borderless icon actions in one
+// group, a text-labelled action stands apart; the primary action is the only
+// orange control in here.
 
 import { createContext, useContext, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
@@ -31,7 +32,7 @@ export function ToolbarFrame({
   const [actions, setActions] = useState<HTMLElement | null>(null)
   return (
     <ToolbarSlots.Provider value={{ title, actions }}>
-      <header className="toolbar-band sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 px-6 max-lg:px-5">
+      <header className="toolbar-band sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-5 max-lg:h-16">
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <div ref={setTitle} className="min-w-0" />
           {leading}
@@ -55,9 +56,9 @@ export function ToolbarContent({ title, actions }: { title: string; actions?: Re
   )
 }
 
-/** The pill that groups borderless icon actions. */
+/** The fill that groups borderless icon actions; a pill on phones. */
 export function ToolbarGroup({ children }: { children: ReactNode }) {
-  return <div className="flex items-center gap-0.5 rounded-full bg-toolbar-fill p-1 max-lg:p-0.5">{children}</div>
+  return <div className="flex items-center gap-0.5 rounded-md bg-toolbar-fill p-0.5 max-lg:rounded-full">{children}</div>
 }
 
 /**
@@ -84,7 +85,7 @@ export function ToolbarButton({
         title={label}
         onClick={onClick}
         disabled={disabled}
-        className="grid h-8 w-9 place-items-center rounded-full text-label transition-colors hover:bg-toolbar-fill disabled:text-label-disabled max-lg:size-11 [&_svg]:size-[18px]"
+        className="grid size-7 place-items-center rounded-sm text-label transition-colors hover:bg-toolbar-fill disabled:text-label-disabled max-lg:size-11 max-lg:rounded-full [&_svg]:size-4 max-lg:[&_svg]:size-[18px]"
       >
         {icon}
       </button>
@@ -95,7 +96,7 @@ export function ToolbarButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-10 rounded-full bg-toolbar-fill px-4 text-callout font-semibold whitespace-nowrap text-label transition-colors disabled:text-label-disabled max-lg:h-11"
+      className="h-7 rounded-sm bg-toolbar-fill px-3 text-callout font-semibold whitespace-nowrap text-label transition-colors disabled:text-label-disabled max-lg:h-11 max-lg:rounded-full max-lg:px-4"
     >
       {label}
     </button>

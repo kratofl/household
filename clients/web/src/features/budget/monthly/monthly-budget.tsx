@@ -8,7 +8,7 @@ import { boardElements } from "@/components/app/board-elements"
 import { KpiCard } from "@/components/app/kpi-card"
 import { PageHeader } from "@/components/app/page-header"
 import { useToast } from "@/components/app/toast"
-import { ToolbarButton, ToolbarContent, ToolbarGroup } from "@/components/app/toolbar"
+import { ToolbarContent, ToolbarGroup } from "@/components/app/toolbar"
 import { WidgetBoard } from "@/components/app/widget-board"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,7 @@ import { voidMonthlyExpense } from "./api"
 import { useMonthlyBudget } from "./controller"
 import { MonthlyExpenseEditor, type ExpenseIntent } from "./expense-editor"
 import { MonthlyExpenseHistory } from "./expense-history"
+import { FormFeedback } from "./form-feedback"
 import { MonthlyPlanEditor } from "./plan-editor"
 import { budgetOverviewWidgets, budgetWidgets } from "./widgets"
 
@@ -42,8 +43,10 @@ export function MonthlyBudget({
   const { resource, presentation: view, copy, busy, run } = controller
   // The editor is a dialog; remember what opened it so focus can go back there.
   const [intent, setIntent] = useState<{ expense: ExpenseIntent; trigger: HTMLElement | null } | null>(null)
-  const openExpense = (next: ExpenseIntent) =>
+  const openExpense = (next: ExpenseIntent) => {
+    controller.dismissError()
     setIntent({ expense: next, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null })
+  }
   if (resource.status === "loading") {
     return (
       <>
@@ -70,20 +73,21 @@ export function MonthlyBudget({
   // Without a plan there is nothing to show but the setup form.
   const page = !state.currentPlan ? "plan" : budgetViewFromPath(pathname)
   const allArchived = state.categories.every((category) => category.archived)
-  const title = page === "plan" ? null : page === "savings" ? copy.savings : page === "expenses" ? copy.expenses : copy.overview
+  const planning = page !== "overview" && page !== "expenses" && page !== "savings"
+  const title = planning ? null : page === "savings" ? copy.savings : page === "expenses" ? copy.expenses : copy.overview
 
   const notices = (
     <>
-      {page !== "plan" && allArchived ? (
+      {!planning && allArchived ? (
         <p className="text-label-secondary">
           {copy.emptyCategories}{" "}
-          <Link className="font-medium text-link hover:underline" href={budgetViews.plan.route}>
-            {copy.plan}
+          <Link className="font-medium text-link hover:underline" href={budgetViews.categories.route}>
+            {copy.categories}
           </Link>
         </p>
       ) : null}
 
-      {controller.error ? <Alert variant="destructive"><AlertDescription>{controller.error}</AlertDescription></Alert> : null}
+      {!planning ? <FormFeedback error={intent ? null : controller.error} /> : null}
       {(state.summary?.fundingShortfallCents ?? 0) > 0 ? (
         <Alert variant="destructive">
           <AlertDescription>
@@ -95,7 +99,7 @@ export function MonthlyBudget({
   )
 
   // The toolbar content and the notices under it. The overview hands this to its
-  // widget board, so Customize sits in the toolbar's icon group with Add expense.
+  // widget board, so Customize sits in the toolbar while Add expense stays prominent.
   // The period picker sits in the toolbar; phones have no room there, so it moves
   // next to the period line instead.
   const periodPicker = (className: string) => (
@@ -126,13 +130,15 @@ export function MonthlyBudget({
           actions={
             <>
               {periodPicker("w-40 max-sm:hidden")}
-              <ToolbarGroup>
-                {customize}
-                <ToolbarButton icon={<IconPlus />} label={copy.addExpense} disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })} />
-              </ToolbarGroup>
+              {customize ? <ToolbarGroup>{customize}</ToolbarGroup> : null}
             </>
           }
         />
+      ) : null}
+      {title && page !== "savings" ? (
+        <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })}>
+          <IconPlus />{copy.addExpense}
+        </Button>
       ) : null}
       {notices}
     </>
@@ -142,9 +148,9 @@ export function MonthlyBudget({
     <div className="space-y-4">
       {page === "overview" ? null : top()}
 
-      {page === "plan" ? (
+      {planning ? (
         <MonthlyPlanEditor key={state.revision} state={state} accessToken={accessToken} locale={locale} busy={busy}
-          isAdmin={isAdmin} merchants={controller.merchants} saveMerchant={controller.saveMerchant} run={run} />
+          section={page} serverError={controller.error} isAdmin={isAdmin} merchants={controller.merchants} saveMerchant={controller.saveMerchant} run={run} />
       ) : null}
 
       {page === "overview" ? (
@@ -196,7 +202,7 @@ export function MonthlyBudget({
           merchants={controller.merchants}
           serverError={controller.error}
           run={run}
-          close={() => setIntent(null)}
+          close={() => { setIntent(null); controller.dismissError() }}
           restoreFocus={() => intent.trigger?.focus()}
         />
       ) : null}

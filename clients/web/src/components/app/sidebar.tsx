@@ -1,10 +1,10 @@
 "use client"
 
-// Navigation. On desktop a 256px sidebar runs edge to edge down the left of the
+// Navigation. On desktop a 224px sidebar runs edge to edge down the left of the
 // window on sidebar-bg with a separator on its right: brand and collapse button
 // in the top row, destinations under caption section headers, the profile at
-// the bottom. Icons are always brand-500 and text always label; the active row
-// sits on fill-strong in semibold. Collapsing narrows it to an icon rail and
+// the bottom. Icons are label-secondary and text label; the active row sits on
+// fill-strong in semibold with its icon in brand-500. Collapsing narrows it to an icon rail and
 // changes nothing else. Phones get a glass tab bar that is navigation only, with
 // the search as a separate tab beside it.
 
@@ -12,6 +12,9 @@ import Link from "next/link"
 import { useCallback, useEffect, useState, type ReactNode } from "react"
 import {
   IconCalendar,
+  IconBuildingStore,
+  IconTag,
+  IconRepeat,
   IconChartBar,
   IconCheck,
   IconChefHat,
@@ -98,14 +101,14 @@ export function Sidebar({
       data-collapsed={collapsed}
       className={cn(
         "hidden h-full shrink-0 flex-col border-r border-separator bg-sidebar transition-[width] duration-200 ease-out motion-reduce:transition-none lg:flex",
-        collapsed ? "w-16" : "w-64",
+        collapsed ? "w-14" : "w-56",
       )}
     >
-      <div className={cn("flex h-16 shrink-0 items-center gap-2.5", collapsed ? "justify-center" : "pr-3 pl-[22px]")}>
+      <div className={cn("flex h-12 shrink-0 items-center gap-2", collapsed ? "justify-center" : "pr-2 pl-4")}>
         {collapsed ? null : (
           <>
-            <HouseholdLogo className="size-7" />
-            <span className="min-w-0 truncate text-[15px] font-semibold">{appName}</span>
+            <HouseholdLogo className="size-6" />
+            <span className="min-w-0 truncate text-[14px] font-semibold">{appName}</span>
           </>
         )}
         <button
@@ -114,15 +117,15 @@ export function Sidebar({
           aria-label={toggleLabel}
           aria-expanded={!collapsed}
           title={toggleLabel}
-          className={cn("grid size-8 shrink-0 place-items-center rounded-sm text-label-secondary transition-colors hover:bg-fill hover:text-label", !collapsed && "ml-auto")}
+          className={cn("grid size-7 shrink-0 place-items-center rounded-sm text-label-secondary transition-colors hover:bg-fill hover:text-label", !collapsed && "ml-auto")}
         >
-          <IconLayoutSidebar className="size-[18px]" />
+          <IconLayoutSidebar className="size-4" />
         </button>
       </div>
-      <nav aria-label={navLabel} className="min-h-0 flex-1 space-y-0.5 overflow-x-hidden overflow-y-auto px-3 pb-3">
+      <nav aria-label={navLabel} className="min-h-0 flex-1 space-y-px overflow-x-hidden overflow-y-auto px-2 pb-2">
         {children}
       </nav>
-      <div className="shrink-0 border-t border-separator px-3 py-2">{footer}</div>
+      <div className="shrink-0 border-t border-separator p-2">{footer}</div>
     </aside>
   )
 }
@@ -130,12 +133,12 @@ export function Sidebar({
 /** A caption section header above a group of destinations. A gap while collapsed. */
 export function SidebarGroupLabel({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
   if (collapsed) return <div className="h-4" aria-hidden />
-  return <div className="truncate px-2.5 pt-3.5 pb-1.5 text-caption text-label-secondary first:pt-1">{children}</div>
+  return <div className="truncate px-2 pt-3 pb-1 text-caption text-label-secondary first:pt-1">{children}</div>
 }
 
 /** The row shape shared by links and the profile button. */
 export const sidebarRowClass =
-  "flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-left text-callout font-medium text-label transition-colors hover:bg-fill [&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-brand-500"
+  "flex h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-callout font-medium text-label transition-colors hover:bg-fill [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-label-secondary"
 
 /**
  * One active module in the sidebar. Modules with several pages become a section
@@ -182,6 +185,11 @@ const budgetViewIcons: Record<BudgetViewKey, typeof IconWallet> = {
   overview: IconWallet,
   expenses: IconReceipt,
   plan: IconChartBar,
+  fixed: IconReceipt,
+  monthly: IconRepeat,
+  yearly: IconCalendar,
+  categories: IconTag,
+  merchants: IconBuildingStore,
   savings: IconPigMoney,
 }
 
@@ -205,7 +213,7 @@ export function SidebarLink({
       aria-current={active ? "page" : undefined}
       title={collapsed ? label : undefined}
       aria-label={collapsed ? label : undefined}
-      className={cn(sidebarRowClass, collapsed && "justify-center px-0", active && "bg-fill-strong font-semibold hover:bg-fill-strong")}
+      className={cn(sidebarRowClass, collapsed && "justify-center px-0", active && "bg-fill-strong font-semibold hover:bg-fill-strong [&_svg]:text-brand-500")}
     >
       {icon}
       <span className={cn("min-w-0 truncate", collapsed && "hidden")}>{children}</span>

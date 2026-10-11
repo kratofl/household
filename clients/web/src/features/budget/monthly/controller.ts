@@ -5,7 +5,7 @@ import type { Locale } from "@/lib/i18n"
 import { createMerchant, loadMerchants, updateMerchant, type Merchant } from "../merchants"
 import { loadMonthlyBudget } from "./api"
 import { monthlyCopy, monthlyError } from "./copy"
-import type { MonthlyExpense, MonthlyState } from "./types"
+import type { MonthlyCategory, MonthlyExpense, MonthlyState } from "./types"
 
 export function parseMoney(value: string): number | null {
   const match = /^(\d{1,9})(?:[.,](\d{1,2}))?$/.exec(value.trim())
@@ -13,8 +13,8 @@ export function parseMoney(value: string): number | null {
   const cents = Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"))
   return cents <= 10_000_000_000 ? cents : null
 }
-export function moneyInput(cents: number): string {
-  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`
+export function moneyInput(cents: number, locale: Locale = "en"): string {
+  return `${Math.floor(cents / 100)}${locale === "de" ? "," : "."}${String(cents % 100).padStart(2, "0")}`
 }
 export function formatters(locale: Locale, currency: string) {
   const amount = new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-GB", { style: "currency", currency })
@@ -28,7 +28,7 @@ export type Formatters = ReturnType<typeof formatters>
 
 /** One expense prepared for a list row, merchant already looked up. */
 export type ExpenseRowModel = { expense: MonthlyExpense; voided: boolean; date: string; amount: string; sources: string
-  merchant: Merchant | null }
+  merchant: Merchant | null; category?: MonthlyCategory }
 
 /** Groups prepared rows by calendar day, newest first, with a signed day total (refunds count negative). */
 export function groupRowsByDay(rows: ExpenseRowModel[], fmt: Formatters) {
@@ -116,7 +116,7 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
       .filter(({ expense, voided }) => !voided && summary && expense.occurredOn >= summary.start && expense.occurredOn <= viewDate)
       .sort((a, b) => b.expense.occurredOn.localeCompare(a.expense.occurredOn))
       .slice(0, 5)
-      .map(({ expense, voided }) => ({ expense, voided, date: fmt.date(expense.occurredOn), amount: fmt.money(expense.amountCents),
+      .map(({ expense, voided }) => ({ expense, voided, category: state.categories.find(category => category.id === expense.categoryId), date: fmt.date(expense.occurredOn), amount: fmt.money(expense.amountCents),
         merchant: expense.merchantId ? merchantById.get(expense.merchantId) ?? null : null,
         sources: expense.funding.some(part => part.source !== "fun") ? expense.funding.map(part => part.source === "category" ? copy.categorySource : part.source === "savings" ? copy.savingsSource : part.source === "buffer" ? copy.bufferSource : copy.fun).join(" · ") : "" }))
     return { fmt, categories, reserveCards: categories.filter(category => category.reservedCents > 0),
@@ -128,6 +128,6 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
       contribution: fmt.money(state.summary?.savingsContributionCents ?? 0),
       deficit: fmt.money(state.summary?.deficitCarryoverCents ?? 0), shortfall: fmt.money(state.summary?.fundingShortfallCents ?? 0) }
   }, [resource, locale, selectedDate, copy, merchantById])
-  return { resource, presentation, copy, busy, error, run, selectedDate, setSelectedDate,
+  return { resource, presentation, copy, busy, error, run, selectedDate, setSelectedDate, dismissError: () => setError(null),
     merchants, merchantById, saveMerchant, retry: () => setReload(value => value + 1) }
 }

@@ -1,7 +1,7 @@
 "use client"
 
-// List building blocks: a flat surface card with an optional headline, rows of
-// 48px separated by hairlines, and the common row shapes. Tables and lists in
+// List building blocks: a soft surface card (separator border, shadow-e1) with
+// an optional headline, rows of 36px (48px on phones) separated by hairlines, and the common row shapes. Tables and lists in
 // the design system look like this.
 
 import Link from "next/link"
@@ -12,7 +12,7 @@ import { toneTint, type Tone } from "@/lib/tone"
 import { cn } from "@/lib/utils"
 
 /** The card behind a list. Header and rows are its children. */
-export const listCardClass = "overflow-hidden rounded-xl bg-surface"
+export const listCardClass = "overflow-hidden rounded-lg border border-separator bg-surface shadow-(--shadow-e1)"
 
 export function Group({
   title,
@@ -34,7 +34,7 @@ export function Group({
     <section className={className}>
       <div className={listCardClass}>
         {header ? (
-          <div className="flex min-h-12 items-center justify-between gap-3 px-4 pt-3 pb-2">
+          <div className="flex min-h-10 items-center justify-between gap-3 px-4 py-2 max-lg:min-h-12 max-lg:pt-3">
             {title ? <h2 className="text-headline">{title}</h2> : <span />}
             {action ? (
               "href" in action ? (
@@ -58,7 +58,7 @@ export function Group({
   )
 }
 
-const rowClass = "flex min-h-12 w-full items-center gap-3 px-4 py-2.5 text-left"
+const rowClass = "flex min-h-9 w-full items-center gap-3 px-4 py-1.5 text-left max-lg:min-h-12 max-lg:py-2.5"
 
 export function Row({
   children,
@@ -93,7 +93,7 @@ export function Row({
 /** Label left, control right; the form-row shape of settings and editors. */
 export function FormRow({ label, htmlFor, hint, children }: { label: string; htmlFor?: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2.5">
+    <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2.5">
       <label htmlFor={htmlFor} className="min-w-0">
         <span className="block">{label}</span>
         {hint ? <span className="block text-footnote text-label-secondary">{hint}</span> : null}
@@ -138,14 +138,14 @@ export function IconTile({
 }
 
 /**
- * The 6px meter: a fill track with the value in brand-500, the budget colour.
+ * The 6px meter: a meter-track (brand tint) with the value in brand-500.
  * The optional marker is a hairline, e.g. how far the period has run; `label`
  * explains the meter to screen readers and as a tooltip.
  */
 export function Meter({ fraction, marker, label, className }: { fraction: number; marker?: number; label?: string; className?: string }) {
   const width = Math.min(100, Math.max(0, fraction * 100))
   return (
-    <div role={label ? "img" : undefined} aria-label={label} title={label} className={cn("relative h-1.5 w-full rounded-full bg-fill", className)}>
+    <div role={label ? "img" : undefined} aria-label={label} title={label} className={cn("relative h-1.5 w-full rounded-full bg-meter-track", className)}>
       <div className="h-full rounded-full bg-brand-500" style={{ width: `${width}%` }} />
       {marker !== undefined ? (
         <div className="absolute -top-1 h-3.5 w-px bg-label" style={{ left: `${Math.min(100, Math.max(0, marker * 100))}%` }} aria-hidden />

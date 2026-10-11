@@ -9,10 +9,17 @@
   names the tokens; their values live here, with dark mode on the .dark class
   that next-themes sets.
 
-  Flat first, glass on chrome: content (cards, lists, inputs, buttons, sidebar)
-  is flat with no shadow. Only the toolbar band and floating layers (menus,
-  toasts, dialogs, the phone tab bar) are Liquid Glass. brand-500 is the only
-  brand colour; text on it is always on-brand.
+  Soft and flat: cards are surface with a separator border and the faint
+  shadow-e1 (none in dark); controls are flat with a border-control edge.
+  Floating layers lift by elevation (e2 sticky or dragged, e3 menus and
+  tooltips, e4 dialogs). Only the toolbar band and small floating chrome (menus,
+  toasts, notifications, the phone tab bar) are frosted glass, close to opaque.
+  brand-500 is the only brand colour; text on it is always on-brand.
+
+  Type and radii have two scales: the base values below are the phone's, and
+  from lg (1024px) the desktop block at the end of this section makes text and
+  corners smaller. Their @theme is not inline, so utilities read the variables
+  and follow the breakpoint.
 
   Tailwind's default palette, radii and text sizes are cleared on purpose, so a
   class that is not part of the system does not compile to anything.
@@ -57,11 +64,16 @@
 
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-floating: var(--surface-floating);
   --color-sidebar: var(--sidebar-bg);
   --color-fill: var(--fill);
   --color-fill-strong: var(--fill-strong);
   --color-separator: var(--separator);
   --color-border: var(--border);
+  --color-border-control: var(--border-control);
+  --color-meter-track: var(--meter-track);
+  --color-chart-muted: var(--chart-muted);
+  --color-chart-muted-strong: var(--chart-muted-strong);
   --color-label: var(--label);
   --color-label-secondary: var(--label-secondary);
   --color-label-disabled: var(--label-disabled);
@@ -72,7 +84,9 @@
   --color-segment-selected: var(--segment-selected);
   --color-focus-ring: var(--focus-ring);
   --color-toolbar-fill: var(--toolbar-fill);
+}
 
+@theme {
   --radius-*: initial;
   --radius-xs: 6px;
   --radius-sm: 8px;
@@ -80,8 +94,12 @@
   --radius-lg: 16px;
   --radius-xl: 18px;
 
-  /* Type styles. `text-kpi` is the 32px bold KPI number from the KpiCard spec. */
+  /* Type styles. `text-display` is a page's one hero number, `text-kpi` every other metric. */
   --text-*: initial;
+  --text-display: 40px;
+  --text-display--line-height: 44px;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.035em;
   --text-large-title: 34px;
   --text-large-title--line-height: 41px;
   --text-large-title--font-weight: 700;
@@ -115,6 +133,40 @@
   --text-caption--font-weight: 600;
 }
 
+/* Desktop scale from lg: dense web dashboard sizes. Phones keep the base values. */
+@media (width >= 64rem) {
+  :root {
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 14px;
+
+    --text-display: 52px;
+    --text-display--line-height: 56px;
+    --text-large-title: 24px;
+    --text-large-title--line-height: 30px;
+    --text-kpi: 22px;
+    --text-kpi--line-height: 28px;
+    --text-title-1: 22px;
+    --text-title-1--line-height: 28px;
+    --text-title-2: 17px;
+    --text-title-2--line-height: 22px;
+    --text-title-3: 15px;
+    --text-title-3--line-height: 20px;
+    --text-headline: 14px;
+    --text-headline--line-height: 20px;
+    --text-body: 13px;
+    --text-body--line-height: 18px;
+    --text-callout: 13px;
+    --text-callout--line-height: 18px;
+    --text-footnote: 12px;
+    --text-footnote--line-height: 16px;
+    --text-caption: 11px;
+    --text-caption--line-height: 14px;
+  }
+}
+
 :root {
   /* Brand + status scales (same in both themes) */
   --brand-100: #ffe9d9; --brand-300: #ffb27f; --brand-500: #ff6a00; --brand-700: #b34a00; --brand-900: #5c2600;
@@ -127,11 +179,18 @@
   /* Semantic */
   --bg: #f5f5f7;
   --surface: #ffffff;
+  --surface-floating: #ffffff;
   --sidebar-bg: #f5f5f7;
   --fill: #f0f0f2;
   --fill-strong: #e5e5ea;
   --separator: #e5e5ea;
   --border: #d2d2d7;
+  /* The edge of inputs, checkboxes and switches: ≥ 3:1 on surface and bg (WCAG 1.4.11). */
+  --border-control: #8a8a8e;
+  --meter-track: var(--brand-100);
+  /* Context series in charts: everything that is not the one highlighted series. */
+  --chart-muted: #c7c7cc;
+  --chart-muted-strong: #8e8e93;
   --label: #1d1d1f;
   --label-secondary: #6e6e73;
   --label-disabled: #aeaeb2;
@@ -142,30 +201,36 @@
   --segment-selected: #ffffff;
   --focus-ring: #b34a00;
 
-  /* Glass */
-  --glass-bg: rgba(255, 255, 255, 0.55);
-  --glass-border: rgba(0, 0, 0, 0.12);
-  --glass-highlight: rgba(255, 255, 255, 0.5);
-  --toolbar-bg: rgba(245, 245, 247, 0.72);
+  /* Glass: surface-floating at 85 %, a real edge, no specular highlight. */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --floating-border: rgba(0, 0, 0, 0.08);
+  --toolbar-bg: rgba(245, 245, 247, 0.85);
   /* Controls inside the frosted toolbar sit on this fill (DESIGN.md, Toolbar). */
   --toolbar-fill: rgba(0, 0, 0, 0.05);
-  --shadow-glass: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 16px 48px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --glass-blur: 14px;
   --shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.12);
-  --glass-blur: 22px;
-  --toolbar-blur: 20px;
-  /* Alpha of brand-500 for chart bars that are not highlighted. */
-  --track-tint: 0.25;
+
+  /* Elevation. e1 cards at rest, e2 sticky or dragged, e3 menus/popovers/tooltips/toasts, e4 dialogs. */
+  --shadow-e1: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --shadow-e2: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+  --shadow-e3: 0 2px 6px rgba(0, 0, 0, 0.06), 0 12px 32px -4px rgba(0, 0, 0, 0.14);
+  --shadow-e4: 0 8px 24px rgba(0, 0, 0, 0.08), 0 32px 64px -16px rgba(0, 0, 0, 0.28);
   color-scheme: light;
 }
 
 .dark {
-  --bg: #000000;
+  --bg: #0b0b0c;
   --surface: #1c1c1e;
-  --sidebar-bg: #161617;
+  --surface-floating: #262628;
+  --sidebar-bg: #141415;
   --fill: #2c2c2e;
   --fill-strong: #2c2c2e;
   --separator: #2c2c2e;
   --border: #3a3a3c;
+  --border-control: #737378;
+  --meter-track: var(--brand-900);
+  --chart-muted: #48484a;
+  --chart-muted-strong: #8e8e93;
   --label: #f5f5f7;
   --label-secondary: #98989d;
   --label-disabled: #636366;
@@ -175,14 +240,16 @@
   --danger-text: #ff7a8a;
   --segment-selected: #636366;
   --focus-ring: #ff9a4d;
-  --glass-bg: rgba(44, 44, 46, 0.55);
-  --glass-border: rgba(0, 0, 0, 0.6);
-  --glass-highlight: rgba(255, 255, 255, 0.14);
-  --toolbar-bg: rgba(18, 18, 20, 0.72);
+  --glass-bg: rgba(38, 38, 40, 0.85);
+  --floating-border: rgba(255, 255, 255, 0.1);
+  --toolbar-bg: rgba(11, 11, 12, 0.85);
   --toolbar-fill: rgba(255, 255, 255, 0.08);
-  --shadow-glass: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 16px 48px rgba(0, 0, 0, 0.5);
   --shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --track-tint: 0.32;
+  /* Dark relies on lighter surfaces; shadows only below floating layers. */
+  --shadow-e1: none;
+  --shadow-e2: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-e3: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-e4: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 24px 64px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
 
@@ -210,22 +277,29 @@
 
 @layer components {
   /*
-    Liquid Glass for floating layers: context menus, toasts, notifications,
-    popovers, dialogs and the phone tab bar. Never on content.
+    Frosted glass for small floating chrome: context menus, select lists,
+    popovers, toasts, notifications, the phone tab bar and the widget board's
+    edit controls. Never on content, never under numbers (tooltips are solid).
   */
   .glass {
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
     backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--shadow-glass);
+    border: 1px solid var(--floating-border);
+    box-shadow: var(--shadow-e3);
+  }
+
+  /* Solid floating layers: chart tooltips (e3) and dialogs or sheets (e4). */
+  .floating {
+    background: var(--surface-floating);
+    border: 1px solid var(--floating-border);
   }
 
   /* The one uniform frosted band across the top of the content area. */
   .toolbar-band {
     background: var(--toolbar-bg);
-    -webkit-backdrop-filter: blur(var(--toolbar-blur)) saturate(180%);
-    backdrop-filter: blur(var(--toolbar-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
     border-bottom: 1px solid var(--separator);
   }
 
@@ -245,17 +319,23 @@
 }
 
 /* Flat fallback: without backdrop-filter or with reduced transparency, glass
-   becomes surface + border and the toolbar a solid band. A complete variant. */
+   becomes the solid floating surface and the toolbar a solid band. A complete variant. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass { background: var(--surface); border-color: var(--border); box-shadow: none; }
+  .glass { background: var(--surface-floating); }
   .glass.toast { background: var(--label); border-color: transparent; color: var(--bg); }
   .toolbar-band { background: var(--bg); --toolbar-fill: var(--fill-strong); }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .glass { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--border); box-shadow: none; }
+  .glass { background: var(--surface-floating); -webkit-backdrop-filter: none; backdrop-filter: none; }
   /* The toast's flat variant is a solid inverse pill. */
   .glass.toast { background: var(--label); border-color: transparent; color: var(--bg); }
   .toolbar-band { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; --toolbar-fill: var(--fill-strong); }
+}
+
+/* High contrast: shadows vanish, so every floating layer keeps an opaque fill and a system-coloured edge. */
+@media (forced-colors: active) {
+  .glass, .floating { background: Canvas; -webkit-backdrop-filter: none; backdrop-filter: none; border-color: CanvasText; }
+  .toolbar-band { background: Canvas; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

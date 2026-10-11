@@ -57,6 +57,7 @@ export function MonthlyExpenseHistory({
       )
       .map(({ expense, voided }) => ({
         expense,
+        category: state.categories.find(category => category.id === expense.categoryId),
         voided,
         date: fmt.date(expense.occurredOn),
         amount: fmt.money(expense.amountCents),
@@ -64,7 +65,7 @@ export function MonthlyExpenseHistory({
         merchant: expense.merchantId ? merchantById.get(expense.merchantId) ?? null : null,
       }))
     return groupRowsByDay(rows, fmt)
-  }, [state.entries, state.currency, state.summary, through, savingsOnly, category, source, search, locale, copy, merchantById])
+  }, [state.categories, state.entries, state.currency, state.summary, through, savingsOnly, category, source, search, locale, copy, merchantById])
 
   return (
     <div className="space-y-5">
@@ -124,7 +125,7 @@ export function MonthlyExpenseHistory({
 
 /** One expense as a grouped-list row: icon tile, description, meta, amount. */
 export function ExpenseRow({ row, copy, showDate = false, children }: { row: ExpenseRowModel; copy: MonthlyCopy; showDate?: boolean; children?: React.ReactNode }) {
-  const visual = categoryVisual(row.expense.categoryName)
+  const visual = categoryVisual(row.expense.categoryName, row.category)
   const refund = row.expense.kind === "refund"
   return (
     <Row className="group/row flex-wrap">

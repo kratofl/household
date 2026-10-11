@@ -93,8 +93,8 @@ Register Household at the provider as a confidential client with the callback UR
 `<your Household URL>/auth/callback`, for example `https://household.example.com/auth/callback`.
 Every address you open Household under needs its own callback URL there.
 
-Signing in with an unknown provider account creates a `pending` user that an admin has to activate,
-like a password registration. To use the provider with an existing account, sign in with the password
+Signing in with an unknown provider account creates a `pending` user that an admin has to activate.
+To use the provider with an existing account, sign in with the password
 and link the provider under **Account**. A provider account never takes over an existing account by
 matching name or email.
 

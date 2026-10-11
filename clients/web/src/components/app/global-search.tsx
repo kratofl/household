@@ -97,7 +97,7 @@ function SearchBox({
 
   return (
     <div className={cn("relative", className)}>
-      <IconSearch className="pointer-events-none absolute top-1/2 left-3.5 size-[15px] -translate-y-1/2 text-label-secondary [stroke-width:2]" />
+      <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-label-secondary [stroke-width:2] max-lg:left-3.5 max-lg:size-[15px]" />
       <input
         ref={input}
         type="search"
@@ -133,12 +133,12 @@ function SearchBox({
           }
         }}
         className={cn(
-          "h-10 w-full rounded-full bg-fill pl-9 text-callout text-label placeholder:text-label-secondary in-[.toolbar-band]:bg-toolbar-fill max-lg:h-11 [&::-webkit-search-cancel-button]:hidden",
-          shortcut ? "pr-14" : "pr-4",
+          "h-7 w-full rounded-sm border border-border-control bg-surface pl-8 text-callout text-label placeholder:text-label-secondary max-lg:h-11 max-lg:rounded-full max-lg:border-0 max-lg:bg-fill max-lg:pl-9 [&::-webkit-search-cancel-button]:hidden",
+          shortcut ? "pr-12" : "pr-4",
         )}
       />
       {shortcut ? (
-        <kbd className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-surface px-2 py-0.5 font-sans text-caption font-medium text-label-secondary">
+        <kbd className="pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 rounded-xs border border-separator px-1 font-sans text-caption font-medium text-label-secondary">
           {isMac ? "⌘K" : "Ctrl K"}
         </kbd>
       ) : null}
@@ -171,11 +171,11 @@ function SearchBox({
                   onMouseEnter={() => setActive(index)}
                   onClick={() => go(result)}
                   className={cn(
-                    "flex h-[30px] cursor-default items-center gap-2 rounded-sm px-2.5 text-footnote font-medium max-lg:h-12 max-lg:rounded-full max-lg:px-4 max-lg:text-callout",
+                    "flex h-[26px] cursor-default items-center gap-2 rounded-sm px-2 text-footnote font-medium max-lg:h-12 max-lg:rounded-full max-lg:px-4 max-lg:text-callout",
                     highlighted ? "bg-brand-500 text-on-brand" : "text-label",
                   )}
                 >
-                  <Glyph className="size-4 shrink-0 [stroke-width:2]" />
+                  <Glyph className="size-3.5 shrink-0 [stroke-width:2] max-lg:size-4" />
                   <span className="min-w-0 flex-1 truncate">{result.label}</span>
                   {result.group ? (
                     <span className={cn("shrink-0 text-caption font-normal", highlighted ? "text-on-brand/75" : "text-label-secondary")}>
@@ -194,7 +194,7 @@ function SearchBox({
 
 /** The search field at the end of the desktop toolbar. */
 export function SearchField(props: SearchProps) {
-  return <SearchBox {...props} shortcut className="w-60 max-lg:hidden xl:w-72" />
+  return <SearchBox {...props} shortcut className="w-56 max-lg:hidden xl:w-64" />
 }
 
 /** The phone's search tab: a round glass button beside the tab bar that opens the field above it. */

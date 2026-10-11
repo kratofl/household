@@ -100,7 +100,51 @@ public static class IdentityEndpoints
     }
 
     /// <summary>
-    /// Lets an admin activate a registration, block or restore an account, and grant or take the admin
+    /// Lets an admin create an account. It is active right away with the user role; the admin hands
+    /// the initial password over and the user changes it under Account.
+    /// </summary>
+    private static async Task<IResult> CreateUser(
+        CreateUserRequest request,
+        HttpContext context,
+        IIdentityAccess identity,
+        IdentityDbContext database,
+        AuditWriter audit,
+        CancellationToken cancellationToken)
+    {
+        CurrentUser? admin = await identity.CurrentUserAsync(context, cancellationToken);
+        if (admin is null) return Unauthorized();
+        if (admin.Role != Roles.Admin) return Forbidden();
+        string name = request.Name?.Trim().ToLowerInvariant() ?? "";
+        string email = request.Email?.Trim().ToLowerInvariant() ?? "";
+        if (name.Length == 0 || email.Length == 0 || string.IsNullOrEmpty(request.Password))
+            return HttpResults.Problem(422, "Validation failed", "Name, email and password are required");
+
+        User user = new User
+        {
+            Name = name,
+            Email = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, 14),
+            Role = Roles.User,
+            Status = UserStatuses.Active,
+        };
+        database.Users.Add(user);
+        try
+        {
+            await database.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            return HttpResults.Problem(409, "User exists", "A user with this name or email already exists");
+        }
+        await audit.RecordAsync(context, admin, "create_user", "identity", "user", "success", new
+        {
+            userId = user.Id,
+        }, cancellationToken);
+        return Results.Json(user, statusCode: 201);
+    }
+
+    /// <summary>
+    /// Lets an admin activate a pending account, block or restore an account, and grant or take the admin
     /// role. Admins cannot change their own account, so the household never loses its last admin.
     /// </summary>
     private static async Task<IResult> UpdateUser(
@@ -133,34 +177,6 @@ public static class IdentityEndpoints
             role = user.Role,
         }, cancellationToken);
         return Results.Ok(user);
-    }
-
-    private static async Task<IResult> CreateUser(
-        CreateUserRequest request,
-        IdentityDbContext database,
-        CancellationToken cancellationToken)
-    {
-        string name = request.Name?.Trim().ToLowerInvariant() ?? "";
-        string email = request.Email?.Trim().ToLowerInvariant() ?? "";
-        if (name.Length == 0 || email.Length == 0 || string.IsNullOrEmpty(request.Password))
-            return HttpResults.Problem(422, "Validation failed", "Name, email and password are required");
-        database.Users.Add(new User
-        {
-            Name = name,
-            Email = email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, 14),
-            Role = Roles.User,
-            Status = UserStatuses.Pending,
-        });
-        try
-        {
-            await database.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            return HttpResults.Problem(400, "Invalid user", "User could not be created");
-        }
-        return Results.StatusCode(201);
     }
 
     private static async Task<IResult> Me(
@@ -273,8 +289,8 @@ public static class IdentityEndpoints
     private sealed record AuthorizeRequest(string? Username, string? Password);
     private sealed record RefreshRequest(string? RefreshToken);
     private sealed record LogoutRequest(string? RefreshToken);
-    private sealed record UpdateUserRequest(string? Status, string? Role);
     private sealed record CreateUserRequest(string? Name, string? Email, string? Password);
+    private sealed record UpdateUserRequest(string? Status, string? Role);
     private sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
     private sealed record UpdateMeRequest(string? Theme);
     private sealed record SetActiveModulesRequest(IReadOnlyList<Guid>? ModuleIds);

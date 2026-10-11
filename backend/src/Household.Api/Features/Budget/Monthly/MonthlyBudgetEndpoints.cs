@@ -9,7 +9,7 @@ namespace Household.Api.Features.Budget;
 // Past periods keep the plan version that produced them either way.
 public sealed record SaveMonthlyPlan(long Revision, MonthlyPlan Plan, long OpeningSavingsCents,
     string TimeZoneId, bool ApplyToCurrentPeriod = false);
-public sealed record SaveMonthlyCategory(string Name, bool Archived = false);
+public sealed record SaveMonthlyCategory(string Name, bool Archived = false, string? Color = null, string? Icon = null);
 public sealed record AddMonthlyExpense(string RequestKey, DateOnly OccurredOn, string Description,
     Guid CategoryId, long AmountCents, IReadOnlyList<MonthlyFunding>? Funding, Guid? CorrectsId = null)
 {
@@ -134,12 +134,19 @@ public static class MonthlyBudgetEndpoints
     {
         CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Results.Unauthorized();
-        if (!MonthlyBudgetValidation.Name(request.Name)) return Invalid();
+        if (!MonthlyBudgetValidation.Name(request.Name) || !MonthlyCategoryAppearance.Valid(request.Color, request.Icon)) return Invalid();
         MonthlyBudgetStore store = new(database, clock);
         await using IDbContextTransaction transaction = await store.LockAsync(user.Id, cancellationToken);
         if (await database.MonthlyCategories.AnyAsync(row => row.OwnerUserId == user.Id && row.Name == request.Name.Trim(), cancellationToken))
             throw new MonthlyBudgetConflict("category_exists");
-        MonthlyCategoryRow category = new() { Id = Guid.NewGuid(), OwnerUserId = user.Id, Name = request.Name.Trim() };
+        List<string> colors = await database.MonthlyCategories.Where(row => row.OwnerUserId == user.Id && !row.Archived)
+            .Select(row => row.Color).ToListAsync(cancellationToken);
+        MonthlyCategoryRow category = new()
+        {
+            Id = Guid.NewGuid(), OwnerUserId = user.Id, Name = request.Name.Trim(),
+            Color = request.Color ?? MonthlyCategoryAppearance.Colors.MinBy(color => colors.Count(used => used == color))!,
+            Icon = request.Icon ?? "tag",
+        };
         database.MonthlyCategories.Add(category);
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -151,7 +158,7 @@ public static class MonthlyBudgetEndpoints
     {
         CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Results.Unauthorized();
-        if (!MonthlyBudgetValidation.Name(request.Name)) return Invalid();
+        if (!MonthlyBudgetValidation.Name(request.Name) || !MonthlyCategoryAppearance.Valid(request.Color, request.Icon)) return Invalid();
         MonthlyBudgetStore store = new(database, clock);
         await using IDbContextTransaction transaction = await store.LockAsync(user.Id, cancellationToken);
         MonthlyCategoryRow? category = await database.MonthlyCategories.SingleOrDefaultAsync(
@@ -166,6 +173,8 @@ public static class MonthlyBudgetEndpoints
             throw new MonthlyBudgetConflict("category_reserved");
         category.Name = request.Name.Trim();
         category.Archived = request.Archived;
+        category.Color = request.Color ?? category.Color;
+        category.Icon = request.Icon ?? category.Icon;
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok(category);

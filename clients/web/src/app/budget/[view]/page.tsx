@@ -1,5 +1,5 @@
 // The Budget module's pages. /budget itself is served by the [section] route.
-const budgetViews = ["expenses", "plan", "savings"]
+const budgetViews = ["expenses", "plan", "fixed", "monthly", "yearly", "categories", "merchants", "savings"]
 
 export const dynamicParams = false
 
