@@ -2,17 +2,17 @@
 
 import Link from "next/link"
 import { useState, type ReactNode } from "react"
-import { IconPlus } from "@tabler/icons-react"
+import { IconPigMoney, IconPlus } from "@tabler/icons-react"
 
 import { boardElements } from "@/components/app/board-elements"
-import { KpiCard } from "@/components/app/kpi-card"
+import { MetricStrip } from "@/components/app/metric-strip"
 import { PageHeader } from "@/components/app/page-header"
+import { PeriodStepper } from "@/components/app/period-stepper"
 import { useToast } from "@/components/app/toast"
-import { ToolbarContent, ToolbarGroup } from "@/components/app/toolbar"
+import { ToolbarContent, ToolbarGroup, type ToolbarPrimaryAction } from "@/components/app/toolbar"
 import { WidgetBoard } from "@/components/app/widget-board"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import type { Locale, Translator } from "@/lib/i18n"
 import { budgetViewFromPath, budgetViews } from "@/lib/modules"
 import { uuid } from "@/lib/uuid"
@@ -25,6 +25,12 @@ import { FormFeedback } from "./form-feedback"
 import { MonthlyPlanEditor } from "./plan-editor"
 import { budgetOverviewWidgets, budgetWidgets } from "./widgets"
 
+/**
+ * The Budget hub: the overview board, the Expenses and Savings lists, and the plan
+ * pages, all on one controller. Overview, Expenses and Savings share the toolbar
+ * (title, period stepper, caption, primary action); the plan pages render their
+ * own header inside the plan editor.
+ */
 export function MonthlyBudget({
   accessToken,
   locale,
@@ -74,19 +80,26 @@ export function MonthlyBudget({
   const page = !state.currentPlan ? "plan" : budgetViewFromPath(pathname)
   const allArchived = state.categories.every((category) => category.archived)
   const planning = page !== "overview" && page !== "expenses" && page !== "savings"
-  const title = planning ? null : page === "savings" ? copy.savings : page === "expenses" ? copy.expenses : copy.overview
+  const title = page === "savings" ? copy.savings : page === "expenses" ? copy.expenses : copy.overview
+  const period = view.period
+  const primaryAction: ToolbarPrimaryAction =
+    page === "savings"
+      ? { label: copy.spendSavings, icon: <IconPigMoney />, onClick: () => openExpense({ kind: "add", source: "savings" }), disabled: busy || allArchived }
+      : { label: copy.addExpense, icon: <IconPlus />, onClick: () => openExpense({ kind: "add" }), disabled: busy || allArchived }
 
+  // Page-level states as banners at the top of the content.
   const notices = (
     <>
       {!planning && allArchived ? (
-        <p className="text-label-secondary">
-          {copy.emptyCategories}{" "}
-          <Link className="font-medium text-link hover:underline" href={budgetViews.categories.route}>
-            {copy.categories}
-          </Link>
-        </p>
+        <Alert variant="warning">
+          <AlertDescription>
+            {copy.emptyCategories}{" "}
+            <Link className="font-semibold underline underline-offset-2" href={budgetViews.categories.route}>
+              {copy.categories}
+            </Link>
+          </AlertDescription>
+        </Alert>
       ) : null}
-
       {!planning ? <FormFeedback error={intent ? null : controller.error} /> : null}
       {(state.summary?.fundingShortfallCents ?? 0) > 0 ? (
         <Alert variant="destructive">
@@ -98,55 +111,59 @@ export function MonthlyBudget({
     </>
   )
 
-  // The toolbar content and the notices under it. The overview hands this to its
-  // widget board, so Customize sits in the toolbar while Add expense stays prominent.
-  // The period picker sits in the toolbar; phones have no room there, so it moves
-  // next to the period line instead.
-  const periodPicker = (className: string) => (
-    <Input
-      type="date"
-      aria-label={copy.period}
-      className={className}
-      title={copy.period}
-      min={state.firstDate ?? undefined}
-      max={state.today}
-      value={controller.selectedDate || state.today}
-      onChange={(event) => {
-        if (event.target.value) controller.setSelectedDate(event.target.value)
-      }}
-    />
-  )
+  // The toolbar and the banners under it. The overview hands this to its widget
+  // board, which passes its Customize action for the toolbar's icon group.
   const top = (customize?: ReactNode) => (
     <>
-      {title ? (
-        <PageHeader
-          title={title}
-          subtitle={
-            <span className="flex flex-wrap items-center justify-between gap-3">
-              {view.period}
-              {periodPicker("w-44 sm:hidden")}
-            </span>
-          }
-          actions={
-            <>
-              {periodPicker("w-40 max-sm:hidden")}
-              {customize ? <ToolbarGroup>{customize}</ToolbarGroup> : null}
-            </>
-          }
-        />
-      ) : null}
-      {title && page !== "savings" ? (
-        <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add" })}>
-          <IconPlus />{copy.addExpense}
-        </Button>
-      ) : null}
+      <PageHeader
+        title={title}
+        scope={
+          period ? (
+            <PeriodStepper
+              label={period.label}
+              previousLabel={copy.previousPeriod}
+              nextLabel={copy.next}
+              previousDisabled={busy || !period.previous}
+              nextDisabled={busy || !period.next}
+              onPrevious={() => { if (period.previous) controller.setSelectedDate(period.previous) }}
+              onNext={() => { if (period.next) controller.setSelectedDate(period.next) }}
+            />
+          ) : undefined
+        }
+        caption={period?.caption}
+        actions={customize ? <ToolbarGroup>{customize}</ToolbarGroup> : undefined}
+        primaryAction={primaryAction}
+      />
       {notices}
     </>
   )
 
+  // A list page leads with its totals (DESIGN.md, List).
+  const metrics =
+    page === "savings" ? (
+      <MetricStrip
+        cells={[
+          { label: copy.totalSaved, value: view.savings, note: copy.savingsAllocation },
+          { label: copy.savedThisPeriod, value: view.contribution, note: copy.contribution },
+          { label: copy.paidFromSavings, value: view.totals.savingsSpent, note: view.totals.savingsCount },
+        ]}
+      />
+    ) : (
+      <MetricStrip
+        cells={[
+          { label: copy.spent, value: view.totals.spent, note: view.totals.fromFun },
+          { label: copy.remaining, value: view.fun, negative: (state.summary?.funRemainingCents ?? 0) < 0,
+            note: `${copy.starting} ${view.starting}`, meter: { fraction: view.usedFraction, marker: view.pace, label: view.totals.usedLabel } },
+          { label: copy.expenseCount, value: view.totals.count, note: view.totals.since },
+          { label: copy.totalSaved, value: view.savings, note: <><span className="font-semibold text-success-text">{view.contributionDelta}</span> {copy.thisPeriod}</> },
+        ]}
+      />
+    )
+
   return (
     <div className="space-y-4">
-      {page === "overview" ? null : top()}
+      {page === "expenses" || page === "savings" ? top() : null}
+      {planning ? notices : null}
 
       {planning ? (
         <MonthlyPlanEditor key={state.revision} state={state} accessToken={accessToken} locale={locale} busy={busy}
@@ -155,37 +172,24 @@ export function MonthlyBudget({
 
       {page === "overview" ? (
         <WidgetBoard
-          boardId="budget-overview"
+          boardId="budget-overview-v2"
           widgets={[...boardElements(t), ...budgetWidgets({ state, view, copy, locale, busy, openExpense })]}
-          defaultIds={budgetOverviewWidgets}
+          defaults={budgetOverviewWidgets}
           header={top}
           t={t}
-        />
-      ) : null}
-
-      {page === "savings" ? (
-        <KpiCard
-          className="max-w-md"
-          label={copy.totalSaved}
-          value={view.savings}
-          delta={{ text: `${copy.plannedSavings}: ${view.contribution}. ${copy.savingsNote}`, tone: "neutral" }}
-          action={
-            <Button disabled={busy || allArchived} onClick={() => openExpense({ kind: "add", source: "savings" })}>
-              {copy.spendSavings}
-            </Button>
-          }
         />
       ) : null}
 
       {page === "expenses" || page === "savings" ? (
         <MonthlyExpenseHistory
           state={state}
-          through={controller.selectedDate || state.today}
+          through={view.through}
           locale={locale}
           merchantById={controller.merchantById}
           savingsOnly={page === "savings"}
           busy={busy}
           open={openExpense}
+          metrics={metrics}
           voidEntry={(expense) => {
             if (window.confirm(copy.confirmVoid)) void run(() => voidMonthlyExpense(accessToken, expense.id, uuid()))
           }}

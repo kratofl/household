@@ -5,7 +5,7 @@
 export const MIN_COLUMNS = 12
 export const MAX_COLUMNS = 24
 export const ROW_HEIGHT = 44
-export const GRID_GAP = 12
+export const GRID_GAP = 16
 
 /** One widget on the board. `key` is the instance, `widget` points at the definition. */
 export type Placement = { key: string; widget: string; x: number; y: number; w: number; h: number; text?: string }
@@ -28,17 +28,15 @@ export function rowCount(items: Placement[], editing: boolean) {
   return Math.max(1, ...items.map((item) => item.y + item.h)) + (editing ? 2 : 0)
 }
 
-/** Stacks the default widgets full width, in the order the module listed them. */
-export function defaultLayout(widgets: WidgetSize[], defaultIds: string[]): Layout {
-  let y = 0
-  const items = defaultIds.flatMap((id) => {
-    const widget = widgets.find((candidate) => candidate.id === id)
-    if (!widget) return []
-    const placement: Placement = { key: widget.id, widget: widget.id, x: 0, y, w: widget.w, h: widget.h }
-    y += widget.h
-    return [placement]
-  })
-  return { columns: MIN_COLUMNS, items }
+/** Where a widget sits on a fresh board, in grid cells. Pages list these as their default arrangement. */
+export type WidgetPosition = { id: string; x: number; y: number; w: number; h: number }
+
+/** The board before the user changes anything; positions of widgets the page does not offer are skipped. */
+export function defaultLayout(widgets: WidgetSize[], defaults: WidgetPosition[]): Layout {
+  const items = defaults
+    .filter((position) => widgets.some((widget) => widget.id === position.id))
+    .map(({ id, x, y, w, h }): Placement => ({ key: id, widget: id, x, y, w, h }))
+  return { columns: neededColumns(items), items }
 }
 
 /**

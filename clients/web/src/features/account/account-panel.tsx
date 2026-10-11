@@ -30,8 +30,11 @@ export function AccountPanel(props: {
       <SettingsSection title={props.t("account.profileTitle")} description={props.t("account.profileDescription")}>
         <SettingsField label={props.t("auth.name")} value={props.currentUser.name} />
         <SettingsField label={props.t("auth.email")} value={props.currentUser.email} />
-        <SettingsField label={props.t("account.role")} value={props.currentUser.role} />
-        <SettingsField label={props.t("account.status")} value={props.currentUser.status} />
+        <SettingsField
+          label={props.t("account.role")}
+          value={props.t(props.currentUser.role === "admin" ? "users.roleAdmin" : "users.roleUser")}
+        />
+        <SettingsField label={props.t("account.status")} value={props.t(`users.status.${props.currentUser.status}`)} />
       </SettingsSection>
 
       <SettingsSection title={props.t("account.passwordTitle")} description={props.t("account.passwordDescription")}>

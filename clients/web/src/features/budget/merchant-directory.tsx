@@ -1,18 +1,26 @@
 "use client"
 
-// The merchant directory: add a shop, rename it, retire it. Only rows the signed-in user may
-// actually change are listed, so a normal user sees their own merchants and an admin also sees
-// the published ones. The shipped catalog stays selectable either way and is only counted.
+// The Merchants page (DESIGN.md, page type "List"): add a shop, rename it, retire it.
+// "Add merchant" is the toolbar's primary action and opens a sheet, rename reuses it,
+// and every merchant is one flat row in a single card. Only rows the signed-in user may
+// actually change are listed, so a normal user sees their own merchants and an admin
+// also sees the published ones. The shipped catalog stays selectable either way and is
+// only counted in the card's footer.
 
 import { useMemo, useState } from "react"
+import { IconDots, IconPlus } from "@tabler/icons-react"
 
-import { Block, Group } from "@/components/app/grouped"
+import { Field } from "@/components/app/field"
+import { listCardClass } from "@/components/app/grouped"
+import { PageHeader } from "@/components/app/page-header"
 import { SearchInput } from "@/components/app/search-input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
 import { MerchantTile } from "./merchant-tile"
@@ -22,6 +30,7 @@ export type MerchantDirectoryCopy = {
   merchants: string
   merchantName: string
   addMerchant: string
+  renameMerchant: string
   publishMerchant: string
   merchantsNote: string
   /** Follows the count, so it must read as a continuation: "65 merchants ship with…". */
@@ -32,9 +41,13 @@ export type MerchantDirectoryCopy = {
   restore: string
   archived: string
   cancel: string
-  search: string
+  merchantSearch: string
+  actions: string
   emptyMerchants: string
 }
+
+/** What the sheet edits: a new merchant, or the name of an existing one. */
+type Target = { kind: "new" } | { kind: "rename"; merchant: Merchant }
 
 export function MerchantDirectory({
   copy,
@@ -47,11 +60,10 @@ export function MerchantDirectory({
   merchants: Merchant[]
   isAdmin: boolean
   busy: boolean
-  save: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => void
+  /** Resolves true once saved, so the sheet can close. */
+  save: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<boolean>
 }) {
-  const [name, setName] = useState("")
-  const [editing, setEditing] = useState<Merchant | null>(null)
-  const [publish, setPublish] = useState(false)
+  const [target, setTarget] = useState<Target | null>(null)
   const [search, setSearch] = useState("")
 
   // A published merchant is everyone's, so only an admin gets it in the editable list.
@@ -65,64 +77,105 @@ export function MerchantDirectory({
   }, [editable, search])
   const catalogCount = merchants.filter((merchant) => merchant.catalog).length
 
-  const submit = () => {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    save(trimmed, editing ? { id: editing.id, archived: editing.archived } : { global: isAdmin && publish })
-    setName("")
-    setEditing(null)
-    setPublish(false)
-  }
-
   return (
-    <Group title={copy.merchants} footer={`${copy.merchantsNote} ${catalogCount} ${copy.catalogCount}`}>
-      {editable.length > 8 ? (
-        <Block>
-          <Label htmlFor="merchant-search" className="sr-only">{copy.search}</Label>
-          <SearchInput id="merchant-search" placeholder={copy.search} value={search} onChange={(event) => setSearch(event.target.value)} />
-        </Block>
+    <div className="space-y-4">
+      <PageHeader title={copy.merchants} primaryAction={{ label: copy.addMerchant, icon: <IconPlus />, onClick: () => setTarget({ kind: "new" }), disabled: busy }} />
+      <section className={listCardClass}>
+        <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 max-lg:min-h-12">
+          <h2 className="text-headline">{copy.merchants}</h2>
+          {editable.length > 8 ? (
+            <SearchInput className="w-full sm:w-56" aria-label={copy.merchantSearch} placeholder={copy.merchantSearch} value={search} onChange={(event) => setSearch(event.target.value)} />
+          ) : null}
+        </div>
+        <ul className="hairline-rows border-t border-separator">
+          {shown.length === 0 ? <li className="px-4 py-3 text-footnote text-label-secondary">{copy.emptyMerchants}</li> : null}
+          {shown.map((merchant) => (
+            <li key={merchant.id} className={cn("flex min-h-9 items-center gap-3 px-4 py-1 max-lg:min-h-12 max-lg:py-2", merchant.archived && "text-label-secondary")}>
+              <MerchantTile merchant={merchant} size={28} />
+              <span className="min-w-0 flex-1 truncate">{merchant.name}</span>
+              {merchant.catalog ? <Badge tone="blue">{copy.published}</Badge> : null}
+              {merchant.archived ? <Badge>{copy.archived}</Badge> : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" disabled={busy} aria-label={`${copy.actions}: ${merchant.name}`} title={copy.actions}>
+                    <IconDots />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setTarget({ kind: "rename", merchant })}>{copy.rename}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => void save(merchant.name, { id: merchant.id, archived: !merchant.archived })}>
+                    {merchant.archived ? copy.restore : copy.archive}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </li>
+          ))}
+        </ul>
+        <p className="border-t border-separator bg-fill px-4 py-2 text-footnote text-label-secondary">
+          {copy.merchantsNote} {catalogCount} {copy.catalogCount}
+        </p>
+      </section>
+      {target ? (
+        <MerchantSheet
+          key={target.kind === "rename" ? target.merchant.id : "new"}
+          target={target}
+          copy={copy}
+          isAdmin={isAdmin}
+          busy={busy}
+          close={() => setTarget(null)}
+          save={save}
+        />
       ) : null}
+    </div>
+  )
+}
 
-      {shown.map((merchant) => (
-        <div key={merchant.id} className={cn("flex min-h-9 flex-wrap items-center gap-3 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2", merchant.archived && "text-label-secondary")}>
-          <MerchantTile merchant={merchant} />
-          <span className="min-w-0 flex-1 truncate">{merchant.name}</span>
-          {merchant.catalog ? <Badge tone="blue">{copy.published}</Badge> : null}
-          {merchant.archived ? <Badge>{copy.archived}</Badge> : null}
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setEditing(merchant); setName(merchant.name) }}>
-            {copy.rename}
-          </Button>
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => save(merchant.name, { id: merchant.id, archived: !merchant.archived })}>
-            {merchant.archived ? copy.restore : copy.archive}
+/** The name form in a solid sheet: Cancel, title and Save on top; admins may publish a new merchant to everyone. */
+function MerchantSheet({ target, copy, isAdmin, busy, close, save }: {
+  target: Target
+  copy: MerchantDirectoryCopy
+  isAdmin: boolean
+  busy: boolean
+  close: () => void
+  save: (name: string, options?: { id?: string; archived?: boolean; global?: boolean }) => Promise<boolean>
+}) {
+  const [name, setName] = useState(target.kind === "rename" ? target.merchant.name : "")
+  const [publish, setPublish] = useState(false)
+  const formId = "merchant-form"
+  const title = target.kind === "rename" ? copy.renameMerchant : copy.addMerchant
+  return (
+    <Sheet open onOpenChange={(open) => { if (!open && !busy) close() }}>
+      <SheetContent>
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-separator px-4 max-lg:h-16">
+          <Button type="button" variant="secondary" disabled={busy} onClick={close}>{copy.cancel}</Button>
+          <SheetTitle className="truncate">{title}</SheetTitle>
+          <Button type="submit" form={formId} disabled={busy || !name.trim()}>
+            {target.kind === "rename" ? copy.rename : copy.addMerchant}
           </Button>
         </div>
-      ))}
-      {shown.length === 0 ? <Block className="text-label-secondary">{copy.emptyMerchants}</Block> : null}
-
-      <Block className="flex flex-wrap items-center gap-2">
-        <Label htmlFor="merchant-name" className="sr-only">{copy.merchantName}</Label>
-        <Input
-          id="merchant-name"
-          className="min-w-40 flex-1"
-          placeholder={copy.merchantName}
-          maxLength={120}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submit() } }}
-        />
-        {isAdmin && !editing ? (
-          <div className="flex items-center gap-2">
-            <Checkbox id="merchant-publish" checked={publish} onCheckedChange={(checked) => setPublish(checked === true)} />
-            <Label htmlFor="merchant-publish" className="text-callout font-normal">{copy.publishMerchant}</Label>
-          </div>
-        ) : null}
-        <Button variant="secondary" disabled={busy || !name.trim()} onClick={submit}>
-          {editing ? copy.rename : copy.addMerchant}
-        </Button>
-        {editing ? (
-          <Button variant="text" onClick={() => { setName(""); setEditing(null) }}>{copy.cancel}</Button>
-        ) : null}
-      </Block>
-    </Group>
+        <form
+          id={formId}
+          className="space-y-4 overflow-y-auto p-4"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            const trimmed = name.trim()
+            if (!trimmed) return
+            const options = target.kind === "rename" ? { id: target.merchant.id, archived: target.merchant.archived } : { global: isAdmin && publish }
+            if (await save(trimmed, options)) close()
+          }}
+        >
+          <SheetDescription>{copy.merchantsNote}</SheetDescription>
+          <Field label={copy.merchantName}>
+            <Input autoFocus autoComplete="off" maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
+          </Field>
+          {isAdmin && target.kind === "new" ? (
+            <div className="flex items-center gap-2">
+              <Checkbox id="merchant-publish" checked={publish} onCheckedChange={(checked) => setPublish(checked === true)} />
+              <Label htmlFor="merchant-publish" className="text-callout font-normal">{copy.publishMerchant}</Label>
+            </div>
+          ) : null}
+        </form>
+      </SheetContent>
+    </Sheet>
   )
 }

@@ -84,9 +84,9 @@ export function DashboardPage({
 
   return (
     <WidgetBoard
-      boardId="dashboard"
+      boardId="dashboard-v2"
       widgets={widgets}
-      defaultIds={budgetDashboardWidgets}
+      defaults={budgetDashboardWidgets}
       header={(customize) => <PageHeader title={t("dashboard.title")} actions={customize ? <ToolbarGroup>{customize}</ToolbarGroup> : null} />}
       t={t}
     />

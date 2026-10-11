@@ -120,7 +120,7 @@ export function MonthlyExpenseEditor(props: Props) {
           <fieldset disabled={props.busy} className="space-y-4">
             <FormFeedback error={editor.error || props.serverError} />
 
-            <div className="rounded-lg bg-surface px-4 py-5 text-center">
+            <div className={`${listCardClass} px-4 py-5 text-center`}>
               <Label htmlFor="expense-amount" className="sr-only">{props.intent.kind === "refund" ? copy.refundAmount : copy.amount}</Label>
               <input
                 autoFocus

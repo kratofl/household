@@ -444,8 +444,11 @@ export function PeriodTrendChart({
               const over = period.spent - period.budget
               const fill = period.running ? "fill-chart-muted-strong" : "fill-chart-muted"
               const overLabel = `+${formatMoney(over)}`
-              // The amount only where it fits beside the icon; it is always in the tooltip and table.
-              const showAmount = textWidth(overLabel) + 16 <= slot
+              // The amount only where it fits beside the icon, borrowing from neighbours that carry no
+              // label of their own; it is always in the tooltip and table.
+              const labelled = (other: TrendPeriod | undefined) => other !== undefined && (other.running || other.spent > other.budget)
+              const room = labelled(periods[index - 1]) || labelled(periods[index + 1]) ? slot : slot * 1.6
+              const showAmount = textWidth(overLabel) + 16 <= room
               const labelTop = y(period.spent) - 8
               return (
                 <g key={period.label}>
