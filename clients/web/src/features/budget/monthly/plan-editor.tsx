@@ -24,6 +24,7 @@ import {
 import { BreakdownChart } from "@/components/app/charts"
 import { FormSelect } from "@/components/app/form-select"
 import { FormSheet, type FormSheetResult } from "@/components/app/form-sheet"
+import { SearchableSelect } from "@/components/app/searchable-select"
 import { Field } from "@/components/app/field"
 import { FormRow, Group, IconTile, listCardClass, Row } from "@/components/app/grouped"
 import { MetricStrip, type MetricCell } from "@/components/app/metric-strip"
@@ -90,7 +91,8 @@ function usePlanDraft({ state, accessToken, locale, run }: Props, copy: MonthlyC
   const [savings, setSavings] = useState(moneyInput(base.savingsCents, locale))
   const [opening, setOpening] = useState(moneyInput(state.openingSavingsCents, locale))
   const [costs, setCosts] = useState<CostDraft[]>(() => base.costs.map(cost => ({ id: cost.id, name: cost.name,
-    kind: cost.kind, amount: moneyInput(cost.amountCents, locale), month: String(cost.dueMonth ?? 1), day: String(cost.dueDay ?? 1) })))
+    kind: cost.kind, amount: moneyInput(cost.amountCents, locale), month: String(cost.dueMonth ?? 1), day: String(cost.dueDay ?? 1),
+    merchantId: cost.merchantId ?? "", description: cost.description ?? "" })))
   const [reserves, setReserves] = useState<Record<string, string>>(() => Object.fromEntries(base.reserves.map(reserve => [reserve.categoryId, moneyInput(reserve.amountCents, locale)])))
   const [scope, setScope] = useState<"next" | "current">("next")
   const [error, setError] = useState<string | null>(null)
@@ -110,7 +112,8 @@ function usePlanDraft({ state, accessToken, locale, run }: Props, copy: MonthlyC
       const dueDay = cost.kind === "yearly" ? Number(cost.day) : null
       if (dueMonth !== null && (!Number.isInteger(dueMonth) || dueMonth < 1 || dueMonth > 12)) return null
       if (dueDay !== null && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31)) return null
-      parsedCosts.push({ id: cost.id, name: cost.name.trim(), amountCents, kind: cost.kind, dueMonth, dueDay })
+      parsedCosts.push({ id: cost.id, name: cost.name.trim(), amountCents, kind: cost.kind, dueMonth, dueDay,
+        merchantId: cost.merchantId || null, description: cost.description.trim() || null })
     }
     const parsedReserves: MonthlyPlan["reserves"] = []
     for (const category of state.categories) {
@@ -149,7 +152,7 @@ function usePlanDraft({ state, accessToken, locale, run }: Props, copy: MonthlyC
     updateCost: (id: string, update: Partial<CostDraft>) => setCosts(current => current.map(cost => cost.id === id ? { ...cost, ...update } : cost)),
     addCost: (kind: MonthlyCost["kind"]) => {
       const id = uuid()
-      setCosts(current => [...current, { id, name: "", amount: moneyInput(0, locale), kind, month: "1", day: "1" }])
+      setCosts(current => [...current, { id, name: "", amount: moneyInput(0, locale), kind, month: "1", day: "1", merchantId: "", description: "" }])
       setAdded(id)
     },
     removeCost: (id: string) => setCosts(current => current.filter(cost => cost.id !== id)),
@@ -336,7 +339,7 @@ function CostsPage(page: PageProps & { kind: MonthlyCost["kind"] }) {
       <MetricStrip cells={cells} />
       <section className={listCardClass}>
         <fieldset disabled={busy} className="hairline-rows">
-          <CostRows kind={kind} draft={draft} copy={copy} />
+          <CostRows kind={kind} draft={draft} copy={copy} merchants={page.merchants} />
         </fieldset>
         <PlanFooter {...page} />
       </section>
@@ -353,9 +356,18 @@ const costColumns = {
 /**
  * The editable rows of one cost kind under their column heads, an empty line when there
  * are none, and the add row last. Phones wrap a row and label the due fields inline.
+ * Subscriptions get a second line for the merchant and a description; picking a merchant
+ * for an unnamed row names it after the merchant.
  */
-function CostRows({ kind, draft, copy }: { kind: MonthlyCost["kind"]; draft: Draft; copy: MonthlyCopy }) {
+function CostRows({ kind, draft, copy, merchants }: { kind: MonthlyCost["kind"]; draft: Draft; copy: MonthlyCopy; merchants: Merchant[] }) {
   const rows = draft.costs.filter(cost => cost.kind === kind)
+  const subscription = kind !== "fixed"
+  const merchantOptions = (selected: string) => [{ value: "", label: copy.noMerchant },
+    ...merchants.filter(merchant => !merchant.archived || merchant.id === selected).map(merchant => ({ value: merchant.id, label: merchant.name }))]
+  const pickMerchant = (cost: CostDraft, merchantId: string) => {
+    const name = merchants.find(merchant => merchant.id === merchantId)?.name
+    draft.updateCost(cost.id, cost.name.trim() || !name ? { merchantId } : { merchantId, name })
+  }
   const months = Array.from({ length: 12 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) }))
   const columns = kind === "yearly" ? costColumns.yearly : costColumns.other
   return (
@@ -371,7 +383,7 @@ function CostRows({ kind, draft, copy }: { kind: MonthlyCost["kind"]; draft: Dra
       {rows.map(cost => (
         <div key={cost.id} className={cn("flex min-h-9 flex-wrap items-center gap-2 px-4 py-1 max-lg:min-h-12 max-lg:py-2", columns)}>
           <Label htmlFor={`name-${cost.id}`} className="sr-only">{copy.name}</Label>
-          <Input id={`name-${cost.id}`} className="min-w-40 flex-1" placeholder={copy.name} value={cost.name} maxLength={100} autoFocus={draft.added === cost.id}
+          <Input id={`name-${cost.id}`} className="min-w-0 flex-1" placeholder={copy.name} value={cost.name} maxLength={100} autoFocus={draft.added === cost.id}
             aria-invalid={!cost.name.trim() || undefined} onChange={event => draft.updateCost(cost.id, { name: event.target.value })} />
           {cost.kind === "yearly" ? (
             <>
@@ -389,6 +401,16 @@ function CostRows({ kind, draft, copy }: { kind: MonthlyCost["kind"]; draft: Dra
           <Button size="icon" variant="ghost" onClick={() => draft.removeCost(cost.id)} aria-label={`${copy.remove}: ${cost.name || copy.name}`} title={copy.remove}>
             <IconX />
           </Button>
+          {subscription ? (
+            <div className="flex w-full flex-wrap items-center gap-2 lg:col-span-full lg:pr-9">
+              <Label htmlFor={`merchant-${cost.id}`} className="sr-only">{copy.merchant}</Label>
+              <SearchableSelect id={`merchant-${cost.id}`} className="w-48 max-lg:flex-1" value={cost.merchantId} onValueChange={merchantId => pickMerchant(cost, merchantId)}
+                options={merchantOptions(cost.merchantId)} searchLabel={copy.merchantSearch} emptyLabel={copy.noResults} />
+              <Label htmlFor={`description-${cost.id}`} className="sr-only">{copy.description}</Label>
+              <Input id={`description-${cost.id}`} className="min-w-40 flex-1" placeholder={copy.description} value={cost.description} maxLength={200}
+                onChange={event => draft.updateCost(cost.id, { description: event.target.value })} />
+            </div>
+          ) : null}
         </div>
       ))}
       <Row onClick={() => draft.addCost(kind)}>
@@ -541,7 +563,7 @@ function PlanSetup(page: PageProps) {
           {step === 1 ? costKinds.map(kind => (
             <div key={kind} className="hairline-rows">
               <h3 className="bg-fill px-4 py-1.5 text-caption text-label-secondary">{kind === "fixed" ? copy.fixed : kind === "monthly" ? copy.monthly : copy.yearly}</h3>
-              <CostRows kind={kind} draft={draft} copy={copy} />
+              <CostRows kind={kind} draft={draft} copy={copy} merchants={page.merchants} />
             </div>
           )) : null}
           {step === 2 ? (

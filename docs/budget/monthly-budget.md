@@ -62,6 +62,8 @@ investing setup.
   Expense records retain their historical category names. Categories have a
   selectable color and icon; new categories automatically receive a palette
   color if none is selected. These visual labels do not affect budget amounts.
+- Subscriptions can name a merchant and carry a short description. Like
+  category colors, these are labels and never change an amount.
 - Expenses default to the category reserve when one exists, otherwise to fun
   money. Savings and buffer are explicit alternative sources. A protected-source
   shortfall offers an explicit split with fun money.

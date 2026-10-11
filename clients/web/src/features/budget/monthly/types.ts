@@ -5,6 +5,9 @@ export type MonthlyCost = {
   kind: "fixed" | "monthly" | "yearly"
   dueMonth: number | null
   dueDay: number | null
+  /** Who is paid, and a free note. Labels only; null when not set. */
+  merchantId: string | null
+  description: string | null
 }
 export type MonthlyPlan = {
   incomeCents: number
@@ -30,7 +33,7 @@ export type MonthlyExpense = {
   /** Where the money went. Null for expenses booked before merchants existed, or without one. */
   merchantId: string | null
 }
-export type CostDue = Pick<MonthlyCost, "id" | "name" | "kind" | "amountCents">
+export type CostDue = Pick<MonthlyCost, "id" | "name" | "kind" | "amountCents" | "merchantId" | "description">
 export type MonthlyForecast = { start: string; end: string; funCents: number; costs: CostDue[] }
 export type MonthlySummary = {
   start: string

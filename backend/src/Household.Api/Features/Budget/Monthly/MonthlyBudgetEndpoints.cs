@@ -45,6 +45,16 @@ public static class MonthlyBudgetEndpoints
 
     private static IResult Invalid(string code = "invalid_input") => HttpResults.Problem(422, "Validation failed", code);
 
+    // Every merchant a plan's costs name exists and is the user's own or shared, as for expenses.
+    private static async Task<bool> MerchantsVisible(BudgetDbContext database, Guid userId, MonthlyPlan plan, CancellationToken cancellationToken)
+    {
+        List<Guid> ids = plan.Costs.Select(cost => cost.MerchantId).OfType<Guid>().Distinct().ToList();
+        if (ids.Count == 0) return true;
+        int visible = await database.Merchants.CountAsync(
+            row => ids.Contains(row.Id) && (row.OwnerUserId == null || row.OwnerUserId == userId), cancellationToken);
+        return visible == ids.Count;
+    }
+
     private static async Task<IResult> Get(DateOnly? date, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider clock, CancellationToken cancellationToken)
     {
@@ -60,6 +70,7 @@ public static class MonthlyBudgetEndpoints
         if (user is null) return Results.Unauthorized();
         MonthlyBudgetState state = await new MonthlyBudgetStore(database, clock).StateAsync(user.Id, null, cancellationToken);
         if (!MonthlyBudgetValidation.Plan(request.Plan, state.Categories)) return Invalid();
+        if (!await MerchantsVisible(database, user.Id, request.Plan, cancellationToken)) return Invalid("invalid_merchant");
         DateOnly effective = EffectiveFrom(request, state);
         MonthlyPlanRow row = new() { EffectiveFrom = effective, PlanJson = MonthlyBudgetStore.Serialize(request.Plan) };
         return Results.Ok(MonthlyBudgetStore.Forecast([row], effective, state.StartDay));
@@ -76,6 +87,7 @@ public static class MonthlyBudgetEndpoints
         if (request.Revision != state.Revision) throw new MonthlyBudgetConflict("plan_changed");
         if (!MonthlyBudgetValidation.Plan(request.Plan, state.Categories) || !MonthlyBudgetValidation.Money(request.OpeningSavingsCents))
             return Invalid();
+        if (!await MerchantsVisible(database, user.Id, request.Plan, cancellationToken)) return Invalid("invalid_merchant");
         if (string.IsNullOrWhiteSpace(request.TimeZoneId) || !TimeZoneInfo.TryFindSystemTimeZoneById(request.TimeZoneId, out TimeZoneInfo? zone))
             return Invalid("invalid_timezone");
         if (state.CurrentPlan is not null && (request.OpeningSavingsCents != state.OpeningSavingsCents || request.TimeZoneId != state.TimeZoneId))

@@ -172,8 +172,9 @@ export function periodBreakdown(summary: MonthlySummary): PeriodBreakdown {
 
 // ---------- Plan: cost lists ----------
 
-/** The editable shape of a cost row; amounts stay text until the plan is saved. */
-export type CostDraft = { id: string; name: string; amount: string; kind: MonthlyCost["kind"]; month: string; day: string }
+/** The editable shape of a cost row; amounts stay text until the plan is saved. An empty merchant or description means none. */
+export type CostDraft = { id: string; name: string; amount: string; kind: MonthlyCost["kind"]; month: string; day: string
+  merchantId: string; description: string }
 
 /** How many costs of a kind the draft lists and what they add up to; unparseable amounts count as zero. */
 export function costTotal(costs: CostDraft[], kind: MonthlyCost["kind"], parse: (value: string) => number | null) {

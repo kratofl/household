@@ -5,6 +5,7 @@ public static class MonthlyBudgetValidation
     public const long MaximumCents = 10_000_000_000;
     public static bool Money(long amount) => amount >= 0 && amount <= MaximumCents;
     public static bool Name(string? name) => !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 100;
+    public static bool Description(string? description) => description is null || description.Length <= 200;
 
     public static bool Plan(MonthlyPlan? plan, IReadOnlyList<MonthlyCategoryRow> categories)
     {
@@ -12,7 +13,7 @@ public static class MonthlyBudgetValidation
             plan.Costs is null || plan.Reserves is null || plan.Costs.Count > 100 || plan.Reserves.Count > 100)
             return false;
         HashSet<Guid> categoryIds = categories.Where(category => !category.Archived).Select(category => category.Id).ToHashSet();
-        return plan.Costs.All(cost => cost is not null && cost.Id != Guid.Empty && Name(cost.Name) && Money(cost.AmountCents) &&
+        return plan.Costs.All(cost => cost is not null && cost.Id != Guid.Empty && Name(cost.Name) && Money(cost.AmountCents) && Description(cost.Description) &&
                 (cost.Kind is "fixed" or "monthly" ? cost.DueMonth is null && cost.DueDay is null :
                  cost.Kind == "yearly" && cost.DueMonth is >= 1 and <= 12 && cost.DueDay is >= 1 and <= 31)) &&
             plan.Costs.Select(cost => cost.Id).Distinct().Count() == plan.Costs.Count &&

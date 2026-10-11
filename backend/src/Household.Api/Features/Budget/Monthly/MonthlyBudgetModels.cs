@@ -1,6 +1,9 @@
 namespace Household.Api.Features.Budget;
 
-public sealed record MonthlyCost(Guid Id, string Name, long AmountCents, string Kind, int? DueMonth, int? DueDay);
+// MerchantId and Description label a cost (who is paid, a note); they never affect amounts.
+// Plan versions saved before they existed read them as null.
+public sealed record MonthlyCost(Guid Id, string Name, long AmountCents, string Kind, int? DueMonth, int? DueDay,
+    Guid? MerchantId = null, string? Description = null);
 public sealed record MonthlyReserve(Guid CategoryId, long AmountCents);
 public sealed record MonthlyPlan(long IncomeCents, long BufferCents, long SavingsCents,
     IReadOnlyList<MonthlyCost> Costs, IReadOnlyList<MonthlyReserve> Reserves);
@@ -15,7 +18,7 @@ public sealed record MonthlyExpense(Guid Id, DateOnly OccurredOn, string Descrip
     public Guid? MerchantId { get; init; }
 }
 public sealed record MonthlyAllowance(Guid CategoryId, long ReservedCents, long RemainingCents);
-public sealed record MonthlyCostDue(Guid Id, string Name, string Kind, long AmountCents);
+public sealed record MonthlyCostDue(Guid Id, string Name, string Kind, long AmountCents, Guid? MerchantId, string? Description);
 public sealed record MonthlyPeriodSummary(DateOnly Start, DateOnly End, long IncomeCents,
     long StartingFunCents, long FunRemainingCents, long SavingsBalanceCents, long BufferBalanceCents,
     long SavingsContributionCents, long DeficitCarryoverCents, long FundingShortfallCents,

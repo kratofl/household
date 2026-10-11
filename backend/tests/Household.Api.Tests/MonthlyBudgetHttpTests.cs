@@ -214,6 +214,31 @@ public sealed class MonthlyBudgetHttpTests(LegacyParityFixture fixture) : IClass
         Assert.Equal(untilApril, past.History);
     }
 
+    [Fact]
+    public async Task Subscriptions_name_a_merchant_and_a_description_but_only_merchants_the_user_can_see()
+    {
+        using HttpClient client = this.Fixture.Client;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.TimelineAccessToken);
+        using HttpResponseMessage cinemaResponse = await client.PostAsJsonAsync("/api/v1/budget/merchants", new SaveMerchant("Kinoabo Müller"));
+        MerchantView cinema = await Read<MerchantView>(cinemaResponse);
+        using HttpClient other = this.Fixture.Client;
+        other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.LedgerAccessToken);
+        using HttpResponseMessage foreignResponse = await other.PostAsJsonAsync("/api/v1/budget/merchants", new SaveMerchant("Fremdes Abo"));
+        MerchantView foreign = await Read<MerchantView>(foreignResponse);
+
+        MonthlyCost streaming = new(Guid.NewGuid(), "Streaming", 1399, "monthly", null, null, cinema.Id, "Familienabo");
+        MonthlyPlan plan = new(300000, 0, 0, [streaming], []);
+        using HttpResponseMessage rejected = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan",
+            new SaveMonthlyPlan(0, plan with { Costs = [streaming with { MerchantId = foreign.Id }] }, 0, "Europe/Berlin"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, rejected.StatusCode);
+
+        using HttpResponseMessage setup = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan", new SaveMonthlyPlan(0, plan, 0, "Europe/Berlin"));
+        MonthlyBudgetState state = await Read<MonthlyBudgetState>(setup);
+        Assert.Equal(streaming, Assert.Single(state.CurrentPlan?.Costs ?? []));
+        MonthlyCostDue due = Assert.Single(state.Summary?.Costs ?? []);
+        Assert.Equal((cinema.Id, "Familienabo"), (due.MerchantId, due.Description));
+    }
+
     private async Task<MonthlyBudgetState> State(HttpClient client)
     {
         using HttpResponseMessage response = await client.GetAsync("/api/v1/budget/monthly/");

@@ -8,7 +8,7 @@
 
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useMemo, useState, type ReactNode } from "react"
-import { IconDots } from "@tabler/icons-react"
+import { IconDots, IconReceipt, IconRepeat } from "@tabler/icons-react"
 
 import { DailyBarChart } from "@/components/app/charts"
 import { FormSelect } from "@/components/app/form-select"
@@ -121,7 +121,8 @@ export function MonthlyExpenseHistory({
         })
       : []
     const groups = groupByDay(rows, scope).map((group) => ({ ...group, label: fmt.day(group.date), total: fmt.money(group.totalCents) }))
-    return { groups, tags, chart, pots, costs: summary?.costs ?? [] }
+    const costs = (summary?.costs ?? []).map((cost) => ({ ...cost, merchant: cost.merchantId ? merchantById.get(cost.merchantId) ?? null : null }))
+    return { groups, tags, chart, pots, costs }
   }, [state, through, savingsOnly, scope, categoryId, search, locale, copy, fmt, merchantById, summary])
 
   const filtered = search.trim() !== "" || categoryId !== null || (!savingsOnly && selectedScope !== "all")
@@ -210,10 +211,12 @@ export function MonthlyExpenseHistory({
                 <Group title={copy.automaticCosts}>
                   {view.costs.map((cost) => (
                     <Row key={cost.id}>
+                      {cost.merchant ? <MerchantTile merchant={cost.merchant} size={28} /> : <IconTile icon={cost.kind === "fixed" ? IconReceipt : IconRepeat} tone="neutral" size={28} />}
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{cost.name}</p>
                         <p className="truncate text-footnote text-label-secondary">
                           {cost.kind === "fixed" ? copy.costFixed : cost.kind === "monthly" ? copy.costMonthly : copy.costYearly}
+                          {cost.description ? ` · ${cost.description}` : null}
                         </p>
                       </div>
                       <span className="tabular-nums">{fmt.money(cost.amountCents)}</span>

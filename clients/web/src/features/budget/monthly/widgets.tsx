@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import type { Locale } from "@/lib/i18n"
 import { budgetViews, moduleCatalog } from "@/lib/modules"
 
+import { MerchantTile } from "../merchant-tile"
 import { categoryVisual } from "./category-visuals"
 import type { UpcomingView, useMonthlyBudget } from "./controller"
 import type { MonthlyCopy } from "./copy"
@@ -186,13 +187,17 @@ function UpcomingRows({ upcoming, copy }: { upcoming: Extract<UpcomingView, { st
                 <span className="block text-headline font-bold">{row.date.day}</span>
                 <span className="block text-caption text-label-secondary uppercase">{row.date.weekday}</span>
               </span>
+            ) : row.merchant ? (
+              <MerchantTile merchant={row.merchant} size={26} />
             ) : (
               <IconTile icon={row.kind === "fixed" ? IconReceipt : IconRepeat} tone="neutral" size={26} />
             )}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium">{row.name}</span>
-            <span className="block truncate text-footnote text-label-secondary">{costKind(row.kind, copy)}</span>
+            <span className="block truncate text-footnote text-label-secondary">
+              {row.description ? `${costKind(row.kind, copy)} · ${row.description}` : costKind(row.kind, copy)}
+            </span>
           </span>
           <span className="font-semibold tabular-nums">{row.amount}</span>
         </Row>

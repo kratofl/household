@@ -11,7 +11,7 @@ public static class MonthlyBudgetCalculator
                     DateOnly due = new(year, month, Math.Min(day, DateTime.DaysInMonth(year, month)));
                     return due >= period.Start && due <= period.End;
                 }))
-            .Select(cost => new MonthlyCostDue(cost.Id, cost.Name, cost.Kind, cost.AmountCents)).ToArray();
+            .Select(cost => new MonthlyCostDue(cost.Id, cost.Name, cost.Kind, cost.AmountCents, cost.MerchantId, cost.Description)).ToArray();
 
     // The period containing asOf. Throws on an unfundable history, so writes call it to verify.
     public static MonthlyPeriodSummary Project(IReadOnlyList<MonthlyPlanVersion> versions,

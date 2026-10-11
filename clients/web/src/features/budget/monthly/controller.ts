@@ -162,7 +162,8 @@ const costOrder: Record<CostDue["kind"], number> = { yearly: 0, fixed: 1, monthl
 /** How many costs the overview lists before it folds the rest into one row. */
 const upcomingRows = 5
 
-type UpcomingRow = { id: string; name: string; kind: CostDue["kind"]; amount: string; date: { day: string; weekday: string } | null }
+type UpcomingRow = { id: string; name: string; kind: CostDue["kind"]; amount: string; date: { day: string; weekday: string } | null
+  merchant: Merchant | null; description: string | null }
 /** A closed period has nothing left to come; an open one lists its costs. */
 export type UpcomingView = { status: "closed" } | { status: "open"; rows: UpcomingRow[]; more: string | null; total: string }
 
@@ -174,12 +175,13 @@ export type UpcomingView = { status: "closed" } | { status: "open"; rows: Upcomi
  * no list: its costs are behind it, and `currentPlan` is today's plan, whose due
  * days need not be the ones that period used.
  */
-function upcomingView(state: MonthlyState, summary: MonthlySummary, fmt: Formatters, copy: MonthlyCopy): UpcomingView {
+function upcomingView(state: MonthlyState, summary: MonthlySummary, merchantById: Map<string, Merchant>, fmt: Formatters, copy: MonthlyCopy): UpcomingView {
   if (summary.end < state.today) return { status: "closed" }
   const rows = summary.costs.map(cost => {
     const planned = state.currentPlan?.costs.find(item => item.id === cost.id)
     const date = cost.kind === "yearly" && planned?.dueMonth && planned.dueDay ? dueDate(planned.dueMonth, planned.dueDay, summary.start, summary.end) : null
     return { id: cost.id, name: cost.name, kind: cost.kind, amountCents: cost.amountCents, amount: fmt.money(cost.amountCents), sortDate: date ?? "",
+      merchant: cost.merchantId ? merchantById.get(cost.merchantId) ?? null : null, description: cost.description,
       date: date ? { day: fmt.dayOnly(date), weekday: fmt.weekday(date) } : null }
   }).sort((a, b) => costOrder[a.kind] - costOrder[b.kind] || a.sortDate.localeCompare(b.sortDate) || b.amountCents - a.amountCents)
   const hidden = rows.length - upcomingRows
@@ -291,7 +293,7 @@ export function useMonthlyBudget(accessToken: string | undefined, locale: Locale
         savingsSpent: fmt.money(savingsSpentCents), savingsCount: countLabel(savingsCount) },
       period: summary ? periodView(state, summary, through, fmt, copy) : null,
       hero: summary ? heroView(state, summary, inPeriod.map(({ expense }) => expense), through, fmt, copy) : null,
-      upcoming: summary ? upcomingView(state, summary, fmt, copy) : null,
+      upcoming: summary ? upcomingView(state, summary, merchantById, fmt, copy) : null,
       pots: categories.filter(category => category.reservedCents > 0).map(category => {
         const usedCents = category.reservedCents - category.remainingCents
         const used = Math.min(1, Math.max(0, usedCents / category.reservedCents))
