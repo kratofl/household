@@ -162,7 +162,7 @@ No CSS variables; use these values. Component internals use `xs`–`xl`, layout
 ## Layout
 
 Web: a 224px sidebar (edge-to-edge, `sidebar-bg`) beside the content, with the
-48px frosted toolbar on top (64px on phones). Content has a 20px gutter and a
+48px frosted toolbar on top (64px on phones, plus a row for the scope control). Content has a 20px gutter and a
 16px gap between cards.
 
 - **Everything belongs somewhere.** Page actions, the period or scope control
@@ -220,6 +220,10 @@ borderless buttons with 16px icons.
   control) and its caption in `footnote` `label-secondary` · trailing =
   borderless icon actions (Filter, Teilen, Mitteilungen) in one group, the search
   field, then the page's primary action last.
+- When the band runs out of room the caption truncates first, then the title;
+  controls never shrink.
+- Phones: the caption is hidden and the scope control moves to a second row of
+  the band, full width; the band grows by that row.
 - The primary action is the page's one Primär M button (verb + 16px icon). It
   is the only orange control in the toolbar; on phones it becomes a 44px icon
   button.
@@ -243,6 +247,18 @@ Quartal). Lives in the toolbar's leading group, or in content as a filter row.
 - Renders as `radiogroup` with `radio` segments.
 - Not for navigation (that is the sidebar / tab bar); never mixes icons and text,
   or actions and selections.
+
+### PeriodStepper
+
+The toolbar's scope control for time: `‹ Oktober 2026 ›`. Steps one period back
+or forward; periods never use a date input.
+
+- 28px, `surface`, 1px `border-control`, `radius-sm`; two 26px chevron buttons
+  (16px icons in `label-secondary`, `fill` on hover) set off by `separator`
+  hairlines, around a fixed-min-width label in `callout` semibold.
+- Each chevron has an `aria-label` („Vorherige Periode“); a step that does not
+  exist is disabled (`label-disabled`). The label is announced when it changes.
+- Phones: a 44px pill across the toolbar's scope row, 44px chevrons.
 
 ### Select
 
@@ -289,8 +305,12 @@ switch on the right. Renders `role="switch"` with `aria-checked`.
   `brand-500`; never colour the active row or its text orange.
 - Active = `fill-strong` background + semibold + `brand-500` icon +
   `aria-current="page"`.
-- Section headers `caption` in `label-secondary`. Favourites use a 10px
-  status-coloured dot instead of an icon.
+- Section headers `caption` in `label-secondary`. Top-level destinations
+  (the dashboard, single-page areas) sit first, without a header; a header only
+  heads a group of several items.
+- A long section splits into clusters of related items by an 8px gap, never by
+  sub-headers. The collapsed rail keeps the gaps.
+- Favourites use a 10px status-coloured dot instead of an icon.
 
 ### ContextMenu
 
@@ -354,7 +374,8 @@ A metric is a label, a number, and a delta line or a meter.
   `separator` hairlines, never a row of separate cards. Each cell: a 26px icon
   tile + label `callout` 500 in `label`, value `kpi`, a `footnote` line in
   `label-secondary`, then an optional meter. Up to five cells on desktop; phones
-  wrap to two columns.
+  wrap to two columns with values at `title-2` size, and an odd last cell spans
+  both.
 - **KpiCard:** one metric on its own soft card (`surface`, `separator` border,
   `shadow-e1`, `radius-lg`), padding 12px 16px (18px 20px on phones). Only where
   the metric stands alone. Label `footnote` `label-secondary`, value `kpi`,
@@ -375,10 +396,15 @@ A metric is a label, a number, and a delta line or a meter.
 - Lines 2px with round joins; a 10 % area fill under a single line at most.
   Bars ≤ 24px wide with `radius-xs` tops, square at a `separator` baseline.
 - Grid: solid `separator` hairlines, 3–5 of them. Dashed lines only for a plan,
-  budget or target reference, in `label-secondary`, labelled at its end.
+  budget or target reference, in `label-secondary`, labelled at its end. A
+  reference that differs between columns is a short dash over each column, never
+  a slope between them.
 - Label selectively: the current value, the maximum, the reference. Text is
   `label` or `label-secondary`, never the series colour. Everything else is in
-  a solid tooltip (`surface-floating`, `shadow-e3`, `radius-md`).
+  a solid tooltip (`surface-floating`, `shadow-e3`, `radius-md`), value first,
+  beside the hovered point so it never covers it.
+- The tooltip follows the keyboard too: the plot is one tab stop, ←/→ move
+  between points, Home/End jump to the ends, Esc hides it.
 - Every chart has a text or table equivalent for screen readers.
 
 ### Sheets and dialogs

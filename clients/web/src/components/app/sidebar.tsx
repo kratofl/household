@@ -2,14 +2,15 @@
 
 // Navigation. On desktop a 224px sidebar runs edge to edge down the left of the
 // window on sidebar-bg with a separator on its right: brand and collapse button
-// in the top row, destinations under caption section headers, the profile at
-// the bottom. Icons are label-secondary and text label; the active row sits on
+// in the top row, then Dashboard and single-page modules without a header,
+// then each multi-page module and Admin under a caption section header (Budget's
+// pages in clusters split by a small gap), the profile at the bottom. Icons are label-secondary and text label; the active row sits on
 // fill-strong in semibold with its icon in brand-500. Collapsing narrows it to an icon rail and
 // changes nothing else. Phones get a glass tab bar that is navigation only, with
 // the search as a separate tab beside it.
 
 import Link from "next/link"
-import { useCallback, useEffect, useState, type ReactNode } from "react"
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react"
 import {
   IconCalendar,
   IconBuildingStore,
@@ -35,7 +36,16 @@ import {
 import { HouseholdLogo } from "@/components/app/household-logo"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { Locale, Translator } from "@/lib/i18n"
-import { budgetViewEntries, budgetViewFromPath, moduleHref, moduleName, type AppModule, type BudgetViewKey } from "@/lib/modules"
+import {
+  budgetViewClusters,
+  budgetViewEntries,
+  budgetViewFromPath,
+  budgetViews,
+  moduleHref,
+  moduleName,
+  type AppModule,
+  type BudgetViewKey,
+} from "@/lib/modules"
 import { cn } from "@/lib/utils"
 import { adminViews } from "@/features/admin/views"
 
@@ -156,7 +166,7 @@ export function SidebarModuleNav(props: {
   const inModule = props.pathname === href || props.pathname.startsWith(`${href}/`)
   const label = moduleName(props.module, props.locale)
 
-  if (props.module.key !== "budget") {
+  if (!hasSidebarSection(props.module)) {
     return (
       <SidebarLink collapsed={props.collapsed} href={href} active={inModule} icon={<Icon />}>
         {label}
@@ -168,16 +178,27 @@ export function SidebarModuleNav(props: {
   return (
     <>
       <SidebarGroupLabel collapsed={props.collapsed}>{label}</SidebarGroupLabel>
-      {budgetViewEntries.map(([key, view]) => {
-        const ViewIcon = budgetViewIcons[key]
-        return (
-          <SidebarLink key={key} collapsed={props.collapsed} href={view.route} active={inModule && current === key} icon={<ViewIcon />}>
-            {props.t(view.labelKey)}
-          </SidebarLink>
-        )
-      })}
+      {budgetViewClusters.map((cluster, index) => (
+        <Fragment key={cluster[0]}>
+          {index > 0 ? <div className="h-2" aria-hidden /> : null}
+          {cluster.map((key) => {
+            const view = budgetViews[key]
+            const ViewIcon = budgetViewIcons[key]
+            return (
+              <SidebarLink key={key} collapsed={props.collapsed} href={view.route} active={inModule && current === key} icon={<ViewIcon />}>
+                {props.t(view.labelKey)}
+              </SidebarLink>
+            )
+          })}
+        </Fragment>
+      ))}
     </>
   )
+}
+
+/** Modules with several pages get their own headed section; the rest are plain links under Dashboard. */
+export function hasSidebarSection(module: AppModule) {
+  return module.key === "budget"
 }
 
 /** Icons for the Budget sub-views, so the collapsed rail can still tell them apart. */

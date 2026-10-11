@@ -46,6 +46,8 @@ export type MonthlySummary = {
   categories: { categoryId: string; reservedCents: number; remainingCents: number }[]
   costs: CostDue[]
 }
+/** One past or current period of the fun budget: what it started with and what was left. */
+export type MonthlyPeriodResult = { start: string; end: string; startingFunCents: number; funRemainingCents: number }
 export type MonthlyState = {
   today: string
   revision: number
@@ -61,6 +63,8 @@ export type MonthlyState = {
   forecast: MonthlyForecast[]
   categories: MonthlyCategory[]
   entries: { expense: MonthlyExpense; voided: boolean }[]
+  /** Up to the six most recent periods, oldest first; the last is the period of `summary`. Empty without a plan. */
+  history: MonthlyPeriodResult[]
 }
 /** applyToCurrentPeriod rewrites the running period instead of starting the next one. */
 export type SavePlan = {

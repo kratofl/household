@@ -82,8 +82,7 @@ export const moduleCatalog = {
 
 export const moduleKeys = Object.keys(moduleCatalog) as Array<keyof typeof moduleCatalog>
 
-// The Budget module's pages. The monthly budget is the Budget; the sidebar
-// lists them in this order.
+// The Budget module's pages. The monthly budget is the Budget.
 export const budgetViews = {
   overview: { route: "/budget", labelKey: "budget.nav.overview" },
   expenses: { route: "/budget/expenses", labelKey: "budget.nav.expenses" },
@@ -98,7 +97,17 @@ export const budgetViews = {
 
 type BudgetView = { route: string; labelKey: TranslationKey }
 export type BudgetViewKey = keyof typeof budgetViews
-export const budgetViewEntries = Object.entries(budgetViews) as [BudgetViewKey, BudgetView][]
+
+// Navigation order: everyday pages, then the plan's parts, then reference data.
+// The sidebar separates the clusters with a small gap; every other list
+// (phone view menu, search) follows the flattened order.
+export const budgetViewClusters: BudgetViewKey[][] = [
+  ["overview", "expenses", "savings"],
+  ["plan", "fixed", "monthly", "yearly"],
+  ["categories", "merchants"],
+]
+
+export const budgetViewEntries: [BudgetViewKey, BudgetView][] = budgetViewClusters.flat().map((key) => [key, budgetViews[key]])
 
 export function budgetViewFromPath(pathname: string): BudgetViewKey {
   const match = budgetViewEntries.find(([, view]) => view.route === pathname)

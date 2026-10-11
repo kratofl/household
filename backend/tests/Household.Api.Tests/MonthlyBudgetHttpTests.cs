@@ -151,6 +151,69 @@ public sealed class MonthlyBudgetHttpTests(LegacyParityFixture fixture) : IClass
         Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
     }
 
+    [Fact]
+    public async Task History_lists_the_last_six_periods_oldest_first_as_they_closed()
+    {
+        using HttpClient client = this.Fixture.Client;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.IncomeAccessToken);
+        using HttpResponseMessage groceriesResponse = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory("Lebensmittel"));
+        MonthlyCategoryRow groceries = await Read<MonthlyCategoryRow>(groceriesResponse);
+        using HttpResponseMessage leisureResponse = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory("Freizeit"));
+        MonthlyCategoryRow leisure = await Read<MonthlyCategoryRow>(leisureResponse);
+        // 3000 income - 500 groceries reserve leaves 2500 fun per period.
+        MonthlyPlan plan = new(300000, 0, 0, [], [new(groceries.Id, 50000)]);
+        this.Fixture.Clock.UtcNow = new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero);
+        try
+        {
+            using HttpResponseMessage setup = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan", new SaveMonthlyPlan(0, plan, 0, "Europe/Berlin"));
+            Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
+        }
+        finally { this.Fixture.Clock.UtcNow = LegacyParityFixture.Now; }
+
+        (DateOnly Date, Guid Category, long Cents)[] expenses =
+        [
+            (new(2026, 1, 10), leisure.Id, 10000),
+            (new(2026, 2, 10), leisure.Id, 20000),
+            (new(2026, 3, 10), leisure.Id, 30000),
+            // April overspends fun and empties the reserve, so May starts 100 short.
+            (new(2026, 4, 10), leisure.Id, 260000),
+            (new(2026, 4, 12), groceries.Id, 50000),
+            (new(2026, 5, 5), leisure.Id, 5000),
+            (new(2026, 7, 10), leisure.Id, 12345),
+        ];
+        foreach ((DateOnly date, Guid category, long cents) in expenses)
+        {
+            using HttpResponseMessage added = await client.PostAsJsonAsync("/api/v1/budget/monthly/expenses",
+                new AddMonthlyExpense($"history-{date:yyyy-MM-dd}-{cents}", date, "Ausgabe", category, cents, null));
+            Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+        }
+
+        MonthlyBudgetState current = await this.State(client);
+        MonthlyPeriodResult[] lastSix =
+            [
+                new MonthlyPeriodResult(new(2026, 2, 1), new(2026, 2, 28), 250000, 230000),
+                new MonthlyPeriodResult(new(2026, 3, 1), new(2026, 3, 31), 250000, 220000),
+                new MonthlyPeriodResult(new(2026, 4, 1), new(2026, 4, 30), 250000, -10000),
+                new MonthlyPeriodResult(new(2026, 5, 1), new(2026, 5, 31), 240000, 235000),
+                new MonthlyPeriodResult(new(2026, 6, 1), new(2026, 6, 30), 250000, 250000),
+                new MonthlyPeriodResult(new(2026, 7, 1), new(2026, 7, 31), 250000, 237655),
+            ];
+        Assert.Equal(lastSix, current.History);
+        Assert.Equal(237655, current.Summary?.FunRemainingCents);
+
+        // Looking back ends the history at the selected period, valued as of that date.
+        using HttpResponseMessage pastResponse = await client.GetAsync("/api/v1/budget/monthly/?date=2026-04-11");
+        MonthlyBudgetState past = await Read<MonthlyBudgetState>(pastResponse);
+        MonthlyPeriodResult[] untilApril =
+            [
+                new MonthlyPeriodResult(new(2026, 1, 1), new(2026, 1, 31), 250000, 240000),
+                new MonthlyPeriodResult(new(2026, 2, 1), new(2026, 2, 28), 250000, 230000),
+                new MonthlyPeriodResult(new(2026, 3, 1), new(2026, 3, 31), 250000, 220000),
+                new MonthlyPeriodResult(new(2026, 4, 1), new(2026, 4, 30), 250000, -10000),
+            ];
+        Assert.Equal(untilApril, past.History);
+    }
+
     private async Task<MonthlyBudgetState> State(HttpClient client)
     {
         using HttpResponseMessage response = await client.GetAsync("/api/v1/budget/monthly/");

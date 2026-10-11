@@ -10,6 +10,8 @@ import { Field } from "@/components/app/field"
 import { HouseholdLogo } from "@/components/app/household-logo"
 import type { Translator } from "@/lib/i18n"
 
+// The stand-alone sign-in page: logo and app name over one card. Errors and notices
+// belong to the sign-in, so they sit inside that card above the form.
 export function LoginScreen(props: {
   title: string
   subtitle: string
@@ -33,23 +35,23 @@ export function LoginScreen(props: {
           <h1 className="text-large-title">{props.title}</h1>
           <p className="mt-0.5 text-label-secondary">{props.subtitle}</p>
         </div>
-        {props.error ? (
-          <Alert variant="destructive">
-            <AlertTitle>{props.t("error.title")}</AlertTitle>
-            <AlertDescription>{props.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {props.message ? (
-          <Alert variant="info">
-            <AlertTitle>{props.t("status.title")}</AlertTitle>
-            <AlertDescription>{props.message}</AlertDescription>
-          </Alert>
-        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>{props.t("auth.title")}</CardTitle>
             <CardDescription>{props.t("auth.description")}</CardDescription>
           </CardHeader>
+          {props.error ? (
+            <Alert variant="destructive">
+              <AlertTitle>{props.t("error.title")}</AlertTitle>
+              <AlertDescription>{props.error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {props.message ? (
+            <Alert variant="info">
+              <AlertTitle>{props.t("status.title")}</AlertTitle>
+              <AlertDescription>{props.message}</AlertDescription>
+            </Alert>
+          ) : null}
           <form
             className="space-y-4"
             onSubmit={(event) => {
@@ -58,11 +60,12 @@ export function LoginScreen(props: {
             }}
           >
             <Field label={props.t("auth.username")}>
-              <Input value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
+              <Input autoComplete="username" value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
             </Field>
             <Field label={props.t("auth.password")}>
               <Input
                 type="password"
+                autoComplete="current-password"
                 value={props.password}
                 onChange={(event) => props.setPassword(event.target.value)}
               />

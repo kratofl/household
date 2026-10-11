@@ -4,23 +4,29 @@ import type { ReactNode } from "react"
 
 import { listCardClass } from "@/components/app/grouped"
 import { PageHeader } from "@/components/app/page-header"
+import type { ToolbarPrimaryAction } from "@/components/app/toolbar"
 import { cn } from "@/lib/utils"
 
-// Settings pages: the title in the toolbar, then list cards with a headline and
-// 36px rows (48px on phones) separated by hairlines, the same shape as every other list.
+// The Settings page type: the title, a one-line caption and the page's primary action
+// in the toolbar, then one column of at most 720px with grouped lists. Each section is one list card
+// whose header carries its title and hint, and whose rows are 36px (48px on phones)
+// separated by hairlines. Nothing sits between the cards.
 
 export function SettingsSurface({
   title,
   description,
+  primaryAction,
   children,
 }: {
   title: string
-  description: string
+  /** One line about the page: the toolbar caption beside the title (hidden on phones). */
+  description?: string
+  primaryAction?: ToolbarPrimaryAction
   children: ReactNode
 }) {
   return (
-    <div className="space-y-4">
-      <PageHeader title={title} subtitle={description} />
+    <div className="mx-auto w-full max-w-[720px] space-y-4">
+      <PageHeader title={title} caption={description} primaryAction={primaryAction} />
       {children}
     </div>
   )
@@ -33,21 +39,29 @@ export function SettingsSection({
   children,
 }: {
   title: string
+  /** A hint about the whole section, under its title inside the card. */
   description?: string
   aside?: ReactNode
   children: ReactNode
 }) {
   return (
-    <section>
-      <div className={listCardClass}>
-        <div className="flex min-h-10 items-center justify-between gap-3 border-b border-separator px-4 py-2 max-lg:min-h-12 max-lg:pt-3">
-          <h2 className="text-headline">{title}</h2>
-          {aside}
-        </div>
-        <div className="hairline-rows">{children}</div>
-      </div>
-      {description ? <p className="mt-2 px-1 text-footnote text-label-secondary">{description}</p> : null}
+    <section className={listCardClass}>
+      <SettingsSectionHeader title={title} description={description} aside={aside} />
+      <div className="hairline-rows border-t border-separator">{children}</div>
     </section>
+  )
+}
+
+/** The 40px (48px on phones) card header: headline title, an optional hint below it, an optional action right. */
+export function SettingsSectionHeader({ title, description, aside }: { title: string; description?: string; aside?: ReactNode }) {
+  return (
+    <div className="flex min-h-10 items-center justify-between gap-3 px-4 py-2 max-lg:min-h-12 max-lg:py-3">
+      <div className="min-w-0">
+        <h2 className="text-headline">{title}</h2>
+        {description ? <p className="mt-0.5 text-footnote text-pretty text-label-secondary">{description}</p> : null}
+      </div>
+      {aside ? <div className="flex shrink-0 items-center gap-2">{aside}</div> : null}
+    </div>
   )
 }
 
@@ -57,18 +71,18 @@ export function SettingsRow({
   children,
   className,
 }: {
-  title: string
-  description?: string
+  title: ReactNode
+  description?: ReactNode
   children?: ReactNode
   className?: string
 }) {
   return (
     <div className={cn("flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2.5", className)}>
-      <div className="min-w-0">
-        <p>{title}</p>
+      <div className="min-w-0 flex-1">
+        <p className="truncate">{title}</p>
         {description ? <p className="text-footnote text-label-secondary">{description}</p> : null}
       </div>
-      {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
+      {children ? <div className="flex shrink-0 flex-wrap items-center gap-2">{children}</div> : null}
     </div>
   )
 }
@@ -88,7 +102,12 @@ export function SettingsField({
   )
 }
 
-/** A block inside a section that needs its own padding (forms, pickers). */
+/** A block inside a section that needs its own padding (forms, pickers, empty states). */
 export function SettingsBlock({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("px-4 py-3", className)}>{children}</div>
+}
+
+/** What a list card shows when it has no rows: one centred line inside the card. */
+export function SettingsEmpty({ children }: { children: ReactNode }) {
+  return <p className="px-4 py-6 text-center text-footnote text-label-secondary">{children}</p>
 }

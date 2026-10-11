@@ -20,6 +20,9 @@ public sealed record MonthlyPeriodSummary(DateOnly Start, DateOnly End, long Inc
     long StartingFunCents, long FunRemainingCents, long SavingsBalanceCents, long BufferBalanceCents,
     long SavingsContributionCents, long DeficitCarryoverCents, long FundingShortfallCents,
     IReadOnlyList<MonthlyAllowance> Categories, IReadOnlyList<MonthlyCostDue> Costs);
+// One period of the fun-budget history: what it started with and what was left, as of its end
+// (or as of the requested date for the period containing it).
+public sealed record MonthlyPeriodResult(DateOnly Start, DateOnly End, long StartingFunCents, long FunRemainingCents);
 
 // Plan versions and expense actions are immutable rows. JSON holds validated value records.
 public sealed record MonthlyPlanRow

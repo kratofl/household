@@ -47,10 +47,15 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     public static readonly Guid AccountId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b44");
     public static readonly Guid PlannedExpenseId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b46");
     public static readonly Guid FreshUserId = Guid.Parse("019bd5e4-6c31-7c48-8471-a42157389b47");
+    public static readonly DateTimeOffset Now = new DateTimeOffset(2026, 7, 23, 12, 0, 0, TimeSpan.Zero);
 
     private readonly string _containerName = $"household-api-tests-{Guid.NewGuid():N}";
     private string _connectionString = "";
     private WebApplicationFactory<Program>? _factory;
+
+    /// The API's clock, fixed at <see cref="Now"/>. A test that spans budget periods may move it
+    /// backwards (sessions are valid until shortly after real time) and must restore it to <see cref="Now"/>.
+    public SettableTimeProvider Clock { get; } = new SettableTimeProvider(Now);
 
     public HttpClient Client => (this._factory ?? throw new InvalidOperationException("Fixture has not started."))
         .CreateClient();
@@ -74,8 +79,7 @@ public sealed class LegacyParityFixture : IAsyncLifetime
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<TimeProvider>();
-                services.AddSingleton<TimeProvider>(
-                    new FixedTimeProvider(new DateTimeOffset(2026, 7, 23, 12, 0, 0, TimeSpan.Zero)));
+                services.AddSingleton<TimeProvider>(this.Clock);
             });
         });
         _ = this.Client;
@@ -132,9 +136,11 @@ public sealed class LegacyParityFixture : IAsyncLifetime
     private static string HashToken(string token) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    public sealed class SettableTimeProvider(DateTimeOffset now) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        public DateTimeOffset UtcNow { get; set; } = now;
+
+        public override DateTimeOffset GetUtcNow() => this.UtcNow;
     }
 
     private async Task StartDatabase()

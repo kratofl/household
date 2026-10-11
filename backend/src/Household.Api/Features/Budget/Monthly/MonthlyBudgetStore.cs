@@ -6,11 +6,12 @@ namespace Household.Api.Features.Budget;
 
 public sealed record MonthlyForecast(DateOnly Start, DateOnly End, long FunCents, IReadOnlyList<MonthlyCostDue> Costs);
 public sealed record MonthlyHistory(MonthlyExpense Expense, bool Voided);
+// History holds up to the six most recent periods, oldest first, ending with Summary's period.
 public sealed record MonthlyBudgetState(DateOnly Today, long Revision, int StartDay, string Currency,
     string TimeZoneId, long OpeningSavingsCents, DateOnly? FirstDate, DateOnly NextStart,
     MonthlyPlan? CurrentPlan, MonthlyPlan? NextPlan, MonthlyPeriodSummary? Summary,
     IReadOnlyList<MonthlyForecast> Forecast, IReadOnlyList<MonthlyCategoryRow> Categories,
-    IReadOnlyList<MonthlyHistory> Entries);
+    IReadOnlyList<MonthlyHistory> Entries, IReadOnlyList<MonthlyPeriodResult> History);
 
 public sealed class MonthlyBudgetStore(BudgetDbContext database, TimeProvider timeProvider)
 {
@@ -80,14 +81,15 @@ public sealed class MonthlyBudgetStore(BudgetDbContext database, TimeProvider ti
         BudgetPeriodRange current = BudgetPeriodCalendar.ForDate(today, day);
         DateOnly nextStart = current.End.AddDays(1);
         if (plans.Count == 0)
-            return new(today, 0, day, currency, zone, 0, null, nextStart, null, null, null, [], categories, []);
+            return new(today, 0, day, currency, zone, 0, null, nextStart, null, null, null, [], categories, [], []);
         DateOnly first = plans[0].EffectiveFrom;
         DateOnly date = selected ?? today;
         if (date < first || date > today) throw new MonthlyBudgetConflict("date_outside_history");
         List<MonthlyEntryRow> rows = await this.EntriesAsync(owner, cancellationToken);
         List<MonthlyExpense> entries = EffectiveEntries(rows);
         List<MonthlyPlanVersion> versions = Versions(plans);
-        MonthlyPeriodSummary summary = MonthlyBudgetCalculator.Project(versions, entries, date, day, plans[0].OpeningSavingsCents);
+        List<MonthlyPeriodSummary> periods = MonthlyBudgetCalculator.Replay(versions, entries, date, day, plans[0].OpeningSavingsCents).ToList();
+        MonthlyPeriodSummary summary = periods[^1];
         List<MonthlyForecast> forecast = Forecast(plans, current.Start, day);
         HashSet<Guid> effectiveIds = entries.Select(entry => entry.Id).ToHashSet();
         MonthlyPlan active = ActivePlan(plans, current.Start);
@@ -98,7 +100,9 @@ public sealed class MonthlyBudgetStore(BudgetDbContext database, TimeProvider ti
             nextStart, active, changed ? next : null,
             summary, forecast, categories,
             rows.Where(row => row.Kind != "void").Select(row => new MonthlyHistory(
-                Deserialize<MonthlyExpense>(row.ExpenseJson), !effectiveIds.Contains(row.Id))).Reverse().ToArray());
+                Deserialize<MonthlyExpense>(row.ExpenseJson), !effectiveIds.Contains(row.Id))).Reverse().ToArray(),
+            periods.TakeLast(6).Select(period => new MonthlyPeriodResult(period.Start, period.End,
+                period.StartingFunCents, period.FunRemainingCents)).ToArray());
     }
 
     public static List<MonthlyForecast> Forecast(IReadOnlyList<MonthlyPlanRow> plans, DateOnly start, int startDay)

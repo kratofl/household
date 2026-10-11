@@ -28,6 +28,7 @@ import {
   SidebarModuleNav,
   ViewMenu,
   budgetViewMenuItems,
+  hasSidebarSection,
   moduleIcons,
   useSidebarCollapsed,
 } from "@/components/app/sidebar"
@@ -517,11 +518,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         navLabel={t("nav.main")}
         footer={<ProfileMenu name={currentUser.name} collapsed={collapsed} logout={logout} t={t} />}
       >
-        <SidebarGroupLabel collapsed={collapsed}>{t("nav.main")}</SidebarGroupLabel>
         <SidebarLink collapsed={collapsed} href="/" active={isHome} icon={<IconHome />}>
           {t("dashboard.title")}
         </SidebarLink>
-        {activeModules.map((module) => (
+        {/* Single-page modules sit under Dashboard; headed sections follow, so a plain link never looks like part of one. */}
+        {[...activeModules.filter((module) => !hasSidebarSection(module)), ...activeModules.filter(hasSidebarSection)].map((module) => (
           <SidebarModuleNav
             key={module.id}
             collapsed={collapsed}

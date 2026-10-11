@@ -1,22 +1,25 @@
 "use client"
 
 // The frosted toolbar: one uniform band across the top of the content area,
-// 48px tall (64px on phones), sticky, with content scrolling underneath. The leading group is the
-// page title (title-2), the trailing group holds the page's icon actions, the
-// search and, last, the page's one primary action. The shell renders the band; pages fill it with PageHeader,
-// which portals the title and actions into the slots below, so a page declares
-// its toolbar where it renders and its handlers stay live.
+// 48px tall (64px on phones), sticky, with content scrolling underneath. The shell
+// renders the band; pages fill it with PageHeader, which portals into the slots
+// below, so a page declares its toolbar where it renders and its handlers stay live.
 //
-// Rules from DESIGN.md: icons over text, borderless icon actions in one
-// group, a text-labelled action stands apart; the primary action is the only
-// orange control in here.
+// Slot order (DESIGN.md, Toolbar): title · `leading` (the phone's view menu) ·
+// scope (a PeriodStepper or segmented control) · caption — then, trailing, the
+// icon actions · search · the page's one primary action, last.
+// When the band runs out of room the caption truncates first, then the title.
+// On phones the caption is hidden and the scope moves to a second row of the band.
 
 import { createContext, useContext, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
-type Slots = { title: HTMLElement | null; actions: HTMLElement | null }
+import { Button } from "@/components/ui/button"
 
-const ToolbarSlots = createContext<Slots>({ title: null, actions: null })
+type SlotName = "title" | "scope" | "caption" | "actions" | "primary"
+type Slots = Record<SlotName, HTMLElement | null>
+
+const ToolbarSlots = createContext<Slots>({ title: null, scope: null, caption: null, actions: null, primary: null })
 
 export function ToolbarFrame({
   leading,
@@ -29,29 +32,72 @@ export function ToolbarFrame({
   children: ReactNode
 }) {
   const [title, setTitle] = useState<HTMLElement | null>(null)
+  const [scope, setScope] = useState<HTMLElement | null>(null)
+  const [caption, setCaption] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
+  const [primary, setPrimary] = useState<HTMLElement | null>(null)
   return (
-    <ToolbarSlots.Provider value={{ title, actions }}>
-      <header className="toolbar-band sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-5 max-lg:h-16">
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+    <ToolbarSlots.Provider value={{ title, scope, caption, actions, primary }}>
+      <header className="toolbar-band sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-5 max-lg:h-auto max-lg:min-h-16 max-lg:flex-wrap max-lg:content-center max-lg:gap-y-2 max-lg:py-2.5">
+        {/* Shrinks after the caption: the title truncates once the caption is gone. */}
+        <div className="flex min-w-0 shrink items-center gap-1">
           <div ref={setTitle} className="min-w-0" />
           {leading}
         </div>
-        <div ref={setActions} className="flex shrink-0 items-center gap-2.5 empty:hidden" />
-        {search}
+        <div ref={setScope} className="flex shrink-0 items-center empty:hidden max-lg:order-last max-lg:basis-full" />
+        <div ref={setCaption} className="flex min-w-0 shrink-[1000] items-center empty:hidden max-lg:hidden" />
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div ref={setActions} className="flex items-center gap-2.5 empty:hidden" />
+          {search}
+          <div ref={setPrimary} className="flex items-center empty:hidden" />
+        </div>
       </header>
       {children}
     </ToolbarSlots.Provider>
   )
 }
 
-/** Puts a page's title and actions into the toolbar the shell renders. */
-export function ToolbarContent({ title, actions }: { title: string; actions?: ReactNode }) {
+/** The page's one primary action: a Primär M button on desktop, a 44px icon button on phones. */
+export type ToolbarPrimaryAction = { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean }
+
+/** Puts a page's title, scope, caption and actions into the toolbar the shell renders. */
+export function ToolbarContent({
+  title,
+  scope,
+  caption,
+  actions,
+  primaryAction,
+}: {
+  title: string
+  scope?: ReactNode
+  caption?: string
+  actions?: ReactNode
+  primaryAction?: ToolbarPrimaryAction
+}) {
   const slots = useContext(ToolbarSlots)
   return (
     <>
       {slots.title ? createPortal(<h1 className="truncate text-title-2">{title}</h1>, slots.title) : null}
+      {scope && slots.scope ? createPortal(scope, slots.scope) : null}
+      {caption && slots.caption
+        ? createPortal(<span className="truncate text-footnote text-label-secondary">{caption}</span>, slots.caption)
+        : null}
       {actions && slots.actions ? createPortal(actions, slots.actions) : null}
+      {primaryAction && slots.primary ? createPortal(<PrimaryButton {...primaryAction} />, slots.primary) : null}
+    </>
+  )
+}
+
+function PrimaryButton({ label, icon, onClick, disabled }: ToolbarPrimaryAction) {
+  return (
+    <>
+      <Button onClick={onClick} disabled={disabled} className="max-lg:hidden">
+        {icon}
+        {label}
+      </Button>
+      <Button onClick={onClick} disabled={disabled} size="icon" aria-label={label} title={label} className="lg:hidden [&_svg]:size-5">
+        {icon}
+      </Button>
     </>
   )
 }

@@ -1,16 +1,31 @@
 "use client"
 
-import { useState } from "react"
-import { IconRefresh, IconUserPlus } from "@tabler/icons-react"
+import { useId, useRef, useState } from "react"
+import { IconDots, IconRefresh, IconShieldCheck, IconShieldOff, IconUserCheck, IconUserOff, IconUserPlus } from "@tabler/icons-react"
 import type { Locale, Translator } from "@/lib/i18n"
 import type { CurrentUser } from "@/lib/session"
 import { StatusDot } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Field } from "@/components/app/field"
-import { SettingsBlock, SettingsRow, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
-import { ToolbarContent } from "@/components/app/toolbar"
+import { listCardClass } from "@/components/app/grouped"
+import { PageHeader } from "@/components/app/page-header"
+import {
+  SettingsEmpty,
+  SettingsRow,
+  SettingsSection,
+  SettingsSectionHeader,
+  SettingsSurface,
+} from "@/components/app/settings-surface"
+import { ToolbarButton, ToolbarGroup } from "@/components/app/toolbar"
 import { Switch } from "@/components/ui/switch"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
 
@@ -22,24 +37,22 @@ import type { AuditEvent, NewUser, UserChange } from "@/features/admin/types"
 /** Shown on every admin page to someone without the admin role. */
 export function AdminForbidden({ t }: { t: Translator }) {
   return (
-    <>
-      <ToolbarContent title={t("nav.admin")} />
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("admin.forbiddenTitle")}</CardTitle>
-          <CardDescription>{t("admin.forbiddenDescription")}</CardDescription>
-        </CardHeader>
-      </Card>
-    </>
+    <SettingsSurface title={t("nav.admin")}>
+      <SettingsSection title={t("admin.forbiddenTitle")}>
+        <SettingsEmpty>{t("admin.forbiddenDescription")}</SettingsEmpty>
+      </SettingsSection>
+    </SettingsSurface>
   )
 }
 
 const statusDot = { pending: "yellow", active: "green", blocked: "red" } as const
 
+const emptyUser: NewUser = { name: "", email: "", password: "" }
+
 /**
  * Every account of the household. Provider sign-ins waiting for approval get their own list on top;
- * the admin's own account has no actions, so nobody locks themselves out. New accounts are created
- * at the bottom; `createUser` resolves true when the account exists, which clears the form.
+ * the admin's own account has no actions, so nobody locks themselves out. "New account" in the
+ * toolbar opens a sheet; `createUser` resolves true when the account exists, which closes it.
  */
 export function AdminUsersPage(props: {
   currentUser: CurrentUser
@@ -48,16 +61,20 @@ export function AdminUsersPage(props: {
   createUser: (user: NewUser) => Promise<boolean>
   t: Translator
 }) {
-  const [draft, setDraft] = useState<NewUser>({ name: "", email: "", password: "" })
+  const [creating, setCreating] = useState(false)
   const pending = props.users.filter((user) => user.status === "pending")
   const accounts = props.users.filter((user) => user.status !== "pending")
   return (
-    <SettingsSurface title={props.t("nav.adminUsers")} description={props.t("users.description")}>
+    <SettingsSurface
+      title={props.t("nav.adminUsers")}
+      description={props.t("users.description")}
+      primaryAction={{ label: props.t("users.new"), icon: <IconUserPlus />, onClick: () => setCreating(true) }}
+    >
       {pending.length > 0 ? (
         <SettingsSection title={props.t("users.pendingTitle")} description={props.t("users.pendingDescription")}>
           {pending.map((user) => (
             <UserRow key={user.id} user={user} t={props.t}>
-              <Button size="sm" onClick={() => props.updateUser(user, { status: "active" })}>
+              <Button size="sm" variant="secondary" onClick={() => props.updateUser(user, { status: "active" })}>
                 {props.t("users.activate")}
               </Button>
               <Button size="sm" variant="destructive" onClick={() => props.updateUser(user, { status: "blocked" })}>
@@ -72,68 +89,15 @@ export function AdminUsersPage(props: {
         {accounts.map((user) =>
           user.id === props.currentUser.id ? (
             <UserRow key={user.id} user={user} own t={props.t} />
-          ) : user.status === "blocked" ? (
-            <UserRow key={user.id} user={user} t={props.t}>
-              <Button size="sm" variant="secondary" onClick={() => props.updateUser(user, { status: "active" })}>
-                {props.t("users.unblock")}
-              </Button>
-            </UserRow>
           ) : (
             <UserRow key={user.id} user={user} t={props.t}>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => props.updateUser(user, { role: user.role === "admin" ? "user" : "admin" })}
-              >
-                {props.t(user.role === "admin" ? "users.removeAdmin" : "users.makeAdmin")}
-              </Button>
-              <Button size="sm" variant="destructive" onClick={() => props.updateUser(user, { status: "blocked" })}>
-                {props.t("users.block")}
-              </Button>
+              <UserActions user={user} updateUser={props.updateUser} t={props.t} />
             </UserRow>
           ),
         )}
       </SettingsSection>
 
-      <SettingsSection title={props.t("users.createTitle")} description={props.t("users.createDescription")}>
-        <SettingsBlock>
-          <form
-            className="grid gap-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end"
-            onSubmit={async (event) => {
-              event.preventDefault()
-              if (await props.createUser(draft)) setDraft({ name: "", email: "", password: "" })
-            }}
-          >
-            <Field label={props.t("auth.username")}>
-              <Input
-                autoComplete="off"
-                value={draft.name}
-                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-              />
-            </Field>
-            <Field label={props.t("auth.email")}>
-              <Input
-                type="email"
-                autoComplete="off"
-                value={draft.email}
-                onChange={(event) => setDraft({ ...draft, email: event.target.value })}
-              />
-            </Field>
-            <Field label={props.t("auth.password")}>
-              <Input
-                type="password"
-                autoComplete="new-password"
-                value={draft.password}
-                onChange={(event) => setDraft({ ...draft, password: event.target.value })}
-              />
-            </Field>
-            <Button type="submit">
-              <IconUserPlus />
-              {props.t("users.create")}
-            </Button>
-          </form>
-        </SettingsBlock>
-      </SettingsSection>
+      <CreateUserSheet open={creating} close={() => setCreating(false)} createUser={props.createUser} t={props.t} />
     </SettingsSurface>
   )
 }
@@ -152,6 +116,115 @@ function UserRow(props: { user: CurrentUser; own?: boolean; t: Translator; child
   )
 }
 
+/** The "…" menu of another account: the role change, then blocking or unblocking last. */
+function UserActions(props: {
+  user: CurrentUser
+  updateUser: (user: CurrentUser, change: UserChange) => Promise<void>
+  t: Translator
+}) {
+  const { user, t } = props
+  const label = t("users.actions", { name: user.name })
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={label} title={label}>
+          <IconDots />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {user.status === "blocked" ? (
+          <DropdownMenuItem onSelect={() => void props.updateUser(user, { status: "active" })}>
+            <IconUserCheck />
+            {t("users.unblock")}
+          </DropdownMenuItem>
+        ) : (
+          <>
+            <DropdownMenuItem onSelect={() => void props.updateUser(user, { role: user.role === "admin" ? "user" : "admin" })}>
+              {user.role === "admin" ? <IconShieldOff /> : <IconShieldCheck />}
+              {t(user.role === "admin" ? "users.removeAdmin" : "users.makeAdmin")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => void props.updateUser(user, { status: "blocked" })}>
+              <IconUserOff />
+              {t("users.block")}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The create-account form in a sheet: Cancel, title and Create in its header, the fields below. */
+function CreateUserSheet(props: {
+  open: boolean
+  close: () => void
+  createUser: (user: NewUser) => Promise<boolean>
+  t: Translator
+}) {
+  const formId = useId()
+  const [draft, setDraft] = useState<NewUser>(emptyUser)
+  const [busy, setBusy] = useState(false)
+  const nameInput = useRef<HTMLInputElement>(null)
+  const t = props.t
+
+  function close() {
+    setDraft(emptyUser)
+    props.close()
+  }
+
+  return (
+    <Sheet open={props.open} onOpenChange={(open) => { if (!open && !busy) close() }}>
+      {/* Focus starts in the first field, not on Cancel. */}
+      <SheetContent onOpenAutoFocus={(event) => { event.preventDefault(); nameInput.current?.focus() }}>
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-separator px-4 max-lg:h-16">
+          <Button type="button" variant="secondary" disabled={busy} onClick={close}>
+            {t("users.cancel")}
+          </Button>
+          <SheetTitle className="truncate">{t("users.createTitle")}</SheetTitle>
+          <Button type="submit" form={formId} disabled={busy}>
+            {t("users.create")}
+          </Button>
+        </div>
+        <form
+          id={formId}
+          className="space-y-4 overflow-y-auto p-4"
+          onSubmit={async (event) => {
+            event.preventDefault()
+            setBusy(true)
+            try {
+              if (await props.createUser(draft)) close()
+            } finally {
+              setBusy(false)
+            }
+          }}
+        >
+          <SheetDescription>{t("users.createDescription")}</SheetDescription>
+          <Field label={t("auth.username")}>
+            <Input ref={nameInput} autoComplete="off" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+          </Field>
+          <Field label={t("auth.email")}>
+            <Input
+              type="email"
+              autoComplete="off"
+              value={draft.email}
+              onChange={(event) => setDraft({ ...draft, email: event.target.value })}
+            />
+          </Field>
+          <Field label={t("auth.password")}>
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={draft.password}
+              onChange={(event) => setDraft({ ...draft, password: event.target.value })}
+            />
+          </Field>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
 export function AdminServicesPage(props: {
   modules: AppModule[]
   locale: Locale
@@ -159,69 +232,102 @@ export function AdminServicesPage(props: {
   t: Translator
 }) {
   return (
-    <SettingsSurface title={props.t("nav.adminServices")} description={props.t("services.description")}>
-      <SettingsSection title={props.t("services.modulesTitle")} description={props.t("services.catalogHint")}>
-        {props.modules.map((module) => (
-          <SettingsRow
-            key={module.id}
-            title={moduleName(module, props.locale)}
-            description={`${moduleDescription(module, props.locale)} · ${
-              module.enabled ? props.t("services.available") : props.t("services.unavailable")
-            }`}
-          >
-            <Switch
-              checked={module.enabled && module.active}
-              disabled={!module.enabled}
-              onCheckedChange={(checked) => props.toggleModule(module, checked)}
-              aria-label={props.t("services.switchLabel", {
-                name: moduleName(module, props.locale),
-              })}
-            />
-          </SettingsRow>
-        ))}
+    <SettingsSurface title={props.t("nav.adminServices")}>
+      <SettingsSection title={props.t("services.modulesTitle")} description={props.t("services.description")}>
+        {props.modules.length === 0 ? (
+          <SettingsEmpty>{props.t("services.empty")}</SettingsEmpty>
+        ) : (
+          props.modules.map((module) => (
+            <SettingsRow
+              key={module.id}
+              title={moduleName(module, props.locale)}
+              description={`${moduleDescription(module, props.locale)} · ${
+                module.enabled ? props.t("services.available") : props.t("services.unavailable")
+              }`}
+            >
+              <Switch
+                checked={module.enabled && module.active}
+                disabled={!module.enabled}
+                onCheckedChange={(checked) => props.toggleModule(module, checked)}
+                aria-label={props.t("services.switchLabel", {
+                  name: moduleName(module, props.locale),
+                })}
+              />
+            </SettingsRow>
+          ))
+        )}
       </SettingsSection>
     </SettingsSurface>
   )
 }
 
+const auditHead = "h-9 px-4 text-left align-middle text-caption text-label-secondary"
+const auditCell = "h-9 px-4 py-1.5 align-middle max-lg:h-12 max-lg:py-2.5"
+
+/**
+ * The audit log as a list page: one table card with the latest events, reload in the toolbar.
+ * On phones the module, time and actor fold into a line under the event.
+ */
 export function AdminAuditPage(props: {
   auditEvents: AuditEvent[]
   loadAuditEvents: (showMessage?: boolean) => Promise<void>
   locale: Locale
   t: Translator
 }) {
+  const t = props.t
+  const time = (value: string) =>
+    new Date(value).toLocaleString(props.locale === "de" ? "de-DE" : "en-US", { dateStyle: "medium", timeStyle: "short" })
   return (
-    <SettingsSurface title={props.t("nav.adminAudit")} description={props.t("audit.description")}>
-      <SettingsSection
-        title={props.t("audit.eventsTitle")}
-        aside={
-          <Button variant="secondary" size="sm" onClick={() => props.loadAuditEvents()}>
-            <IconRefresh />
-            {props.t("audit.load")}
-          </Button>
+    <div className="space-y-4">
+      <PageHeader
+        title={t("nav.adminAudit")}
+        actions={
+          <ToolbarGroup>
+            <ToolbarButton label={t("audit.load")} icon={<IconRefresh />} onClick={() => void props.loadAuditEvents()} />
+          </ToolbarGroup>
         }
-      >
+      />
+      <section className={listCardClass}>
+        <SettingsSectionHeader title={t("audit.eventsTitle")} description={t("audit.description")} />
         {props.auditEvents.length === 0 ? (
-          <SettingsBlock className="text-label-secondary">{props.t("audit.empty")}</SettingsBlock>
+          <div className="border-t border-separator">
+            <SettingsEmpty>{t("audit.empty")}</SettingsEmpty>
+          </div>
         ) : (
-          props.auditEvents.map((event) => (
-            <div key={event.id} className="flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-1.5 max-lg:min-h-12 max-lg:py-2.5">
-              <div className="min-w-0">
-                <p className="font-medium">{event.action}</p>
-                <p className="text-footnote text-label-secondary">
-                  {event.module} ·{" "}
-                  {new Date(event.occurredAt).toLocaleString(props.locale === "de" ? "de-DE" : "en-US")} ·{" "}
-                  {event.actorRole || props.t("audit.systemActor")}
-                </p>
-                {event.errorCode ? <p className="text-footnote text-danger-text">{event.errorCode}</p> : null}
-              </div>
-              <StatusDot status={event.outcome === "success" ? "green" : "red"} className="text-footnote">
-                {event.outcome}
-              </StatusDot>
-            </div>
-          ))
+          <table className="w-full border-t border-separator text-callout">
+            <thead className="max-lg:sr-only">
+              <tr className="border-b border-separator">
+                <th scope="col" className={auditHead}>{t("audit.time")}</th>
+                <th scope="col" className={auditHead}>{t("audit.event")}</th>
+                <th scope="col" className={auditHead}>{t("audit.module")}</th>
+                <th scope="col" className={auditHead}>{t("audit.actor")}</th>
+                <th scope="col" className={auditHead}>{t("audit.outcome")}</th>
+              </tr>
+            </thead>
+            <tbody className="hairline-rows">
+              {props.auditEvents.map((event) => (
+                <tr key={event.id}>
+                  <td className={`${auditCell} whitespace-nowrap tabular-nums text-label-secondary max-lg:hidden`}>{time(event.occurredAt)}</td>
+                  <td className={auditCell}>
+                    <p className="font-medium">{event.action}</p>
+                    <p className="text-footnote text-label-secondary lg:hidden">
+                      {event.module} · {time(event.occurredAt)} · {event.actorRole || t("audit.systemActor")}
+                    </p>
+                    {event.errorCode ? <p className="text-footnote text-danger-text">{event.errorCode}</p> : null}
+                  </td>
+                  <td className={`${auditCell} text-label-secondary max-lg:hidden`}>{event.module}</td>
+                  <td className={`${auditCell} text-label-secondary max-lg:hidden`}>{event.actorRole || t("audit.systemActor")}</td>
+                  <td className={`${auditCell} text-right lg:text-left`}>
+                    <StatusDot status={event.outcome === "success" ? "green" : "red"} className="text-footnote">
+                      {event.outcome === "success" ? t("audit.outcomeSuccess") : event.outcome}
+                    </StatusDot>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-      </SettingsSection>
-    </SettingsSurface>
+      </section>
+    </div>
   )
 }
