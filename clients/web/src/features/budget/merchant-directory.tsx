@@ -12,7 +12,7 @@ import { IconDots, IconPlus } from "@tabler/icons-react"
 
 import { Field } from "@/components/app/field"
 import { FormSheet, type FormSheetResult } from "@/components/app/form-sheet"
-import { listCardClass } from "@/components/app/grouped"
+import { CardHeader, ListCard, ListFooter } from "@/components/app/grouped"
 import { PageHeader } from "@/components/app/page-header"
 import { SearchInput } from "@/components/app/search-input"
 import { Badge } from "@/components/ui/badge"
@@ -80,13 +80,13 @@ export function MerchantDirectory({
   return (
     <div className="space-y-4">
       <PageHeader title={copy.merchants} primaryAction={{ label: copy.addMerchant, icon: <IconPlus />, onClick: () => setTarget({ kind: "new" }), disabled: busy }} />
-      <section className={listCardClass}>
-        <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 max-lg:min-h-12">
-          <h2 className="text-headline">{copy.merchants}</h2>
-          {editable.length > 8 ? (
+      <ListCard>
+        <CardHeader
+          title={copy.merchants}
+          aside={editable.length > 8 ? (
             <SearchInput className="w-full sm:w-56" aria-label={copy.merchantSearch} placeholder={copy.merchantSearch} value={search} onChange={(event) => setSearch(event.target.value)} />
           ) : null}
-        </div>
+        />
         <ul className="hairline-rows border-t border-separator">
           {shown.length === 0 ? <li className="px-4 py-3 text-footnote text-label-secondary">{copy.emptyMerchants}</li> : null}
           {shown.map((merchant) => (
@@ -111,10 +111,10 @@ export function MerchantDirectory({
             </li>
           ))}
         </ul>
-        <p className="border-t border-separator bg-fill px-4 py-2 text-footnote text-label-secondary">
+        <ListFooter>
           {copy.merchantsNote} {catalogCount} {copy.catalogCount}
-        </p>
-      </section>
+        </ListFooter>
+      </ListCard>
       {target ? (
         <MerchantSheet
           key={target.kind === "rename" ? target.merchant.id : "new"}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { FormSelect } from "@/components/app/form-select"
-import { FormRow, listCardClass } from "@/components/app/grouped"
+import { Block, FormRow, ListCard } from "@/components/app/grouped"
 import { FormFeedback } from "./form-feedback"
 import { SearchableSelect } from "@/components/app/searchable-select"
 import { Button } from "@/components/ui/button"
@@ -121,7 +121,7 @@ export function MonthlyExpenseEditor(props: Props) {
           <fieldset disabled={props.busy} className="space-y-4">
             <FormFeedback error={editor.error} />
 
-            <div className={`${listCardClass} px-4 py-5 text-center`}>
+            <ListCard className="px-4 py-5 text-center">
               <Label htmlFor="expense-amount" className="sr-only">{props.intent.kind === "refund" ? copy.refundAmount : copy.amount}</Label>
               <input
                 autoFocus
@@ -136,9 +136,9 @@ export function MonthlyExpenseEditor(props: Props) {
               />
               <p className="mt-1 text-label-secondary">{props.state.currency}</p>
               <p id="expense-money-hint" className="mt-2 text-footnote text-label-secondary">{copy.moneyHint}</p>
-            </div>
+            </ListCard>
 
-            <div className={`${listCardClass} hairline-rows`}>
+            <ListCard className="hairline-rows">
               {props.intent.kind !== "refund" ? (
                 <FormRow label={copy.category} htmlFor="expense-category">
                   <FormSelect id="expense-category" className="w-auto min-w-40" value={editor.category} onValueChange={editor.setCategory} options={editor.calculated.categories} />
@@ -173,18 +173,18 @@ export function MonthlyExpenseEditor(props: Props) {
                   </FormRow>
                 </>
               ) : null}
-            </div>
+            </ListCard>
 
             {editor.calculated.shortage > 0 ? (
-              <div className={`${listCardClass} hairline-rows`}>
-                <div className="px-4 py-3">
+              <ListCard className="hairline-rows">
+                <Block>
                   <p className="font-medium">{copy.excess}: {editor.calculated.shortfall}</p>
                   <p className="text-footnote text-label-secondary">{copy.coverNote}</p>
-                </div>
+                </Block>
                 <FormRow label={copy.cover} htmlFor="cover-shortfall">
                   <Checkbox id="cover-shortfall" checked={editor.cover} onCheckedChange={(checked) => editor.setCover(checked === true)} />
                 </FormRow>
-              </div>
+              </ListCard>
             ) : null}
 
             {props.intent.kind === "add" ? (

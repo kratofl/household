@@ -10,13 +10,19 @@ import { IconCheck, IconChevronRight } from "@tabler/icons-react"
 // 26px items in footnote 500, the highlighted item in brand-500 with on-brand
 // text, shortcuts right in label-secondary, destructive last after a separator.
 // Below lg the items grow to 48px pills in a 24px-radius menu. The select list
-// and the search results reuse these classes so every menu looks the same.
+// and the combobox (command.tsx) reuse these classes so every menu looks the same.
 
 export const menuContentClass =
   "glass z-50 min-w-[200px] overflow-x-hidden overflow-y-auto rounded-lg p-1 text-label duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 max-lg:rounded-[24px] max-lg:p-1.5"
 
-export const menuItemClass =
-  "group/menu-item relative flex h-[26px] cursor-default items-center gap-2 rounded-sm px-2 text-footnote font-medium outline-hidden select-none data-highlighted:bg-brand-500 data-highlighted:text-on-brand data-disabled:pointer-events-none data-disabled:text-label-disabled [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-2 [&_svg:not([class*='size-'])]:size-3.5 max-lg:h-12 max-lg:[&_svg:not([class*='size-'])]:size-4 max-lg:rounded-full max-lg:px-4 max-lg:text-callout"
+/** An item's shape without its states, for lists whose states use other attributes (cmdk). */
+export const menuItemShapeClass =
+  "group/menu-item relative flex h-[26px] cursor-default items-center gap-2 rounded-sm px-2 text-footnote font-medium outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-2 [&_svg:not([class*='size-'])]:size-3.5 max-lg:h-12 max-lg:[&_svg:not([class*='size-'])]:size-4 max-lg:rounded-full max-lg:px-4 max-lg:text-callout"
+
+export const menuItemClass = cn(
+  menuItemShapeClass,
+  "data-highlighted:bg-brand-500 data-highlighted:text-on-brand data-disabled:pointer-events-none data-disabled:text-label-disabled"
+)
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />

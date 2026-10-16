@@ -14,7 +14,7 @@
 
 import type { ComponentType, ReactNode } from "react"
 
-import { listCardClass } from "@/components/app/grouped"
+import { ListCard } from "@/components/app/grouped"
 import { toneTint } from "@/lib/tone"
 import { cn } from "@/lib/utils"
 
@@ -38,7 +38,7 @@ export function HeroMetric({
   className?: string
 }) {
   return (
-    <section className={cn(listCardClass, "flex h-full flex-col", className)}>
+    <ListCard className={cn("flex h-full flex-col", className)}>
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2 px-4 pt-4 pb-1">
         <div className="min-w-0">
           <h2 className="text-callout font-medium text-label-secondary">{label}</h2>
@@ -55,6 +55,6 @@ export function HeroMetric({
         ) : null}
       </div>
       {children ? <div className="mt-auto px-2 pb-2">{children}</div> : null}
-    </section>
+    </ListCard>
   )
 }

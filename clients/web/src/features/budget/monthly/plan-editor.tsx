@@ -16,7 +16,6 @@
 //   Merchants  merchant-directory.tsx.
 //   No plan yet  the setup: one card per step in a settings-width column.
 
-import Link from "next/link"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   IconArchive, IconCheck, IconChevronRight, IconListDetails, IconMoodSmile, IconPigMoney, IconPlus, IconReceipt, IconRepeat, IconRestore, IconTag, IconX,
@@ -27,7 +26,7 @@ import { FormSelect } from "@/components/app/form-select"
 import { DetailSheet, FormSheet, type FormSheetResult } from "@/components/app/form-sheet"
 import { SearchableSelect } from "@/components/app/searchable-select"
 import { Field } from "@/components/app/field"
-import { FormRow, Group, IconTile, listCardClass, Row } from "@/components/app/grouped"
+import { CardHeader, FormRow, Group, IconTile, ListCard, ListEmpty, ListFooter, ListSubhead, Row, TextAction } from "@/components/app/grouped"
 import { MetricStrip, type MetricCell } from "@/components/app/metric-strip"
 import { PageHeader } from "@/components/app/page-header"
 import { Segmented } from "@/components/app/segmented"
@@ -44,7 +43,7 @@ import { cn } from "@/lib/utils"
 import type { Merchant } from "../merchants"
 import { MerchantDirectory } from "../merchant-directory"
 import { cancelMonthlyPlan, previewMonthlyPlan, saveMonthlyCategory, saveMonthlyPlan } from "./api"
-import { CategoryAppearancePicker, CategoryLookButton } from "./category-appearance-picker"
+import { CategoryLookButton, CategoryLookFields } from "./category-appearance-picker"
 import { categoryVisual } from "./category-visuals"
 import { expenseRowModel, fill, formatters, moneyInput, parseMoney, periodMonth, type Formatters, type Run } from "./controller"
 import { type MonthlyCopy, monthlyCopy, monthlyError } from "./copy"
@@ -215,7 +214,7 @@ function PlanFooter({ draft, copy, fmt, state, busy, serverError, accessToken, r
   const problem = serverError || draft.error || (!draft.payload ? copy.invalid_input : draft.invalidCategory ? copy.categoryNameRequired : null)
   const changed = draft.fun.draft !== null && draft.fun.saved !== null && draft.fun.draft !== draft.fun.saved
   return (
-    <div className="space-y-1 border-t border-separator bg-fill px-4 py-2 text-footnote text-label-secondary">
+    <ListFooter className="space-y-1">
       <p aria-live="polite" className={cn(problem && "text-danger-text")}>
         {problem ?? (
           <>
@@ -237,20 +236,7 @@ function PlanFooter({ draft, copy, fmt, state, busy, serverError, accessToken, r
           </Button>
         </p>
       ) : null}
-    </div>
-  )
-}
-
-/** A card header: headline title, an optional hint under it, optional content on the right. */
-function CardHeader({ title, hint, children }: { title: string; hint?: string; children?: ReactNode }) {
-  return (
-    <div className="flex min-h-10 items-center justify-between gap-3 px-4 py-2 max-lg:min-h-12">
-      <div className="min-w-0">
-        <h2 className="text-headline">{title}</h2>
-        {hint ? <p className="text-footnote text-label-secondary">{hint}</p> : null}
-      </div>
-      {children}
-    </div>
+    </ListFooter>
   )
 }
 
@@ -261,10 +247,6 @@ function MoneyInput({ id, value, onChange, ariaLabel, autoFocus, quiet = false }
 }) {
   return <Input id={id} className={cn("w-28 text-right tabular-nums", quiet && cn(quietValueField, "max-sm:w-24"))} inputMode="decimal" aria-label={ariaLabel} aria-invalid={parseMoney(value) === null || undefined}
     autoFocus={autoFocus} value={value} onChange={event => onChange(event.target.value)} />
-}
-
-function EditLink({ href, label }: { href: string; label: string }) {
-  return <Link href={href} className="text-footnote font-medium text-link hover:underline">{label}</Link>
 }
 
 // ---------- Income & reserves (Plan type) ----------
@@ -283,11 +265,11 @@ function IncomePage(page: PageProps) {
 
   const cells: MetricCell[] = view ? [
     { label: copy.fixed, value: fmt.money(view.parts.fixed), icon: { glyph: IconReceipt, tone: "blue" }, note: fill(copy.itemCount, { count: view.counts.fixed }),
-      action: <EditLink href={budgetViews.fixed.route} label={copy.edit} /> },
+      action: <TextAction action={{ label: copy.edit, href: budgetViews.fixed.route }} className="text-footnote" /> },
     { label: copy.subscriptions, value: fmt.money(view.parts.monthly + view.parts.yearly), icon: { glyph: IconRepeat, tone: "purple" },
-      note: fill(copy.monthlyAndYearly, { monthly: view.counts.monthly, yearly: view.counts.yearly }), action: <EditLink href={budgetViews.monthly.route} label={copy.edit} /> },
+      note: fill(copy.monthlyAndYearly, { monthly: view.counts.monthly, yearly: view.counts.yearly }), action: <TextAction action={{ label: copy.edit, href: budgetViews.monthly.route }} className="text-footnote" /> },
     { label: copy.categories, value: fmt.money(view.parts.reserves), icon: { glyph: IconTag, tone: "green" }, note: fill(copy.withReserve, { count: view.counts.reserves }),
-      action: <EditLink href={budgetViews.categories.route} label={copy.edit} /> },
+      action: <TextAction action={{ label: copy.edit, href: budgetViews.categories.route }} className="text-footnote" /> },
     { label: copy.savingsAndBuffer, value: fmt.money(view.parts.savings + view.parts.buffer), icon: { glyph: IconPigMoney, tone: "yellow" },
       note: `${copy.savings} ${fmt.money(view.parts.savings)} · ${copy.bufferSource} ${fmt.money(view.parts.buffer)}` },
     { label: copy.fun, value: fmt.money(view.parts.fun), negative: view.parts.fun < 0, icon: { glyph: IconMoodSmile, tone: "brand" },
@@ -298,7 +280,7 @@ function IncomePage(page: PageProps) {
     <div className="space-y-4">
       <PlanToolbar title={copy.incomeReserves} draft={draft} copy={copy} fmt={fmt} busy={busy} />
       {view ? (
-        <section className={listCardClass}>
+        <ListCard>
           <CardHeader title={fill(copy.breakdownTitle, { amount: fmt.money(view.parts.income), month: view.month })} />
           <div className="border-t border-separator px-4 py-1.5">
             <BreakdownChart
@@ -314,20 +296,20 @@ function IncomePage(page: PageProps) {
               formatMoney={fmt.money}
             />
           </div>
-          <p className="border-t border-separator bg-fill px-4 py-2 text-footnote text-label-secondary">{copy.leftoverNote}</p>
-        </section>
+          <ListFooter>{copy.leftoverNote}</ListFooter>
+        </ListCard>
       ) : null}
       {cells.length > 0 ? <MetricStrip cells={cells} /> : null}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section className={listCardClass}>
-          <CardHeader title={copy.plan} hint={copy.moneyHint} />
+        <ListCard>
+          <CardHeader title={copy.plan} description={copy.moneyHint} />
           <fieldset disabled={busy} className="hairline-rows border-t border-separator">
             <FormRow label={copy.income} htmlFor="plan-income"><MoneyInput id="plan-income" value={draft.income} onChange={draft.setIncome} /></FormRow>
             <FormRow label={copy.bufferRate} htmlFor="plan-buffer"><MoneyInput id="plan-buffer" value={draft.buffer} onChange={draft.setBuffer} /></FormRow>
             <FormRow label={copy.savingsRate} htmlFor="plan-savings"><MoneyInput id="plan-savings" value={draft.savings} onChange={draft.setSavings} /></FormRow>
           </fieldset>
           <PlanFooter {...page} />
-        </section>
+        </ListCard>
         {draft.forecast.length > 0 ? <Forecast forecast={draft.forecast} locale={page.locale} currency={state.currency} /> : null}
       </div>
     </div>
@@ -366,12 +348,12 @@ function CostsPage(page: PageProps & { kind: MonthlyCost["kind"] }) {
     <div className="space-y-4">
       <PlanToolbar title={title} draft={draft} copy={copy} fmt={fmt} busy={busy} />
       <MetricStrip cells={cells} />
-      <section className={listCardClass}>
+      <ListCard>
         <fieldset disabled={busy} className="hairline-rows">
           <CostRows kind={kind} draft={draft} copy={copy} merchants={page.merchants} />
         </fieldset>
         <PlanFooter {...page} />
-      </section>
+      </ListCard>
     </div>
   )
 }
@@ -473,13 +455,13 @@ function CategoriesPage(page: PageProps) {
         actions={<ToolbarButton label={copy.saveChanges} onClick={() => void draft.save()} disabled={busy || !draft.canSave} />}
         primaryAction={{ label: copy.addCategory, icon: <IconPlus />, onClick: () => setAdding(true), disabled: busy }} />
       <MetricStrip cells={cells} />
-      <section className={listCardClass}>
-        <CardHeader title={copy.categories} hint={`${copy.reserve}: ${copy.noReserve}`} />
+      <ListCard>
+        <CardHeader title={copy.categories} description={`${copy.reserve}: ${copy.noReserve}`} />
         <div className="hairline-rows border-t border-separator">
           <CategoryRows {...page} inspect={category => setInspected(category.id)} />
         </div>
         <PlanFooter {...page} />
-      </section>
+      </ListCard>
       {adding ? <CategorySheet copy={copy} locale={page.locale} close={() => setAdding(false)}
         save={(name, appearance) => page.run(() => saveMonthlyCategory(page.accessToken, name, undefined, appearance), "sheet")} /> : null}
       {inspectedCategory ? <CategoryDetails page={page} category={inspectedCategory} close={() => setInspected(null)} /> : null}
@@ -568,7 +550,7 @@ function CategorySheet({ copy, locale, close, save }: {
           </Field>
         </div>
       </div>
-      <CategoryAppearancePicker locale={locale} color={color} icon={icon} onColor={setColor} onIcon={setIcon} />
+      <CategoryLookFields automatic locale={locale} color={color} icon={icon} onColor={setColor} onIcon={setIcon} />
     </FormSheet>
   )
 }
@@ -610,7 +592,7 @@ function CategoryDetails({ page, category, close }: { page: PageProps; category:
       <MetricStrip cells={view.cells} />
       <Group>
         {view.rows.length === 0
-          ? <p className="px-4 py-3 text-footnote text-label-secondary">{copy.noCategoryExpenses}</p>
+          ? <ListEmpty>{copy.noCategoryExpenses}</ListEmpty>
           : view.rows.map(row => <ExpenseRow key={row.expense.id} row={row} copy={copy} showDate />)}
         <Row href={`/budget/expenses?category=${category.id}`} className="justify-between font-medium text-link">
           {copy.categoryExpenses}<IconChevronRight className="size-4" />
@@ -639,7 +621,7 @@ function PlanSetup(page: PageProps) {
   return (
     <div className="mx-auto w-full max-w-[720px] space-y-4">
       <PageHeader title={copy.plan} caption={copy.setupTitle} />
-      <section className={listCardClass}>
+      <ListCard>
         <div className="space-y-3 px-4 pt-3 pb-3">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-headline">{steps[step].title}</h2>
@@ -666,7 +648,7 @@ function PlanSetup(page: PageProps) {
           ) : null}
           {step === 1 ? costKinds.map(kind => (
             <div key={kind} className="hairline-rows">
-              <h3 className="bg-fill px-4 py-1.5 text-caption text-label-secondary">{kind === "fixed" ? copy.fixed : kind === "monthly" ? copy.monthly : copy.yearly}</h3>
+              <ListSubhead>{kind === "fixed" ? copy.fixed : kind === "monthly" ? copy.monthly : copy.yearly}</ListSubhead>
               <CostRows kind={kind} draft={draft} copy={copy} merchants={page.merchants} />
             </div>
           )) : null}
@@ -702,7 +684,7 @@ function PlanSetup(page: PageProps) {
             <Button disabled={busy || !draft.canSave} onClick={() => void draft.save()}>{copy.startPlan}</Button>
           )}
         </div>
-      </section>
+      </ListCard>
       {step === 3 && draft.previewCurrent && draft.forecast.length > 0 ? <Forecast forecast={draft.forecast} locale={page.locale} currency={state.currency} /> : null}
       {adding ? <CategorySheet copy={copy} locale={page.locale} close={() => setAdding(false)}
         save={(name, appearance) => page.run(() => saveMonthlyCategory(page.accessToken, name, undefined, appearance), "sheet")} /> : null}
@@ -735,7 +717,7 @@ export function Forecast({ forecast, locale, currency }: { forecast: MonthlyFore
           <span className={cn("font-medium tabular-nums", row.negative && "text-danger-text")}>{row.amount}</span>
         </Row>
       ))}
-      <p className="bg-fill px-4 py-2 text-footnote text-label-secondary">{copy.forecastNote}</p>
+      <ListFooter>{copy.forecastNote}</ListFooter>
     </Group>
   )
 }

@@ -13,11 +13,10 @@
 //       note: "übrig von 450,00 €", meter: { fraction: 0.38, marker: 0.35 } },
 //   ]} />
 
-import Link from "next/link"
 import { useId, type ComponentProps, type ReactNode } from "react"
 import { IconPlus } from "@tabler/icons-react"
 
-import { IconTile, Meter, listCardClass } from "@/components/app/grouped"
+import { CardHeader, IconTile, ListCard, Meter, type CardAction } from "@/components/app/grouped"
 import type { Tone } from "@/lib/tone"
 import { cn } from "@/lib/utils"
 
@@ -41,7 +40,6 @@ type MetricCellContent = {
 export type MetricCell = MetricCellContent &
   ({ action?: ReactNode; select?: never } | { select: { label: string; onClick: () => void }; action?: never })
 
-export type CardAction = { label: string; href: string } | { label: string; onClick: () => void }
 
 // A cell's width per row of 1–5 columns, less 1px so the hairlines still fit; cells
 // grow from there. Written out so Tailwind sees every class.
@@ -65,20 +63,15 @@ export function MetricStrip({
   className?: string
 }) {
   return (
-    <section className={cn(listCardClass, className)} aria-label={title}>
-      {title ? (
-        <div className="flex min-h-10 items-center justify-between gap-3 border-b border-separator px-4 py-2 max-lg:min-h-12">
-          <h2 className="text-headline">{title}</h2>
-          {action ? <HeaderAction action={action} /> : null}
-        </div>
-      ) : null}
+    <ListCard className={className} label={title}>
+      {title ? <CardHeader title={title} action={action} /> : null}
       {/* The separator shows through the 1px gaps as hairlines between cells. */}
-      <div className="flex flex-wrap gap-px bg-separator">
+      <div className={cn("flex flex-wrap gap-px bg-separator", title && "border-t border-separator")}>
         {cells.map((cell) => (
           <MetricCellView key={cell.label} cell={cell} basis={desktopBasis[desktopColumns(cells.length)]} />
         ))}
       </div>
-    </section>
+    </ListCard>
   )
 }
 
@@ -119,18 +112,5 @@ function MetricCellView({ cell, basis }: { cell: MetricCell; basis: string }) {
       {content}
       {cell.action ? <div className="mt-auto pt-1">{cell.action}</div> : null}
     </div>
-  )
-}
-
-function HeaderAction({ action }: { action: CardAction }) {
-  const className = "shrink-0 text-right font-medium text-link hover:underline"
-  return "href" in action ? (
-    <Link href={action.href} className={className}>
-      {action.label}
-    </Link>
-  ) : (
-    <button type="button" onClick={action.onClick} className={className}>
-      {action.label}
-    </button>
   )
 }

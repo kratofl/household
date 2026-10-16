@@ -12,7 +12,7 @@ import { IconDots, IconReceipt, IconRepeat } from "@tabler/icons-react"
 
 import { DailyBarChart } from "@/components/app/charts"
 import { FormSelect } from "@/components/app/form-select"
-import { Group, IconTile, listCardClass, Meter, Row } from "@/components/app/grouped"
+import { Group, IconTile, ListCard, ListEmpty, ListFooter, ListSubhead, Meter, Row } from "@/components/app/grouped"
 import { SearchInput } from "@/components/app/search-input"
 import { Segmented } from "@/components/app/segmented"
 import { Badge } from "@/components/ui/badge"
@@ -222,10 +222,10 @@ export function MonthlyExpenseHistory({
                       <span className="tabular-nums">{fmt.money(cost.amountCents)}</span>
                     </Row>
                   ))}
-                  <div className="flex items-center gap-3 bg-fill px-4 py-2 text-footnote text-label-secondary">
+                  <ListFooter className="flex items-center gap-3">
                     <span className="min-w-0 flex-1">{copy.upcomingFooter}</span>
                     <span className="font-semibold text-label tabular-nums">{fmt.money(view.costs.reduce((sum, cost) => sum + cost.amountCents, 0))}</span>
-                  </div>
+                  </ListFooter>
                 </Group>
               ) : null}
             </div>
@@ -248,7 +248,7 @@ function ExpenseTable({ groups, tags, copy, busy, empty, open, voidEntry }: {
   voidEntry: (expense: MonthlyExpense) => void
 }) {
   return (
-    <section className={listCardClass} aria-label={copy.expenses}>
+    <ListCard label={copy.expenses}>
       <div aria-hidden className={cn("hidden h-8 items-center px-4 text-caption text-label-secondary", groups.length > 0 && tableColumns)}>
         <span>{copy.colMerchant}</span>
         <span>{copy.category}</span>
@@ -257,14 +257,11 @@ function ExpenseTable({ groups, tags, copy, busy, empty, open, voidEntry }: {
         <span />
       </div>
       {groups.length === 0 ? (
-        <p className="px-4 py-6 text-center text-footnote text-label-secondary">{empty}</p>
+        <ListEmpty>{empty}</ListEmpty>
       ) : (
         groups.map((group, index) => (
           <section key={group.date} aria-label={group.label}>
-            <h3 className={cn("flex min-h-[30px] items-center justify-between gap-3 bg-fill px-4 text-footnote font-semibold text-label-secondary", index > 0 && "border-t border-separator", "lg:border-t lg:border-separator")}>
-              <span>{group.label}</span>
-              <span className="tabular-nums">{group.total}</span>
-            </h3>
+            <ListSubhead trailing={group.total} className={cn(index > 0 && "border-t border-separator", "lg:border-t lg:border-separator")}>{group.label}</ListSubhead>
             <ul className="hairline-rows border-t border-separator">
               {group.rows.map((row) => (
                 <LedgerRow key={row.expense.id} row={row} tags={tags.get(row.expense.id) ?? []} copy={copy} busy={busy} open={open} voidEntry={voidEntry} />
@@ -273,7 +270,7 @@ function ExpenseTable({ groups, tags, copy, busy, empty, open, voidEntry }: {
           </section>
         ))
       )}
-    </section>
+    </ListCard>
   )
 }
 

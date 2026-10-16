@@ -1,16 +1,16 @@
 "use client"
 
-// Colour and icon of a category. In the new-category sheet they are two groups of toggle
-// buttons: a picked option is a selected chip (brand-100, DESIGN.md Colour) with
-// aria-pressed; colours show as a -500 dot beside their name, never as a tinted button,
-// so the selection stays readable on every colour. In the categories table the tile
-// itself is the button and opens both as a compact popover (CategoryLookButton).
+// Colour and icon of a category, picked the same way everywhere: colours as a row of
+// swatches and icons as a grid, each a radio group (one Tab stop, arrow keys move and
+// select). The new-category sheet shows them inline with an extra "automatic" swatch;
+// in the categories table the tile itself is the button and opens them in a popover
+// (CategoryLookButton).
 
-import { Popover } from "radix-ui"
-import { IconChevronDown } from "@tabler/icons-react"
+import { IconChevronDown, IconSparkles } from "@tabler/icons-react"
 
 import { IconTile } from "@/components/app/grouped"
-import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import type { Locale } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { categoryColors, categoryIcons, categoryVisual } from "./category-visuals"
@@ -25,39 +25,55 @@ const names = {
 const dots: Record<(typeof categoryColors)[number], string> = {
   brand: "bg-brand-500", green: "bg-green-500", blue: "bg-blue-500", purple: "bg-purple-500", yellow: "bg-yellow-500",
 }
-const selected = "aria-pressed:bg-brand-100 aria-pressed:text-brand-700 dark:aria-pressed:bg-brand-500/20 dark:aria-pressed:text-brand-300"
+// Sheets and popovers are both on surface-floating, so the ring offset matches either.
+const swatchClass = "grid size-6 place-items-center rounded-full data-[state=checked]:ring-2 data-[state=checked]:ring-label data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-surface-floating max-lg:size-11"
+// The value of the automatic swatch; a category without a colour gets one from its name.
+const AUTOMATIC = "automatic"
 
-export function CategoryAppearancePicker({ locale, color, icon, onColor, onIcon }: {
+/**
+ * The swatches and the icon grid. With `automatic` the colours start with an
+ * "automatic" swatch, which stands for no colour (null).
+ */
+export function CategoryLookFields({ locale, color, icon, onColor, onIcon, automatic = false, className }: {
   locale: Locale; color: string | null; icon: string; onColor: (value: string | null) => void; onIcon: (value: string) => void
+  /** Offer "assign automatically" as the first colour. */
+  automatic?: boolean; className?: string
 }) {
   const copy = monthlyCopy(locale)
-  return <div className="w-full space-y-4">
-    <fieldset className="space-y-2">
-      <legend className="mb-2 text-caption">{copy.color}</legend>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" aria-pressed={color === null} onClick={() => onColor(null)} className={selected}>{copy.automaticColor}</Button>
-        {categoryColors.map(value => <Button type="button" key={value} variant="secondary" aria-pressed={color === value} onClick={() => onColor(value)} className={selected}>
-          <span aria-hidden className={cn("size-2.5 rounded-full", dots[value])} />
-          {names[locale][value]}
-        </Button>)}
-      </div>
-    </fieldset>
-    <fieldset className="space-y-2">
-      <legend className="mb-2 text-caption">{copy.icon}</legend>
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(categoryIcons).map(([value, Glyph]) => {
-          const label = Object.entries(names[locale]).find(([key]) => key === value)?.[1]
-          return <Button type="button" key={value} size="icon" variant="secondary" aria-label={label} title={label} aria-pressed={icon === value} onClick={() => onIcon(value)} className={selected}><Glyph /></Button>
-        })}
-      </div>
-    </fieldset>
-  </div>
+  const iconName = (value: string) => Object.entries(names[locale]).find(([key]) => key === value)?.[1]
+  return (
+    <div className={cn("space-y-3", className)}>
+      <fieldset>
+        <legend className="mb-2 text-caption text-label-secondary">{copy.color}</legend>
+        <RadioGroup aria-label={copy.color} value={color ?? AUTOMATIC} onValueChange={value => onColor(value === AUTOMATIC ? null : value)} className="flex flex-wrap gap-2.5">
+          {automatic ? (
+            <RadioGroupItem value={AUTOMATIC} aria-label={copy.automaticColor} title={copy.automaticColor} className={cn(swatchClass, "bg-fill-strong text-label-secondary")}>
+              <IconSparkles className="size-3.5 [stroke-width:2]" />
+            </RadioGroupItem>
+          ) : null}
+          {categoryColors.map(value => (
+            <RadioGroupItem key={value} value={value} aria-label={names[locale][value]} title={names[locale][value]} className={cn(swatchClass, dots[value])} />
+          ))}
+        </RadioGroup>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-caption text-label-secondary">{copy.icon}</legend>
+        <RadioGroup aria-label={copy.icon} value={icon} onValueChange={onIcon} className="grid grid-cols-5 gap-1">
+          {Object.entries(categoryIcons).map(([value, Glyph]) => (
+            <RadioGroupItem key={value} value={value} aria-label={iconName(value)} title={iconName(value)}
+              className="grid h-8 place-items-center rounded-sm text-label-secondary hover:bg-fill data-[state=checked]:bg-fill-strong data-[state=checked]:text-label max-lg:h-11 max-lg:rounded-full">
+              <Glyph className="size-4" />
+            </RadioGroupItem>
+          ))}
+        </RadioGroup>
+      </fieldset>
+    </div>
+  )
 }
 
 /**
- * A category's tile as a button: it opens the colour (dots) and icon (grid) as a small
- * glass popover, each option a labelled toggle with aria-pressed. A small chevron on the
- * tile says it opens something.
+ * A category's tile as a button that opens CategoryLookFields in a popover. A small
+ * chevron on the tile says it opens something.
  */
 export function CategoryLookButton({ locale, name, color, icon, onColor, onIcon, disabled = false }: {
   locale: Locale; name: string; color: string; icon: string; onColor: (value: string) => void; onIcon: (value: string) => void; disabled?: boolean
@@ -66,8 +82,8 @@ export function CategoryLookButton({ locale, name, color, icon, onColor, onIcon,
   const visual = categoryVisual(name, { color, icon })
   const label = `${copy.categoryLook}: ${name}`
   return (
-    <Popover.Root>
-      <Popover.Trigger asChild>
+    <Popover>
+      <PopoverTrigger asChild>
         <button type="button" disabled={disabled} aria-label={label} title={copy.categoryLook}
           className="relative shrink-0 rounded-sm disabled:opacity-50 data-[state=open]:ring-2 data-[state=open]:ring-brand-500">
           <IconTile icon={visual.icon} tone={visual.tone} size={28} />
@@ -75,34 +91,10 @@ export function CategoryLookButton({ locale, name, color, icon, onColor, onIcon,
             <IconChevronDown className="size-2.5" />
           </span>
         </button>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content aria-label={label} align="start" sideOffset={6} className="glass z-[60] w-[17rem] max-w-[calc(100vw-2rem)] space-y-3 rounded-lg p-3">
-          <fieldset>
-            <legend className="mb-2 text-caption text-label-secondary">{copy.color}</legend>
-            <div className="flex gap-2.5">
-              {categoryColors.map(value => (
-                <button key={value} type="button" aria-label={names[locale][value]} title={names[locale][value]} aria-pressed={color === value} onClick={() => onColor(value)}
-                  className={cn("size-6 rounded-full aria-pressed:ring-2 aria-pressed:ring-label aria-pressed:ring-offset-2 aria-pressed:ring-offset-surface-floating", dots[value])} />
-              ))}
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend className="mb-2 text-caption text-label-secondary">{copy.icon}</legend>
-            <div className="grid grid-cols-5 gap-1">
-              {Object.entries(categoryIcons).map(([value, Glyph]) => {
-                const glyphLabel = Object.entries(names[locale]).find(([key]) => key === value)?.[1]
-                return (
-                  <button key={value} type="button" aria-label={glyphLabel} title={glyphLabel} aria-pressed={icon === value} onClick={() => onIcon(value)}
-                    className="grid h-8 place-items-center rounded-sm text-label-secondary hover:bg-fill aria-pressed:bg-fill-strong aria-pressed:text-label">
-                    <Glyph className="size-4" />
-                  </button>
-                )
-              })}
-            </div>
-          </fieldset>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      </PopoverTrigger>
+      <PopoverContent aria-label={label} className="w-[18rem]">
+        <CategoryLookFields locale={locale} color={color} icon={icon} onColor={value => { if (value) onColor(value) }} onIcon={onIcon} />
+      </PopoverContent>
+    </Popover>
   )
 }

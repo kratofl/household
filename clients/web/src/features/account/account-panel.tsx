@@ -5,8 +5,9 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { SettingsBlock, SettingsField, SettingsRow, SettingsSection, SettingsSurface } from "@/components/app/settings-surface"
+import { Field } from "@/components/app/field"
+import { Block, FormRow, Group } from "@/components/app/grouped"
+import { SettingsSurface } from "@/components/app/settings-surface"
 import type { Translator } from "@/lib/i18n"
 import type { CurrentUser } from "@/lib/session"
 
@@ -27,18 +28,17 @@ export function AccountPanel(props: {
   const providerName = props.oidcName ?? (props.currentUser.oidcLinked ? "SSO" : null)
   return (
     <SettingsSurface title={props.t("account.title")} description={props.t("account.description")}>
-      <SettingsSection title={props.t("account.profileTitle")} description={props.t("account.profileDescription")}>
-        <SettingsField label={props.t("auth.name")} value={props.currentUser.name} />
-        <SettingsField label={props.t("auth.email")} value={props.currentUser.email} />
-        <SettingsField
-          label={props.t("account.role")}
-          value={props.t(props.currentUser.role === "admin" ? "users.roleAdmin" : "users.roleUser")}
-        />
-        <SettingsField label={props.t("account.status")} value={props.t(`users.status.${props.currentUser.status}`)} />
-      </SettingsSection>
+      <Group title={props.t("account.profileTitle")} description={props.t("account.profileDescription")}>
+        <FormRow label={props.t("auth.name")}><span className="truncate text-label-secondary">{props.currentUser.name}</span></FormRow>
+        <FormRow label={props.t("auth.email")}><span className="truncate text-label-secondary">{props.currentUser.email}</span></FormRow>
+        <FormRow label={props.t("account.role")}>
+          <span className="truncate text-label-secondary">{props.t(props.currentUser.role === "admin" ? "users.roleAdmin" : "users.roleUser")}</span>
+        </FormRow>
+        <FormRow label={props.t("account.status")}><span className="truncate text-label-secondary">{props.t(`users.status.${props.currentUser.status}`)}</span></FormRow>
+      </Group>
 
-      <SettingsSection title={props.t("account.passwordTitle")} description={props.t("account.passwordDescription")}>
-        <SettingsBlock>
+      <Group title={props.t("account.passwordTitle")} description={props.t("account.passwordDescription")}>
+        <Block>
           <form
             className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
             onSubmit={(event) => {
@@ -46,38 +46,34 @@ export function AccountPanel(props: {
               void props.changePassword()
             }}
           >
-            <div className="space-y-2">
-              <Label htmlFor="account-current-password">{props.t("account.currentPassword")}</Label>
+            <Field label={props.t("account.currentPassword")}>
               <Input
-                id="account-current-password"
                 type="password"
                 autoComplete="current-password"
                 value={props.currentPassword}
                 onChange={(event) => props.setCurrentPassword(event.target.value)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="account-new-password">{props.t("account.newPassword")}</Label>
+            </Field>
+            <Field label={props.t("account.newPassword")}>
               <Input
-                id="account-new-password"
                 type="password"
                 autoComplete="new-password"
                 value={props.newPassword}
                 onChange={(event) => props.setNewPassword(event.target.value)}
               />
-            </div>
+            </Field>
             <Button type="submit">{props.t("account.changePassword")}</Button>
           </form>
-        </SettingsBlock>
-      </SettingsSection>
+        </Block>
+      </Group>
 
       {providerName ? (
-        <SettingsSection
+        <Group
           title={props.t("account.oidcTitle", { name: providerName })}
           description={props.t("account.oidcDescription", { name: providerName })}
         >
-          <SettingsRow
-            title={props.currentUser.oidcLinked ? props.t("account.oidcLinked") : props.t("account.oidcNotLinked")}
+          <FormRow
+            label={props.currentUser.oidcLinked ? props.t("account.oidcLinked") : props.t("account.oidcNotLinked")}
           >
             {props.currentUser.oidcLinked ? (
               <Button variant="outline" onClick={() => void props.unlinkOidc()}>
@@ -86,8 +82,8 @@ export function AccountPanel(props: {
             ) : props.oidcName ? (
               <Button onClick={() => void props.linkOidc()}>{props.t("account.oidcLink")}</Button>
             ) : null}
-          </SettingsRow>
-        </SettingsSection>
+          </FormRow>
+        </Group>
       ) : null}
     </SettingsSurface>
   )

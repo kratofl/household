@@ -39,7 +39,7 @@ export type BudgetWidgetContext = {
 }
 
 /** Lets a Group card fill its board cell, so cards in one row share their height. */
-const fullHeight = "h-full *:h-full"
+const fullHeight = "h-full"
 
 /**
  * Every Budget widget. Returns an empty list until the period summary exists, so

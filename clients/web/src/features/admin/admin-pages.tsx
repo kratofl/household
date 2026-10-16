@@ -16,15 +16,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Field } from "@/components/app/field"
 import { FormSheet } from "@/components/app/form-sheet"
-import { listCardClass } from "@/components/app/grouped"
+import { CardHeader, FormRow, Group, ListCard, ListEmpty } from "@/components/app/grouped"
 import { PageHeader } from "@/components/app/page-header"
-import {
-  SettingsEmpty,
-  SettingsRow,
-  SettingsSection,
-  SettingsSectionHeader,
-  SettingsSurface,
-} from "@/components/app/settings-surface"
+import { SettingsSurface } from "@/components/app/settings-surface"
 import { ToolbarButton, ToolbarGroup } from "@/components/app/toolbar"
 import { Switch } from "@/components/ui/switch"
 import { moduleDescription, moduleName, type AppModule } from "@/lib/modules"
@@ -38,9 +32,9 @@ import type { AuditEvent, CreateUserResult, NewUser, UserChange } from "@/featur
 export function AdminForbidden({ t }: { t: Translator }) {
   return (
     <SettingsSurface title={t("nav.admin")}>
-      <SettingsSection title={t("admin.forbiddenTitle")}>
-        <SettingsEmpty>{t("admin.forbiddenDescription")}</SettingsEmpty>
-      </SettingsSection>
+      <Group title={t("admin.forbiddenTitle")}>
+        <ListEmpty>{t("admin.forbiddenDescription")}</ListEmpty>
+      </Group>
     </SettingsSurface>
   )
 }
@@ -71,7 +65,7 @@ export function AdminUsersPage(props: {
       primaryAction={{ label: props.t("users.new"), icon: <IconUserPlus />, onClick: () => setCreating(true) }}
     >
       {pending.length > 0 ? (
-        <SettingsSection title={props.t("users.pendingTitle")} description={props.t("users.pendingDescription")}>
+        <Group title={props.t("users.pendingTitle")} description={props.t("users.pendingDescription")}>
           {pending.map((user) => (
             <UserRow key={user.id} user={user} t={props.t}>
               <Button size="sm" variant="secondary" onClick={() => props.updateUser(user, { status: "active" })}>
@@ -82,10 +76,10 @@ export function AdminUsersPage(props: {
               </Button>
             </UserRow>
           ))}
-        </SettingsSection>
+        </Group>
       ) : null}
 
-      <SettingsSection title={props.t("users.accountsTitle")} description={props.t("users.accountsDescription")}>
+      <Group title={props.t("users.accountsTitle")} description={props.t("users.accountsDescription")}>
         {accounts.map((user) =>
           user.id === props.currentUser.id ? (
             <UserRow key={user.id} user={user} own t={props.t} />
@@ -95,7 +89,7 @@ export function AdminUsersPage(props: {
             </UserRow>
           ),
         )}
-      </SettingsSection>
+      </Group>
 
       <CreateUserSheet open={creating} close={() => setCreating(false)} createUser={props.createUser} t={props.t} />
     </SettingsSurface>
@@ -104,15 +98,15 @@ export function AdminUsersPage(props: {
 
 function UserRow(props: { user: CurrentUser; own?: boolean; t: Translator; children?: React.ReactNode }) {
   return (
-    <SettingsRow
-      title={props.own ? props.t("users.you", { name: props.user.name }) : props.user.name}
-      description={`${props.user.email} · ${props.t(props.user.role === "admin" ? "users.roleAdmin" : "users.roleUser")}`}
+    <FormRow
+      label={props.own ? props.t("users.you", { name: props.user.name }) : props.user.name}
+      hint={`${props.user.email} · ${props.t(props.user.role === "admin" ? "users.roleAdmin" : "users.roleUser")}`}
     >
       <StatusDot status={statusDot[props.user.status]} className="text-footnote">
         {props.t(`users.status.${props.user.status}`)}
       </StatusDot>
       {props.children}
-    </SettingsRow>
+    </FormRow>
   )
 }
 
@@ -209,15 +203,15 @@ export function AdminServicesPage(props: {
 }) {
   return (
     <SettingsSurface title={props.t("nav.adminServices")}>
-      <SettingsSection title={props.t("services.modulesTitle")} description={props.t("services.description")}>
+      <Group title={props.t("services.modulesTitle")} description={props.t("services.description")}>
         {props.modules.length === 0 ? (
-          <SettingsEmpty>{props.t("services.empty")}</SettingsEmpty>
+          <ListEmpty>{props.t("services.empty")}</ListEmpty>
         ) : (
           props.modules.map((module) => (
-            <SettingsRow
+            <FormRow
               key={module.id}
-              title={moduleName(module, props.locale)}
-              description={`${moduleDescription(module, props.locale)} · ${
+              label={moduleName(module, props.locale)}
+              hint={`${moduleDescription(module, props.locale)} · ${
                 module.enabled ? props.t("services.available") : props.t("services.unavailable")
               }`}
             >
@@ -229,10 +223,10 @@ export function AdminServicesPage(props: {
                   name: moduleName(module, props.locale),
                 })}
               />
-            </SettingsRow>
+            </FormRow>
           ))
         )}
-      </SettingsSection>
+      </Group>
     </SettingsSurface>
   )
 }
@@ -263,11 +257,11 @@ export function AdminAuditPage(props: {
           </ToolbarGroup>
         }
       />
-      <section className={listCardClass}>
-        <SettingsSectionHeader title={t("audit.eventsTitle")} description={t("audit.description")} />
+      <ListCard>
+        <CardHeader title={t("audit.eventsTitle")} description={t("audit.description")} />
         {props.auditEvents.length === 0 ? (
           <div className="border-t border-separator">
-            <SettingsEmpty>{t("audit.empty")}</SettingsEmpty>
+            <ListEmpty>{t("audit.empty")}</ListEmpty>
           </div>
         ) : (
           <table className="w-full border-t border-separator text-callout">
@@ -303,7 +297,7 @@ export function AdminAuditPage(props: {
             </tbody>
           </table>
         )}
-      </section>
+      </ListCard>
     </div>
   )
 }

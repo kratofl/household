@@ -191,6 +191,10 @@ Web: a 224px sidebar (edge-to-edge, `sidebar-bg`) beside the content, with the
 
 ## Components
 
+Every component here exists once in the web client: primitives in
+`src/components/ui`, compositions in `src/components/app`. Pages compose them and
+never restyle one in place; a shape a page needs twice becomes a component first.
+
 ### Button
 
 | Variant | Colours |
@@ -249,7 +253,8 @@ Quartal). Lives in the toolbar's leading group, or in content as a filter row.
 - Track: pill on `toolbar-fill` in the toolbar; in content a flat `fill-strong`
   track with `radius-md`, concentric with the `radius-sm` segments.
 - Selected: `segment-selected` + `shadow-segment`, semibold.
-- Renders as `radiogroup` with `radio` segments.
+- Renders as `radiogroup` with `radio` segments: one Tab stop, arrow keys move and
+  select.
 - Not for navigation (that is the sidebar / tab bar); never mixes icons and text,
   or actions and selections.
 
@@ -287,6 +292,26 @@ Leading 14px magnifier, placeholder „Suchen“ in `label-secondary`, text
 `border-control` edge and `radius-sm`, optional keyboard hint (⌘K) as a bordered
 `radius-xs` `kbd` on the right; in the toolbar it sits just before the primary
 action. Phones: a 44px pill on `fill`.
+
+### Popover and combobox
+
+A popover is small floating glass beside its trigger for a choice that needs more
+than a menu: `radius-lg`, 12px padding, `shadow-e3`. It also opens over sheets;
+Escape closes it and returns focus to the trigger.
+
+A combobox is a search field over options styled as context-menu items: arrow keys
+move the `brand-500` highlight, Enter picks, the saved value carries a check on the
+right. A searchable select opens one in a popover from a Select-shaped field; the
+app search shows its results under the field.
+
+### Choice grid
+
+Pick-one choices that are not words (colours, icons) are a radio group: one Tab
+stop, arrow keys move and select, every option named by `aria-label` and tooltip.
+Colours are 24px `-500` swatches (44px on phones); the picked one gets a 2px `label`
+ring offset 2px. Icons sit in a five-column grid of 32px cells (44px on phones); the
+picked one is `fill-strong` with `label` text. The same grid appears inline in a
+sheet and in a popover.
 
 ### Switch
 
@@ -440,9 +465,13 @@ no dimming.
 
 Column heads `caption` in `label-secondary`, rows 36px (48px on phones),
 `separator` hairlines, selected row = `fill` with `radius-md`. Card headers are
-40px (48px on phones): `headline` title, an optional `link` text action on the
-right. A list may end in a summary footer row on `fill` in `footnote`. Rows are
-flat inside their one card; a card never contains another card.
+40px (48px on phones): `headline` title with an optional `footnote` hint under it,
+and on the right either a `link` text action or one control (a search field) that
+wraps below the title when there is no room. Rows under a subheading (a day, a
+kind) start with a 30px `fill` subheader in `footnote` semibold `label-secondary`,
+its total on the right. A list may end in a summary footer row on `fill` in
+`footnote`. An empty list shows one centred `footnote` line in `label-secondary`.
+Rows are flat inside their one card; a card never contains another card.
 
 A table whose rows are edited in place uses quiet fields, so it still reads as a
 table. A text field has no edge at rest and looks like the row's text; it gains a

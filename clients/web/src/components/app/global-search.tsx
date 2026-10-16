@@ -5,12 +5,13 @@
 // On desktop it is the pill search field at the end of the toolbar; ⌘K or
 // Ctrl+K focuses it from anywhere. On phones it is a separate search tab next to
 // the tab bar that opens the same field above it. Arrow keys move through the
-// results, Enter opens one, Escape closes the list.
+// results, Enter opens one, Escape closes the list (a combobox, components/ui/command).
 
 import { IconSearch, type Icon } from "@tabler/icons-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore } from "react"
 
+import { Command, CommandEmpty, CommandHint, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { menuContentClass } from "@/components/ui/dropdown-menu"
 import type { Translator } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -60,15 +61,12 @@ function SearchBox({
   className,
 }: SearchProps & { above?: boolean; autoFocus?: boolean; shortcut?: boolean; onDone?: () => void; className?: string }) {
   const router = useRouter()
-  const listId = useId()
   const input = useRef<HTMLInputElement>(null)
   const [term, setTerm] = useState("")
   const [open, setOpen] = useState(autoFocus)
-  const [active, setActive] = useState(0)
   const isMac = useSyncExternalStore(noopSubscribe, () => /Mac|iPhone|iPad/.test(navigator.platform), () => false)
 
   const list = open ? results(term, destinations, expensesHref, t) : []
-  const selected = Math.min(active, Math.max(0, list.length - 1))
 
   useEffect(() => {
     if (!shortcut) return
@@ -95,47 +93,26 @@ function SearchBox({
     router.push(result.href)
   }
 
+  // Results are listed only while the field has focus, so the field is never collapsed
+  // while it is in use (cmdk always reports it expanded).
   return (
-    <div className={cn("relative", className)}>
-      <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-label-secondary [stroke-width:2] max-lg:left-3.5 max-lg:size-[15px]" />
-      <input
+    <Command shouldFilter={false} loop label={t("search.label")} className={cn("relative", className)}>
+      <CommandInput
         ref={input}
-        type="search"
-        role="combobox"
         autoFocus={autoFocus}
         aria-label={t("search.label")}
-        aria-expanded={open && list.length > 0}
-        aria-controls={listId}
-        aria-activedescendant={open && list.length > 0 ? `${listId}-${selected}` : undefined}
-        autoComplete="off"
         placeholder={t("search.placeholder")}
         value={term}
-        onChange={(event) => {
-          setTerm(event.target.value)
-          setActive(0)
+        onValueChange={(value) => {
+          setTerm(value)
           setOpen(true)
         }}
         onFocus={() => setOpen(true)}
         onBlur={close}
         onKeyDown={(event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault()
-            setOpen(true)
-            setActive((selected + 1) % Math.max(1, list.length))
-          } else if (event.key === "ArrowUp") {
-            event.preventDefault()
-            setActive((selected - 1 + list.length) % Math.max(1, list.length))
-          } else if (event.key === "Enter" && list[selected]) {
-            event.preventDefault()
-            go(list[selected])
-          } else if (event.key === "Escape") {
-            input.current?.blur()
-          }
+          if (event.key === "Escape") input.current?.blur()
         }}
-        className={cn(
-          "h-7 w-full rounded-sm border border-border-control bg-surface pl-8 text-callout text-label placeholder:text-label-secondary max-lg:h-11 max-lg:rounded-full max-lg:border-0 max-lg:bg-fill max-lg:pl-9 [&::-webkit-search-cancel-button]:hidden",
-          shortcut ? "pr-12" : "pr-4",
-        )}
+        inputClassName={shortcut ? "pr-12" : "pr-4"}
       />
       {shortcut ? (
         <kbd className="pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 rounded-xs border border-separator px-1 font-sans text-caption font-medium text-label-secondary">
@@ -144,51 +121,33 @@ function SearchBox({
       ) : null}
 
       {open ? (
-        <div
-          id={listId}
-          role="listbox"
-          aria-label={t("search.label")}
+        <CommandList
           className={cn(
             menuContentClass,
             "absolute right-0 left-0 max-h-80 min-w-0",
             above ? "bottom-[calc(100%+8px)] origin-bottom" : "top-[calc(100%+8px)] origin-top",
           )}
         >
-          {list.length === 0 ? (
-            <p className="px-2.5 py-2 text-footnote text-label-secondary">{t("search.empty")}</p>
-          ) : (
-            list.map((result, index) => {
-              const Glyph = result.icon
-              const highlighted = index === selected
-              return (
-                <div
-                  key={result.key}
-                  id={`${listId}-${index}`}
-                  role="option"
-                  aria-selected={highlighted}
-                  // Keeps focus in the input, so blur does not close the list before the click lands.
-                  onMouseDown={(event) => event.preventDefault()}
-                  onMouseEnter={() => setActive(index)}
-                  onClick={() => go(result)}
-                  className={cn(
-                    "flex h-[26px] cursor-default items-center gap-2 rounded-sm px-2 text-footnote font-medium max-lg:h-12 max-lg:rounded-full max-lg:px-4 max-lg:text-callout",
-                    highlighted ? "bg-brand-500 text-on-brand" : "text-label",
-                  )}
-                >
-                  <Glyph className="size-3.5 shrink-0 [stroke-width:2] max-lg:size-4" />
-                  <span className="min-w-0 flex-1 truncate">{result.label}</span>
-                  {result.group ? (
-                    <span className={cn("shrink-0 text-caption font-normal", highlighted ? "text-on-brand/75" : "text-label-secondary")}>
-                      {result.group}
-                    </span>
-                  ) : null}
-                </div>
-              )
-            })
-          )}
-        </div>
+          <CommandEmpty>{t("search.empty")}</CommandEmpty>
+          {list.map((result) => {
+            const Glyph = result.icon
+            return (
+              <CommandItem
+                key={result.key}
+                value={result.key}
+                // Keeps focus in the input, so blur does not close the list before the click lands.
+                onMouseDown={(event) => event.preventDefault()}
+                onSelect={() => go(result)}
+              >
+                <Glyph />
+                <span className="min-w-0 flex-1 truncate">{result.label}</span>
+                {result.group ? <CommandHint>{result.group}</CommandHint> : null}
+              </CommandItem>
+            )
+          })}
+        </CommandList>
       ) : null}
-    </div>
+    </Command>
   )
 }
 

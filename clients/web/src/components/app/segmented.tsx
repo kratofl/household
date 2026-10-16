@@ -9,10 +9,10 @@
 // SegmentedControl). Only in the toolbar is it a pill on the toolbar
 // fill, and below lg it is a pill with 40px segments on a 48px track like every
 // mobile control. Not for navigation.
-// Keyboard follows the radio group pattern: one Tab stop, arrow keys move and select.
+// Keyboard follows the radio group pattern (components/ui/radio-group): one Tab stop,
+// arrow keys move and select.
 
-import { useRef, type KeyboardEvent } from "react"
-
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { cn } from "@/lib/utils"
 
 export function Segmented<T extends string>({
@@ -28,46 +28,28 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void
   className?: string
 }) {
-  const index = options.findIndex((option) => option.value === value)
-  const group = useRef<HTMLDivElement>(null)
-  const onKeyDown = (event: KeyboardEvent) => {
-    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0
-    if (step === 0) return
-    event.preventDefault()
-    const next = (Math.max(0, index) + step + options.length) % options.length
-    onChange(options[next].value)
-    group.current?.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus()
-  }
   return (
-    <div
-      ref={group}
-      role="radiogroup"
+    <RadioGroup
       aria-label={ariaLabel}
-      onKeyDown={onKeyDown}
+      value={value}
+      onValueChange={(next) => {
+        const option = options.find((item) => item.value === next)
+        if (option) onChange(option.value)
+      }}
       className={cn(
         "grid w-fit auto-cols-fr grid-flow-col gap-0.5 rounded-md bg-fill-strong p-0.5 in-[.toolbar-band]:rounded-full in-[.toolbar-band]:bg-toolbar-fill max-lg:w-full max-lg:rounded-full max-lg:p-1",
         className,
       )}
     >
-      {options.map((option, position) => {
-        const selected = option.value === value
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            tabIndex={selected || (index < 0 && position === 0) ? 0 : -1}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "h-6 min-w-[72px] rounded-sm px-2.5 in-[.toolbar-band]:rounded-full max-lg:rounded-full text-footnote font-medium whitespace-nowrap text-label transition-[background-color,box-shadow] duration-200 motion-reduce:transition-none max-lg:h-10 max-lg:min-w-0 max-lg:px-3",
-              selected && "bg-segment-selected font-semibold shadow-(--shadow-segment)",
-            )}
-          >
-            {option.label}
-          </button>
-        )
-      })}
-    </div>
+      {options.map((option) => (
+        <RadioGroupItem
+          key={option.value}
+          value={option.value}
+          className="h-6 min-w-[72px] rounded-sm px-2.5 in-[.toolbar-band]:rounded-full max-lg:rounded-full text-footnote font-medium whitespace-nowrap text-label transition-[background-color,box-shadow] duration-200 motion-reduce:transition-none max-lg:h-10 max-lg:min-w-0 max-lg:px-3 data-[state=checked]:bg-segment-selected data-[state=checked]:font-semibold data-[state=checked]:shadow-(--shadow-segment)"
+        >
+          {option.label}
+        </RadioGroupItem>
+      ))}
+    </RadioGroup>
   )
 }
