@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { IconKey, IconLogin2, IconUserCheck } from "@tabler/icons-react"
+import { IconKey, IconLogin2 } from "@tabler/icons-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,9 +8,10 @@ import { Input } from "@/components/ui/input"
 
 import { Field } from "@/components/app/field"
 import { HouseholdLogo } from "@/components/app/household-logo"
-import { TabView } from "@/components/app/tab-view"
 import type { Translator } from "@/lib/i18n"
 
+// The stand-alone sign-in page: logo and app name over one card. Errors and notices
+// belong to the sign-in, so they sit inside that card above the form.
 export function LoginScreen(props: {
   title: string
   subtitle: string
@@ -19,22 +19,14 @@ export function LoginScreen(props: {
   message: string | null
   username: string
   password: string
-  registerName: string
-  registerEmail: string
-  registerPassword: string
   setUsername: (value: string) => void
   setPassword: (value: string) => void
-  setRegisterName: (value: string) => void
-  setRegisterEmail: (value: string) => void
-  setRegisterPassword: (value: string) => void
   login: () => Promise<void>
-  register: () => Promise<void>
   /** Provider to offer next to the password, or null when OIDC login is off. */
   oidcName: string | null
   loginWithOidc: () => Promise<void>
   t: Translator
 }) {
-  const [mode, setMode] = useState<"login" | "register">("login")
   return (
     <main className="flex min-h-screen items-center justify-center bg-bg p-6 text-label max-lg:p-5">
       <div className="w-full max-w-md space-y-4">
@@ -43,98 +35,55 @@ export function LoginScreen(props: {
           <h1 className="text-large-title">{props.title}</h1>
           <p className="mt-0.5 text-label-secondary">{props.subtitle}</p>
         </div>
-        {props.error ? (
-          <Alert variant="destructive">
-            <AlertTitle>{props.t("error.title")}</AlertTitle>
-            <AlertDescription>{props.error}</AlertDescription>
-          </Alert>
-        ) : null}
-        {props.message ? (
-          <Alert variant="info">
-            <AlertTitle>{props.t("status.title")}</AlertTitle>
-            <AlertDescription>{props.message}</AlertDescription>
-          </Alert>
-        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>{props.t("auth.title")}</CardTitle>
             <CardDescription>{props.t("auth.description")}</CardDescription>
           </CardHeader>
-          <TabView
-            ariaLabel={props.t("auth.title")}
-            className="w-full"
-            value={mode}
-            options={[
-              { value: "login", label: props.t("auth.loginTab") },
-              { value: "register", label: props.t("auth.registerTab") },
-            ]}
-            onChange={setMode}
-          />
-          {mode === "login" ? (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void props.login()
-              }}
-            >
-              <Field label={props.t("auth.username")}>
-                <Input value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
-              </Field>
-              <Field label={props.t("auth.password")}>
-                <Input
-                  type="password"
-                  value={props.password}
-                  onChange={(event) => props.setPassword(event.target.value)}
-                />
-              </Field>
-              <Button className="w-full" size="lg" type="submit">
-                <IconLogin2 />
-                {props.t("auth.login")}
-              </Button>
-              {props.oidcName ? (
-                <>
-                  <p className="text-center text-footnote text-label-secondary">{props.t("auth.oidcOr")}</p>
-                  <Button className="w-full" size="lg" type="button" variant="outline" onClick={() => void props.loginWithOidc()}>
-                    <IconKey />
-                    {props.t("auth.oidcLogin", { name: props.oidcName })}
-                  </Button>
-                </>
-              ) : null}
-            </form>
-          ) : (
-            <form
-              className="space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void props.register()
-              }}
-            >
-              <Field label={props.t("auth.name")}>
-                <Input
-                  value={props.registerName}
-                  onChange={(event) => props.setRegisterName(event.target.value)}
-                />
-              </Field>
-              <Field label={props.t("auth.email")}>
-                <Input
-                  value={props.registerEmail}
-                  onChange={(event) => props.setRegisterEmail(event.target.value)}
-                />
-              </Field>
-              <Field label={props.t("auth.password")}>
-                <Input
-                  type="password"
-                  value={props.registerPassword}
-                  onChange={(event) => props.setRegisterPassword(event.target.value)}
-                />
-              </Field>
-              <Button className="w-full" size="lg" type="submit">
-                <IconUserCheck />
-                {props.t("auth.register")}
-              </Button>
-            </form>
-          )}
+          {props.error ? (
+            <Alert variant="destructive">
+              <AlertTitle>{props.t("error.title")}</AlertTitle>
+              <AlertDescription>{props.error}</AlertDescription>
+            </Alert>
+          ) : null}
+          {props.message ? (
+            <Alert variant="info">
+              <AlertTitle>{props.t("status.title")}</AlertTitle>
+              <AlertDescription>{props.message}</AlertDescription>
+            </Alert>
+          ) : null}
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void props.login()
+            }}
+          >
+            <Field label={props.t("auth.username")}>
+              <Input autoComplete="username" value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
+            </Field>
+            <Field label={props.t("auth.password")}>
+              <Input
+                type="password"
+                autoComplete="current-password"
+                value={props.password}
+                onChange={(event) => props.setPassword(event.target.value)}
+              />
+            </Field>
+            <Button className="w-full" size="lg" type="submit">
+              <IconLogin2 />
+              {props.t("auth.login")}
+            </Button>
+            {props.oidcName ? (
+              <>
+                <p className="text-center text-footnote text-label-secondary">{props.t("auth.oidcOr")}</p>
+                <Button className="w-full" size="lg" type="button" variant="outline" onClick={() => void props.loginWithOidc()}>
+                  <IconKey />
+                  {props.t("auth.oidcLogin", { name: props.oidcName })}
+                </Button>
+              </>
+            ) : null}
+          </form>
         </Card>
       </div>
     </main>

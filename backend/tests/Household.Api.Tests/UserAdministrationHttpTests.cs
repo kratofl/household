@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace Household.Api.Tests;
 
@@ -9,16 +10,10 @@ public sealed class UserAdministrationHttpTests(OidcFixture fixture) : IClassFix
     private OidcFixture Fixture { get; } = fixture;
 
     [Fact]
-    public async Task Admin_activates_a_registration_and_can_block_and_restore_it()
+    public async Task Admin_activates_a_pending_user_and_can_block_and_restore_it()
     {
         using HttpClient admin = await this.Admin("ulla");
-        using HttpResponseMessage registration = await admin.PutAsJsonAsync("/api/v1/users/", new
-        {
-            name = "vera",
-            email = "vera@household.test",
-            password = "vera-password",
-        });
-        Assert.Equal(HttpStatusCode.Created, registration.StatusCode);
+        await this.Fixture.CreatePasswordUser("vera", "vera-password", status: "pending");
         Assert.Equal(HttpStatusCode.Forbidden, await this.LoginStatus("vera", "vera-password"));
 
         Guid vera = (await this.Users(admin)).Single(x => x.Name == "vera").Id;
@@ -63,6 +58,55 @@ public sealed class UserAdministrationHttpTests(OidcFixture fixture) : IClassFix
         Assert.Equal(HttpStatusCode.OK, demoted.StatusCode);
         using HttpResponseMessage asUser = await xaver.GetAsync("/api/v1/users");
         Assert.Equal(HttpStatusCode.Forbidden, asUser.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_creates_an_active_user_that_can_sign_in_right_away()
+    {
+        using HttpClient admin = await this.Admin("yara");
+        using HttpResponseMessage created = await admin.PutAsJsonAsync("/api/v1/users/", new
+        {
+            name = " Yuki ",
+            email = "yuki@household.test",
+            password = "yuki-password",
+        });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        ListedUser yuki = (await this.Users(admin)).Single(x => x.Name == "yuki");
+        Assert.Equal(("user", "active"), (yuki.Role, yuki.Status));
+        Assert.Equal(HttpStatusCode.OK, await this.LoginStatus("yuki", "yuki-password"));
+
+        using HttpResponseMessage duplicate = await admin.PutAsJsonAsync("/api/v1/users/", new
+        {
+            name = "yuki",
+            email = "other@household.test",
+            password = "other-password",
+        });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        // The web client translates the code; the English detail stays for other API readers.
+        JsonElement problem = await duplicate.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("user_exists", problem.GetProperty("code").GetString());
+        Assert.Equal("A user with this name or email already exists", problem.GetProperty("detail").GetString());
+        using HttpResponseMessage incomplete = await admin.PutAsJsonAsync("/api/v1/users/", new { name = "zoe" });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, incomplete.StatusCode);
+
+        using HttpClient anonymous = this.Fixture.Client;
+        using HttpResponseMessage anonymousCreate = await anonymous.PutAsJsonAsync("/api/v1/users/", new
+        {
+            name = "mallory",
+            email = "mallory@household.test",
+            password = "mallory-password",
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousCreate.StatusCode);
+
+        using HttpClient yukiClient = this.Fixture.Client;
+        yukiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await this.Fixture.PasswordLogin("yuki", "yuki-password"));
+        using HttpResponseMessage userCreate = await yukiClient.PutAsJsonAsync("/api/v1/users/", new
+        {
+            name = "mallory",
+            email = "mallory@household.test",
+            password = "mallory-password",
+        });
+        Assert.Equal(HttpStatusCode.Forbidden, userCreate.StatusCode);
     }
 
     private async Task<HttpClient> Admin(string name)

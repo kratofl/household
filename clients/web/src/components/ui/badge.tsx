@@ -3,8 +3,8 @@ import * as React from "react"
 import { toneTint, type Tone } from "@/lib/tone"
 import { cn } from "@/lib/utils"
 
-// Status tag: a tinted label with a word, never colour alone. 3px 10px padding,
-// radius-xs, caption type. For a status dot with a word use StatusDot.
+// Status tag: a tinted label with a word, never colour alone. 1px 6px padding
+// (3px 10px below lg), radius-xs, caption type. For a status dot with a word use StatusDot.
 function Badge({
   className,
   tone = "neutral",
@@ -13,7 +13,7 @@ function Badge({
   return (
     <span
       data-slot="badge"
-      className={cn("inline-flex w-fit shrink-0 items-center rounded-xs px-2.5 py-[3px] text-caption whitespace-nowrap", toneTint[tone], className)}
+      className={cn("inline-flex w-fit shrink-0 items-center rounded-xs px-1.5 py-px text-caption max-lg:px-2.5 max-lg:py-[3px] whitespace-nowrap", toneTint[tone], className)}
       {...props}
     />
   )

@@ -1,8 +1,10 @@
 # Monthly Budget
 
-This is the Budget. The module has four pages: Overview at `/budget`, plus
-Expenses, Planning, and Savings below it. The Overview is a widget board the
-user arranges; the global dashboard draws from the same widgets.
+This is the Budget. Overview at `/budget` is a widget board the user arranges;
+the global dashboard draws from the same widgets. Expenses and Savings have
+their own pages. Planning is split into Income & reserves, Fixed costs, Monthly
+subscriptions, Yearly subscriptions, Categories, and Merchants. First-time
+setup walks through income, costs, categories, and a review before starting.
 
 The older Budget screens were removed from the web client. Their tables and
 endpoints are untouched, and that data has never been converted into this
@@ -57,7 +59,11 @@ investing setup.
   cannot be saved.
 - Categories can be created, renamed, archived, and restored. A category with
   a current or pending reserve must have that reserve removed before archival.
-  Expense records retain their historical category names.
+  Expense records retain their historical category names. Categories have a
+  selectable color and icon; new categories automatically receive a palette
+  color if none is selected. These visual labels do not affect budget amounts.
+- Subscriptions can name a merchant and carry a short description. Like
+  category colors, these are labels and never change an amount.
 - Expenses default to the category reserve when one exists, otherwise to fun
   money. Savings and buffer are explicit alternative sources. A protected-source
   shortfall offers an explicit split with fun money.
@@ -67,7 +73,8 @@ investing setup.
 - Expense corrections, voids, and partial or full refunds preserve the original
   records. Reverse linked refunds before correcting or voiding their expense.
 - German and English, mobile layouts, keyboard submission and focus restoration,
-  expense filtering, and historical date selection.
+  expense filtering, and stepping back through closed periods, which show as
+  they closed.
 
 Income and scheduled bills are planning assumptions. They do not require
 monthly confirmation and must not be mistaken for verified bank transactions.
@@ -120,12 +127,12 @@ existing bearer session. Errors use problem JSON with a stable error code in
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /?date=YYYY-MM-DD` | Current or historical state, categories, history, pending plan, outlook |
+| `GET /?date=YYYY-MM-DD` | Current or historical state, categories, expense history, the last six periods' fun money, pending plan, outlook |
 | `POST /plan/preview` | Validate and calculate an unsaved plan's next twelve periods |
 | `PUT /plan` | First setup, a new next-period version, or with `applyToCurrentPeriod` a version that replaces the running period |
 | `DELETE /plan/pending?revision=N` | Append a version retaining the current plan next period |
-| `POST /categories` | Create a category immediately |
-| `PATCH /categories/{id}` | Rename, archive, or restore |
+| `POST /categories` | Create a category immediately, with an optional color and icon |
+| `PATCH /categories/{id}` | Rename, recolor, change the icon, archive, or restore |
 | `POST /expenses` | Record an expense, or append a correction using `correctsId` |
 | `POST /expenses/{id}/refunds` | Record a dated partial or full refund |
 | `POST /expenses/{id}/void` | Reverse an entry while keeping its history |

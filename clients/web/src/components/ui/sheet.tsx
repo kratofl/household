@@ -5,8 +5,9 @@ import { Dialog as SheetPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
-// A dialog that slides in from the right as a floating Liquid Glass panel, inset
-// from the window edges. Dialogs are one of the few places glass belongs.
+// A dialog that slides in from the right as a solid floating panel (surface-floating,
+// e4, radius-xl), inset from the window edges, over a dimmed page. Not glass: a
+// large blurred area behind form text costs legibility and battery.
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -17,12 +18,12 @@ function SheetContent({ className, children, ...props }: React.ComponentProps<ty
     <SheetPrimitive.Portal>
       <SheetPrimitive.Overlay
         data-slot="sheet-overlay"
-        className="fixed inset-0 z-50 bg-black/20 duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+        className="fixed inset-0 z-50 bg-black/30 duration-200 dark:bg-black/50 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
       />
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "glass fixed inset-2 z-50 flex flex-col overflow-hidden rounded-xl text-label duration-200 ease-out data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-right-10 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-right-10 sm:left-auto sm:w-full sm:max-w-md",
+          "floating fixed inset-2 z-50 flex flex-col overflow-hidden rounded-xl text-label shadow-(--shadow-e4) duration-200 ease-out data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-right-10 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-right-10 sm:left-auto sm:w-full sm:max-w-md",
           className
         )}
         {...props}

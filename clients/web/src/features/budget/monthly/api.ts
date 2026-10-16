@@ -14,9 +14,9 @@ export function previewMonthlyPlan(accessToken: string, body: SavePlan) {
 export function cancelMonthlyPlan(accessToken: string, revision: number) {
   return apiRequest<MonthlyState>(`${root}/plan/pending?revision=${revision}`, { accessToken, method: "DELETE" })
 }
-export function saveMonthlyCategory(accessToken: string, name: string, existing?: { id: string; archived: boolean }) {
+export function saveMonthlyCategory(accessToken: string, name: string, existing?: { id: string; archived: boolean }, appearance?: { color: string | null; icon: string }) {
   return apiRequest<MonthlyCategory>(`${root}/categories${existing ? `/${existing.id}` : ""}`, {
-    accessToken, method: existing ? "PATCH" : "POST", body: { name, archived: existing?.archived ?? false },
+    accessToken, method: existing ? "PATCH" : "POST", body: { name, archived: existing?.archived ?? false, ...appearance },
   })
 }
 export function addMonthlyExpense(accessToken: string, body: ExpenseInput) {

@@ -49,17 +49,18 @@ public sealed class OidcFixture : IAsyncLifetime
         await RunDocker("rm", "-f", this._containerName);
     }
 
-    /// <summary>Creates a user that signs in with a password, as registration plus admin approval would.</summary>
-    public async Task CreatePasswordUser(string name, string password, string role = "user")
+    /// <summary>Creates a user that signs in with a password; <paramref name="status"/> "pending" waits for admin approval.</summary>
+    public async Task CreatePasswordUser(string name, string password, string role = "user", string status = "active")
     {
         await using NpgsqlConnection connection = new NpgsqlConnection(this._connectionString);
         await connection.OpenAsync();
         await using NpgsqlCommand command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO identity.users (name, email, password_hash, role, status)
-            VALUES (@name, @email, @hash, @role, 'active')
+            VALUES (@name, @email, @hash, @role, @status)
             """;
         command.Parameters.AddWithValue("role", role);
+        command.Parameters.AddWithValue("status", status);
         command.Parameters.AddWithValue("name", name);
         command.Parameters.AddWithValue("email", $"{name}@household.test");
         command.Parameters.AddWithValue("hash", BCrypt.Net.BCrypt.HashPassword(password, 4));

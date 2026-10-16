@@ -82,18 +82,40 @@ export const moduleCatalog = {
 
 export const moduleKeys = Object.keys(moduleCatalog) as Array<keyof typeof moduleCatalog>
 
-// The Budget module's pages. The monthly budget is the Budget; the sidebar
-// lists these four in this order.
+// The Budget module's pages. The monthly budget is the Budget.
 export const budgetViews = {
   overview: { route: "/budget", labelKey: "budget.nav.overview" },
   expenses: { route: "/budget/expenses", labelKey: "budget.nav.expenses" },
   plan: { route: "/budget/plan", labelKey: "budget.nav.plan" },
+  fixed: { route: "/budget/fixed", labelKey: "budget.nav.fixed" },
+  monthly: { route: "/budget/monthly", labelKey: "budget.nav.monthly" },
+  yearly: { route: "/budget/yearly", labelKey: "budget.nav.yearly" },
+  categories: { route: "/budget/categories", labelKey: "budget.nav.categories" },
+  merchants: { route: "/budget/merchants", labelKey: "budget.nav.merchants" },
   savings: { route: "/budget/savings", labelKey: "budget.nav.savings" },
 } as const satisfies Record<string, BudgetView>
 
 type BudgetView = { route: string; labelKey: TranslationKey }
 export type BudgetViewKey = keyof typeof budgetViews
-export const budgetViewEntries = Object.entries(budgetViews) as [BudgetViewKey, BudgetView][]
+
+// Budget's navigation: the everyday pages, then groups of related pages that the
+// sidebar shows as fold-away rows. The phone view menu follows the same groups;
+// search uses the flattened order.
+export const budgetNav = {
+  main: ["overview", "expenses", "savings"],
+  groups: [
+    { key: "planning", labelKey: "budget.nav.groupPlanning", views: ["plan", "fixed", "monthly", "yearly"] },
+    { key: "manage", labelKey: "budget.nav.groupManage", views: ["categories", "merchants"] },
+  ],
+} as const satisfies {
+  main: readonly BudgetViewKey[]
+  groups: readonly { key: string; labelKey: TranslationKey; views: readonly BudgetViewKey[] }[]
+}
+
+export type BudgetNavGroup = (typeof budgetNav.groups)[number]
+
+export const budgetViewEntries: [BudgetViewKey, BudgetView][] = [...budgetNav.main, ...budgetNav.groups.flatMap((group) => group.views)]
+  .map((key) => [key, budgetViews[key]])
 
 export function budgetViewFromPath(pathname: string): BudgetViewKey {
   const match = budgetViewEntries.find(([, view]) => view.route === pathname)

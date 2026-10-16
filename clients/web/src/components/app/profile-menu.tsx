@@ -42,9 +42,9 @@ export function ProfileMenu({
       <DropdownMenuTrigger
         title={collapsed ? name : undefined}
         aria-label={collapsed ? name : undefined}
-        className={cn(sidebarRowClass, "h-11 aria-expanded:bg-fill", collapsed && "justify-center px-0")}
+        className={cn(sidebarRowClass, "h-9 aria-expanded:bg-fill", collapsed && "justify-center px-0")}
       >
-        <Avatar size="sm" className="size-7">
+        <Avatar size="sm" className="size-6">
           <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
         {collapsed ? null : <span className="min-w-0 truncate">{name}</span>}

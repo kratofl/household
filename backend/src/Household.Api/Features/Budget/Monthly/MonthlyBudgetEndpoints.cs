@@ -9,7 +9,7 @@ namespace Household.Api.Features.Budget;
 // Past periods keep the plan version that produced them either way.
 public sealed record SaveMonthlyPlan(long Revision, MonthlyPlan Plan, long OpeningSavingsCents,
     string TimeZoneId, bool ApplyToCurrentPeriod = false);
-public sealed record SaveMonthlyCategory(string Name, bool Archived = false);
+public sealed record SaveMonthlyCategory(string Name, bool Archived = false, string? Color = null, string? Icon = null);
 public sealed record AddMonthlyExpense(string RequestKey, DateOnly OccurredOn, string Description,
     Guid CategoryId, long AmountCents, IReadOnlyList<MonthlyFunding>? Funding, Guid? CorrectsId = null)
 {
@@ -45,6 +45,16 @@ public static class MonthlyBudgetEndpoints
 
     private static IResult Invalid(string code = "invalid_input") => HttpResults.Problem(422, "Validation failed", code);
 
+    // Every merchant a plan's costs name exists and is the user's own or shared, as for expenses.
+    private static async Task<bool> MerchantsVisible(BudgetDbContext database, Guid userId, MonthlyPlan plan, CancellationToken cancellationToken)
+    {
+        List<Guid> ids = plan.Costs.Select(cost => cost.MerchantId).OfType<Guid>().Distinct().ToList();
+        if (ids.Count == 0) return true;
+        int visible = await database.Merchants.CountAsync(
+            row => ids.Contains(row.Id) && (row.OwnerUserId == null || row.OwnerUserId == userId), cancellationToken);
+        return visible == ids.Count;
+    }
+
     private static async Task<IResult> Get(DateOnly? date, HttpContext context, IIdentityAccess identity,
         BudgetDbContext database, TimeProvider clock, CancellationToken cancellationToken)
     {
@@ -60,6 +70,7 @@ public static class MonthlyBudgetEndpoints
         if (user is null) return Results.Unauthorized();
         MonthlyBudgetState state = await new MonthlyBudgetStore(database, clock).StateAsync(user.Id, null, cancellationToken);
         if (!MonthlyBudgetValidation.Plan(request.Plan, state.Categories)) return Invalid();
+        if (!await MerchantsVisible(database, user.Id, request.Plan, cancellationToken)) return Invalid("invalid_merchant");
         DateOnly effective = EffectiveFrom(request, state);
         MonthlyPlanRow row = new() { EffectiveFrom = effective, PlanJson = MonthlyBudgetStore.Serialize(request.Plan) };
         return Results.Ok(MonthlyBudgetStore.Forecast([row], effective, state.StartDay));
@@ -76,6 +87,7 @@ public static class MonthlyBudgetEndpoints
         if (request.Revision != state.Revision) throw new MonthlyBudgetConflict("plan_changed");
         if (!MonthlyBudgetValidation.Plan(request.Plan, state.Categories) || !MonthlyBudgetValidation.Money(request.OpeningSavingsCents))
             return Invalid();
+        if (!await MerchantsVisible(database, user.Id, request.Plan, cancellationToken)) return Invalid("invalid_merchant");
         if (string.IsNullOrWhiteSpace(request.TimeZoneId) || !TimeZoneInfo.TryFindSystemTimeZoneById(request.TimeZoneId, out TimeZoneInfo? zone))
             return Invalid("invalid_timezone");
         if (state.CurrentPlan is not null && (request.OpeningSavingsCents != state.OpeningSavingsCents || request.TimeZoneId != state.TimeZoneId))
@@ -134,12 +146,19 @@ public static class MonthlyBudgetEndpoints
     {
         CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Results.Unauthorized();
-        if (!MonthlyBudgetValidation.Name(request.Name)) return Invalid();
+        if (!MonthlyBudgetValidation.Name(request.Name) || !MonthlyCategoryAppearance.Valid(request.Color, request.Icon)) return Invalid();
         MonthlyBudgetStore store = new(database, clock);
         await using IDbContextTransaction transaction = await store.LockAsync(user.Id, cancellationToken);
         if (await database.MonthlyCategories.AnyAsync(row => row.OwnerUserId == user.Id && row.Name == request.Name.Trim(), cancellationToken))
             throw new MonthlyBudgetConflict("category_exists");
-        MonthlyCategoryRow category = new() { Id = Guid.NewGuid(), OwnerUserId = user.Id, Name = request.Name.Trim() };
+        List<string> colors = await database.MonthlyCategories.Where(row => row.OwnerUserId == user.Id && !row.Archived)
+            .Select(row => row.Color).ToListAsync(cancellationToken);
+        MonthlyCategoryRow category = new()
+        {
+            Id = Guid.NewGuid(), OwnerUserId = user.Id, Name = request.Name.Trim(),
+            Color = request.Color ?? MonthlyCategoryAppearance.Colors.OrderBy(color => colors.Count(used => used == color)).First(),
+            Icon = request.Icon ?? "tag",
+        };
         database.MonthlyCategories.Add(category);
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -151,7 +170,7 @@ public static class MonthlyBudgetEndpoints
     {
         CurrentUser? user = await identity.CurrentUserAsync(context, cancellationToken);
         if (user is null) return Results.Unauthorized();
-        if (!MonthlyBudgetValidation.Name(request.Name)) return Invalid();
+        if (!MonthlyBudgetValidation.Name(request.Name) || !MonthlyCategoryAppearance.Valid(request.Color, request.Icon)) return Invalid();
         MonthlyBudgetStore store = new(database, clock);
         await using IDbContextTransaction transaction = await store.LockAsync(user.Id, cancellationToken);
         MonthlyCategoryRow? category = await database.MonthlyCategories.SingleOrDefaultAsync(
@@ -166,6 +185,8 @@ public static class MonthlyBudgetEndpoints
             throw new MonthlyBudgetConflict("category_reserved");
         category.Name = request.Name.Trim();
         category.Archived = request.Archived;
+        category.Color = request.Color ?? category.Color;
+        category.Icon = request.Icon ?? category.Icon;
         await database.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return Results.Ok(category);

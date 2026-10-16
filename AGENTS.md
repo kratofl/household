@@ -209,7 +209,8 @@ Windows PowerShell uses `.\make.ps1 <target>` with the same names.
   JSON is camelCase with language-neutral enum values; errors are problem JSON.
 - Web UI follows `docs/design-system/DESIGN.md` without exceptions. Its tokens live in
   `clients/web/src/app/globals.css`, which clears Tailwind's default palette, radii and text
-  sizes, so a class outside the system compiles to nothing.
+  sizes, so a class outside the system compiles to nothing. A change that alters a rule
+  updates DESIGN.md, the tokens and every component together (`design-system-sync` skill).
 - Web UI: use shadcn/ui primitives, do not rebuild common controls in feature pages.
   Dashboard subnavigation is nested sidebar navigation, not page-level tab rows. Do not
   render an "Active slices" card; active modules only control navigation. Keep Account

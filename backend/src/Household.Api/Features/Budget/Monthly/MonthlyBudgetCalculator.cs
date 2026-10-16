@@ -11,10 +11,17 @@ public static class MonthlyBudgetCalculator
                     DateOnly due = new(year, month, Math.Min(day, DateTime.DaysInMonth(year, month)));
                     return due >= period.Start && due <= period.End;
                 }))
-            .Select(cost => new MonthlyCostDue(cost.Id, cost.Name, cost.Kind, cost.AmountCents)).ToArray();
+            .Select(cost => new MonthlyCostDue(cost.Id, cost.Name, cost.Kind, cost.AmountCents, cost.MerchantId, cost.Description)).ToArray();
 
-    // Replay each period once. Reads have no posting side effects and work after missed months.
+    // The period containing asOf. Throws on an unfundable history, so writes call it to verify.
     public static MonthlyPeriodSummary Project(IReadOnlyList<MonthlyPlanVersion> versions,
+        IReadOnlyList<MonthlyExpense> entries, DateOnly asOf, int startDay, long openingSavingsCents) =>
+        Replay(versions, entries, asOf, startDay, openingSavingsCents).Last();
+
+    // Every period from the first plan up to the one containing asOf, oldest first, each as of its
+    // end (the last as of asOf). Reads have no posting side effects and work after missed months.
+    // Lazy: argument and funding errors surface while enumerating, so enumerate to the end.
+    public static IEnumerable<MonthlyPeriodSummary> Replay(IReadOnlyList<MonthlyPlanVersion> versions,
         IReadOnlyList<MonthlyExpense> entries, DateOnly asOf, int startDay, long openingSavingsCents)
     {
         DateOnly first = versions.Min(version => version.EffectiveFrom);
@@ -64,10 +71,10 @@ public static class MonthlyBudgetCalculator
                 if (savings < 0 || buffer < 0 || remaining.Values.Any(amount => amount < 0))
                     throw new MonthlyBudgetConflict("insufficient_funds");
             }
-            if (asOf <= period.End)
-                return new MonthlyPeriodSummary(period.Start, period.End, plan.IncomeCents,
-                    funded ? startingFun : capacity, fun, savings, buffer, contribution, carryover, shortfall,
-                    reserved.Select(pair => new MonthlyAllowance(pair.Key, pair.Value, remaining[pair.Key])).ToArray(), costs);
+            yield return new MonthlyPeriodSummary(period.Start, period.End, plan.IncomeCents,
+                funded ? startingFun : capacity, fun, savings, buffer, contribution, carryover, shortfall,
+                reserved.Select(pair => new MonthlyAllowance(pair.Key, pair.Value, remaining[pair.Key])).ToArray(), costs);
+            if (asOf <= period.End) yield break;
 
             long leftover = checked(fun + remaining.Values.Sum());
             savings = checked(savings + Math.Max(0, leftover));

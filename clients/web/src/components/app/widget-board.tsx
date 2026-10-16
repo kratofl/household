@@ -9,9 +9,13 @@
 // adds rows and the page gets taller, which is what scrolling is for.
 //
 // Below the `sm` breakpoint there is no room for a 12-column grid, so tiles flow
-// in reading order on two columns at their natural height: quarter- and
-// third-width widgets (the KPI cards) take one column, so they sit 2×2, anything
-// wider takes both. Only add/remove stays available there.
+// in reading order (top to bottom, then left to right) on two columns at their
+// natural height: quarter-width widgets take one column, so they sit 2×2,
+// anything wider takes both. Only add/remove stays available there.
+//
+// Pages pass their default arrangement as positions; the grid arithmetic lives in
+// widget-layout.ts. A page that drops widgets from its registry bumps its board id
+// so saved boards that referred to them start over from the new default.
 //
 // Outside editing, rows take the height of their content, so an empty list or a
 // short card leaves no gap under it. Editing switches to fixed-height rows,
@@ -30,6 +34,23 @@ import {
 } from "@tabler/icons-react"
 
 import { ToolbarButton } from "@/components/app/toolbar"
+import {
+  cellAt as cellUnder,
+  defaultLayout,
+  grabOffset,
+  GRID_GAP,
+  MAX_COLUMNS,
+  MIN_COLUMNS,
+  neededColumns,
+  place as placeWidget,
+  put as putPlacement,
+  removeItem,
+  ROW_HEIGHT,
+  rowCount,
+  type Layout,
+  type Placement,
+  type WidgetPosition,
+} from "@/components/app/widget-layout"
 import { Button } from "@/components/ui/button"
 import type { Translator } from "@/lib/i18n"
 import { uuid } from "@/lib/uuid"
@@ -56,10 +77,6 @@ export type WidgetDefinition = {
   render: (instance: WidgetInstance) => ReactNode
 }
 
-/** One widget on the board. `key` is the instance, `widget` points at the definition. */
-type Placement = { key: string; widget: string; x: number; y: number; w: number; h: number; text?: string }
-type Layout = { columns: number; items: Placement[] }
-
 /**
  * What the pointer is doing. `grabX`/`grabY` keep the cell the user grabbed under
  * the cursor, so a tile does not jump its top-left corner to the pointer.
@@ -67,11 +84,6 @@ type Layout = { columns: number; items: Placement[] }
 type Gesture =
   | { kind: "move"; key: string; widget: string; placed: boolean; grabX: number; grabY: number }
   | { kind: "resize"; key: string }
-
-const MIN_COLUMNS = 12
-const MAX_COLUMNS = 24
-const ROW_HEIGHT = 44
-const GRID_GAP = 16
 
 function storageKey(boardId: string) {
   return `household.widgets.${boardId}`
@@ -105,57 +117,22 @@ function readLayout(boardId: string): Layout | null {
   }
 }
 
-/**
- * Packs the default widgets left to right in the order the module listed them,
- * wrapping to a new row when the next one no longer fits. Widgets carry their
- * own width, so three quarter-width cards sit side by side instead of each
- * taking a row of its own.
- */
-function defaultLayout(widgets: WidgetDefinition[], defaultIds: string[]): Layout {
-  let x = 0
-  let y = 0
-  let rowHeight = 0
-  const items = defaultIds.flatMap((id) => {
-    const widget = widgets.find((candidate) => candidate.id === id)
-    if (!widget) return []
-    const w = Math.min(widget.w, MIN_COLUMNS)
-    if (x + w > MIN_COLUMNS) {
-      x = 0
-      y += rowHeight
-      rowHeight = 0
-    }
-    const placement: Placement = { key: widget.id, widget: widget.id, x, y, w, h: widget.h }
-    x += w
-    rowHeight = Math.max(rowHeight, widget.h)
-    return [placement]
-  })
-  return { columns: MIN_COLUMNS, items }
-}
-
 /** Repeatable elements get a fresh instance per copy; everything else is a singleton. */
 function instanceKey(widget: WidgetDefinition) {
   return widget.repeatable ? `${widget.id}:${uuid()}` : widget.id
 }
 
-function overlaps(a: Placement, b: Placement) {
-  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-}
-
-/** Columns actually needed, never below the base width. */
-function neededColumns(items: Placement[]) {
-  return Math.max(MIN_COLUMNS, ...items.map((item) => item.x + item.w))
-}
-
 export function WidgetBoard({
   boardId,
   widgets,
-  defaultIds,
+  defaults,
   header,
   t,
 }: {
   boardId: string
   widgets: WidgetDefinition[]
-  defaultIds: string[]
+  /** The arrangement of a fresh board, and what Reset restores. */
+  defaults: WidgetPosition[]
   /** The page's toolbar content. Receives the Customize icon action (null while editing) to place in its icon group. */
   header: (customize: ReactNode) => ReactNode
   t: Translator
@@ -213,7 +190,7 @@ export function WidgetBoard({
 
   // Widgets can disappear between releases; keep only ids the registry still has.
   const current = (layout: Layout | undefined): Layout => {
-    const source = layout ?? defaultLayout(widgets, defaultIds)
+    const source = layout ?? defaultLayout(widgets, defaults)
     return { ...source, items: source.items.filter((item) => widgets.some((widget) => widget.id === item.widget)) }
   }
   const layout = current(stored?.boardId === boardId ? stored.layout : undefined)
@@ -228,56 +205,21 @@ export function WidgetBoard({
     }))
   }
 
-  /** Writes a placement if nothing else is already sitting there. */
-  const put = (key: string, next: Omit<Placement, "key" | "widget" | "text">) => {
-    commit((value) => {
-      const item = value.items.find((candidate) => candidate.key === key)
-      if (!item) return value
-      const moved: Placement = { ...item, ...next }
-      if (moved.x + moved.w > MAX_COLUMNS) return value
-      if (value.items.some((other) => other.key !== key && overlaps(moved, other))) return value
-      const items = value.items.map((candidate) => (candidate.key === key ? moved : candidate))
-      return { columns: Math.min(MAX_COLUMNS, neededColumns(items)), items }
-    })
-  }
+  const put = (key: string, next: Omit<Placement, "key" | "widget" | "text">) => commit((value) => putPlacement(value, key, next))
 
-  const remove = (key: string) =>
-    commit((value) => {
-      const items = value.items.filter((item) => item.key !== key)
-      return { columns: neededColumns(items), items }
-    })
+  const remove = (key: string) => commit((value) => removeItem(value, key))
 
   const setText = (key: string, text: string) =>
     commit((value) => ({ ...value, items: value.items.map((item) => (item.key === key ? { ...item, text } : item)) }))
 
   /** Drops a widget where the pointer is, or at the bottom when there is no target. */
-  const place = (widget: WidgetDefinition, key: string, at?: { x: number; y: number }) => {
-    commit((value) => {
-      if (!widget.repeatable && value.items.some((item) => item.widget === widget.id)) return value
-      const bottom = Math.max(0, ...value.items.map((item) => item.y + item.h))
-      const target: Placement = {
-        key,
-        widget: widget.id,
-        x: at ? Math.max(0, Math.min(value.columns - widget.w, at.x)) : 0,
-        y: at ? Math.max(0, at.y) : bottom,
-        w: widget.w,
-        h: widget.h,
-      }
-      const free = !value.items.some((other) => overlaps(target, other))
-      const items = [...value.items, free ? target : { ...target, x: 0, y: bottom }]
-      return { columns: Math.min(MAX_COLUMNS, neededColumns(items)), items }
-    })
-  }
+  const place = (widget: WidgetDefinition, key: string, at?: { x: number; y: number }) =>
+    commit((value) => placeWidget(value, widget, key, widget.repeatable ?? false, at))
 
   /** The cell under the pointer. Beyond the right edge it keeps counting, which is what grows the grid. */
   const cellAt = (clientX: number, clientY: number) => {
     const box = board.current?.getBoundingClientRect()
-    if (!box) return null
-    const columnWidth = (box.width - GRID_GAP * (columns - 1)) / columns
-    return {
-      x: Math.floor((clientX - box.left) / (columnWidth + GRID_GAP)),
-      y: Math.max(0, Math.floor((clientY - box.top) / (ROW_HEIGHT + GRID_GAP))),
-    }
+    return box ? cellUnder(box, columns, clientX, clientY) : null
   }
 
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -318,21 +260,13 @@ export function WidgetBoard({
     // Touch gives the target implicit pointer capture; release it so the board
     // keeps seeing pointermove and can tell which cell is under the pointer.
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-    const cell = cellAt(event.clientX, event.clientY)
-    setGesture({
-      kind: "move",
-      key: item.key,
-      widget: item.widget,
-      placed: true,
-      grabX: cell ? Math.max(0, Math.min(item.w - 1, cell.x - item.x)) : 0,
-      grabY: cell ? Math.max(0, Math.min(item.h - 1, cell.y - item.y)) : 0,
-    })
+    setGesture({ kind: "move", key: item.key, widget: item.widget, placed: true, ...grabOffset(item, cellAt(event.clientX, event.clientY)) })
   }
 
   const placedIds = new Set(layout.items.map((item) => item.widget))
   const unplaced = widgets.filter((widget) => widget.repeatable || !placedIds.has(widget.id))
   const dragged = gesture?.kind === "move" ? widgets.find((widget) => widget.id === gesture.widget) : undefined
-  const rows = Math.max(1, ...layout.items.map((item) => item.y + item.h)) + (editing ? 2 : 0)
+  const rows = rowCount(layout.items, editing)
   const gridStyle: CSSProperties = compact
     ? { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: GRID_GAP }
     : {
@@ -367,7 +301,7 @@ export function WidgetBoard({
             if (!widget) return null
             const moving = gesture?.kind === "move" && gesture.key === item.key
             const cellStyle: CSSProperties = compact
-              ? { gridColumn: item.w <= 4 ? "span 1" : "span 2" }
+              ? { gridColumn: item.w <= 3 ? "span 1" : "span 2" }
               : { gridColumn: `${item.x + 1} / span ${item.w}`, gridRow: `${item.y + 1} / span ${item.h}` }
             return (
               <div
@@ -376,9 +310,9 @@ export function WidgetBoard({
                 onPointerDown={editing && !widget.repeatable ? (event) => startMove(event, item) : undefined}
                 className={cn(
                   "relative min-w-0",
-                  editing && "rounded-xl ring-1 ring-brand-500/50",
+                  editing && "rounded-lg ring-1 ring-brand-500/50",
                   editing && !compact && !widget.repeatable && "cursor-grab active:cursor-grabbing",
-                  moving && "rounded-xl border-2 border-dashed border-brand-500 bg-brand-500/10 ring-0",
+                  moving && "rounded-lg border-2 border-dashed border-brand-500 bg-brand-500/10 ring-0",
                 )}
               >
                 {editing ? (
@@ -473,7 +407,7 @@ export function WidgetBoard({
           onGrab={(widget) =>
             setGesture({ kind: "move", key: "", widget: widget.id, placed: false, grabX: 0, grabY: 0 })
           }
-          onReset={() => commit(() => defaultLayout(widgets, defaultIds))}
+          onReset={() => commit(() => defaultLayout(widgets, defaults))}
           onDone={() => setEditing(false)}
         />
       ) : null}
@@ -483,7 +417,7 @@ export function WidgetBoard({
             <div
               ref={ghost}
               aria-hidden
-              className="glass pointer-events-none fixed top-0 left-0 z-50 flex items-center gap-2 rounded-full px-3 py-1.5 font-medium"
+              className="floating pointer-events-none fixed top-0 left-0 z-50 flex items-center gap-2 rounded-full px-3 py-1.5 font-medium shadow-(--shadow-e2)"
             >
               <IconGripVertical className="size-4 text-label-secondary" />
               {dragged.title}
@@ -496,9 +430,10 @@ export function WidgetBoard({
 }
 
 /**
- * The floating tray of widgets that are not on the board. Household-wide elements
- * come first, then one collapsible section per module. Each widget is a card you
- * drag onto the grid, or tap to append.
+ * The floating tray of widgets that are not on the board: a solid panel
+ * (`.floating`, shadow-e4), not glass, because it carries content. Household-wide
+ * elements come first, then one collapsible section per module. Each widget is a
+ * card you drag onto the grid, or tap to append.
  */
 function WidgetTray({
   widgets,
@@ -529,7 +464,7 @@ function WidgetTray({
   return createPortal(
     <aside
       aria-label={t("widgets.add")}
-      className="glass fixed inset-x-2 bottom-24 z-30 flex max-h-[44vh] flex-col rounded-xl animate-in fade-in-0 slide-in-from-bottom-4 duration-200 motion-reduce:animate-none lg:inset-x-auto lg:right-3 lg:bottom-3 lg:top-[76px] lg:max-h-none lg:w-[272px] lg:slide-in-from-bottom-0 lg:slide-in-from-right-4"
+      className="floating fixed inset-x-2 bottom-24 z-30 flex max-h-[44vh] flex-col rounded-lg shadow-(--shadow-e4) animate-in fade-in-0 slide-in-from-bottom-4 duration-200 motion-reduce:animate-none lg:inset-x-auto lg:right-3 lg:bottom-3 lg:top-[76px] lg:max-h-none lg:w-[272px] lg:slide-in-from-bottom-0 lg:slide-in-from-right-4"
     >
       <div className="flex items-center gap-2 px-3 py-2.5">
         <IconLayoutGrid className="size-[18px] shrink-0 text-brand-500" />

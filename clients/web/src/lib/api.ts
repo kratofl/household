@@ -2,10 +2,13 @@ import { TOKENS_STORAGE_KEY, liveSession, type TokenPair } from "@/lib/session"
 
 export class ApiError extends Error {
   status: number
+  /** The problem's stable `code`, which the UI translates; null when the API sends none. */
+  code: string | null
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code: string | null = null) {
     super(message)
     this.status = status
+    this.code = code
   }
 }
 
@@ -23,7 +26,7 @@ export async function apiRequest<T = unknown>(path: string, options: ApiOptions 
   }))
 
   if (!response.ok) {
-    throw new ApiError(response.status, await responseMessage(response))
+    throw await apiError(response)
   }
 
   if (response.status === 204) {
@@ -40,7 +43,7 @@ export async function apiRequestText(path: string, options: ApiOptions = {}) {
   }))
 
   if (!response.ok) {
-    throw new ApiError(response.status, await responseMessage(response))
+    throw await apiError(response)
   }
 
   return await response.text()
@@ -125,14 +128,19 @@ function storedTokens(): TokenPair | null {
   }
 }
 
-async function responseMessage(response: Response) {
+/** Reads a problem JSON response: its `code` if any, and `detail` (or `title`) as the message. */
+async function apiError(response: Response) {
+  let message = response.statusText || `HTTP ${response.status}`
+  let code: string | null = null
   try {
-    const data = await response.json()
-    if (typeof data?.detail === "string") return data.detail
-    if (typeof data?.title === "string") return data.title
+    const data: unknown = await response.json()
+    if (typeof data === "object" && data !== null) {
+      if ("code" in data && typeof data.code === "string") code = data.code
+      if ("detail" in data && typeof data.detail === "string") message = data.detail
+      else if ("title" in data && typeof data.title === "string") message = data.title
+    }
   } catch {
-    // Fall through to HTTP status text.
+    // Not JSON: keep the HTTP status text.
   }
-
-  return response.statusText || `HTTP ${response.status}`
+  return new ApiError(response.status, message, code)
 }

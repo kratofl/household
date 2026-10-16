@@ -1,21 +1,27 @@
 "use client"
 
 // The frosted toolbar: one uniform band across the top of the content area,
-// 64px tall, sticky, with content scrolling underneath. The leading group is the
-// page title (title-2), the trailing group holds the page's icon actions and,
-// last, the search. The shell renders the band; pages fill it with PageHeader,
-// which portals the title and actions into the slots below, so a page declares
-// its toolbar where it renders and its handlers stay live.
+// 48px tall (64px on phones), sticky, with content scrolling underneath. The shell
+// renders the band; pages fill it with PageHeader, which portals into the slots
+// below, so a page declares its toolbar where it renders and its handlers stay live.
 //
-// Rules from DESIGN.md: icons over text, borderless icon actions in one pill
-// group, a text-labelled action stands apart, nothing tinted or orange in here.
+// Slot order (DESIGN.md, Toolbar): title · `leading` (the phone's view menu) ·
+// scope (a PeriodStepper or segmented control) · caption — then, trailing, the
+// icon actions · search · the page's one primary action, last.
+// When the band runs out of room the caption truncates first, then the title.
+// On phones the caption is hidden and the scope moves to a second row of the band.
+// Once content has scrolled under it, the band lifts to shadow-e2.
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
-type Slots = { title: HTMLElement | null; actions: HTMLElement | null }
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
-const ToolbarSlots = createContext<Slots>({ title: null, actions: null })
+type SlotName = "title" | "scope" | "caption" | "actions" | "primary"
+type Slots = Record<SlotName, HTMLElement | null>
+
+const ToolbarSlots = createContext<Slots>({ title: null, scope: null, caption: null, actions: null, primary: null })
 
 export function ToolbarFrame({
   leading,
@@ -28,36 +34,103 @@ export function ToolbarFrame({
   children: ReactNode
 }) {
   const [title, setTitle] = useState<HTMLElement | null>(null)
+  const [scope, setScope] = useState<HTMLElement | null>(null)
+  const [caption, setCaption] = useState<HTMLElement | null>(null)
   const [actions, setActions] = useState<HTMLElement | null>(null)
+  const [primary, setPrimary] = useState<HTMLElement | null>(null)
+  const { ref: sentinel, past: stuck } = useScrolledPast()
   return (
-    <ToolbarSlots.Provider value={{ title, actions }}>
-      <header className="toolbar-band sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 px-6 max-lg:px-5">
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+    <ToolbarSlots.Provider value={{ title, scope, caption, actions, primary }}>
+      {/* 1px sentinel above the band (its margin cancels the height): out of view means content scrolled under. */}
+      <div ref={sentinel} aria-hidden className="-mb-px h-px" />
+      <header
+        className={cn(
+          "toolbar-band sticky top-0 z-20 flex h-12 shrink-0 items-center gap-3 px-5 transition-shadow duration-200 motion-reduce:transition-none max-lg:h-auto max-lg:min-h-16 max-lg:flex-wrap max-lg:content-center max-lg:gap-y-2 max-lg:py-2.5",
+          stuck && "shadow-(--shadow-e2)",
+        )}
+      >
+        {/* Shrinks after the caption: the title truncates once the caption is gone. */}
+        <div className="flex min-w-0 shrink items-center gap-1">
           <div ref={setTitle} className="min-w-0" />
           {leading}
         </div>
-        <div ref={setActions} className="flex shrink-0 items-center gap-2.5 empty:hidden" />
-        {search}
+        <div ref={setScope} className="flex shrink-0 items-center empty:hidden max-lg:order-last max-lg:basis-full" />
+        <div ref={setCaption} className="flex min-w-0 shrink-[1000] items-center empty:hidden max-lg:hidden" />
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div ref={setActions} className="flex items-center gap-2.5 empty:hidden" />
+          {search}
+          <div ref={setPrimary} className="flex items-center empty:hidden" />
+        </div>
       </header>
       {children}
     </ToolbarSlots.Provider>
   )
 }
 
-/** Puts a page's title and actions into the toolbar the shell renders. */
-export function ToolbarContent({ title, actions }: { title: string; actions?: ReactNode }) {
+/**
+ * Whether the element given to `ref` has left the viewport, i.e. its scroll
+ * container has scrolled past it. One IntersectionObserver, no scroll handler.
+ */
+function useScrolledPast() {
+  const [node, setNode] = useState<HTMLElement | null>(null)
+  const [past, setPast] = useState(false)
+  useEffect(() => {
+    if (!node) return
+    const observer = new IntersectionObserver(([entry]) => setPast(entry ? !entry.isIntersecting : false))
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [node])
+  return { ref: setNode, past }
+}
+
+/** The page's one primary action: a Primär M button on desktop, a 44px icon button on phones. */
+export type ToolbarPrimaryAction = { label: string; icon: ReactNode; onClick: () => void; disabled?: boolean }
+
+/** Puts a page's title, scope, caption and actions into the toolbar the shell renders. */
+export function ToolbarContent({
+  title,
+  scope,
+  caption,
+  actions,
+  primaryAction,
+}: {
+  title: string
+  scope?: ReactNode
+  caption?: string
+  actions?: ReactNode
+  primaryAction?: ToolbarPrimaryAction
+}) {
   const slots = useContext(ToolbarSlots)
   return (
     <>
       {slots.title ? createPortal(<h1 className="truncate text-title-2">{title}</h1>, slots.title) : null}
+      {scope && slots.scope ? createPortal(scope, slots.scope) : null}
+      {caption && slots.caption
+        ? createPortal(<span className="truncate text-footnote text-label-secondary">{caption}</span>, slots.caption)
+        : null}
       {actions && slots.actions ? createPortal(actions, slots.actions) : null}
+      {primaryAction && slots.primary ? createPortal(<PrimaryButton {...primaryAction} />, slots.primary) : null}
     </>
   )
 }
 
-/** The pill that groups borderless icon actions. */
+function PrimaryButton({ label, icon, onClick, disabled }: ToolbarPrimaryAction) {
+  return (
+    <>
+      <Button onClick={onClick} disabled={disabled} className="max-lg:hidden">
+        {icon}
+        {label}
+      </Button>
+      <Button onClick={onClick} disabled={disabled} size="icon" aria-label={label} title={label} className="lg:hidden [&_svg]:size-5">
+        {icon}
+      </Button>
+    </>
+  )
+}
+
+/** The fill that groups borderless icon actions; a pill on phones. */
 export function ToolbarGroup({ children }: { children: ReactNode }) {
-  return <div className="flex items-center gap-0.5 rounded-full bg-toolbar-fill p-1 max-lg:p-0.5">{children}</div>
+  return <div className="flex items-center gap-0.5 rounded-md bg-toolbar-fill p-0.5 max-lg:rounded-full">{children}</div>
 }
 
 /**
@@ -84,7 +157,7 @@ export function ToolbarButton({
         title={label}
         onClick={onClick}
         disabled={disabled}
-        className="grid h-8 w-9 place-items-center rounded-full text-label transition-colors hover:bg-toolbar-fill disabled:text-label-disabled max-lg:size-11 [&_svg]:size-[18px]"
+        className="grid size-7 place-items-center rounded-sm text-label transition-colors hover:bg-toolbar-fill disabled:text-label-disabled max-lg:size-11 max-lg:rounded-full [&_svg]:size-4 max-lg:[&_svg]:size-[18px]"
       >
         {icon}
       </button>
@@ -95,7 +168,7 @@ export function ToolbarButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-10 rounded-full bg-toolbar-fill px-4 text-callout font-semibold whitespace-nowrap text-label transition-colors disabled:text-label-disabled max-lg:h-11"
+      className="h-7 rounded-sm bg-toolbar-fill px-3 text-callout font-semibold whitespace-nowrap text-label transition-colors disabled:text-label-disabled max-lg:h-11 max-lg:rounded-full max-lg:px-4"
     >
       {label}
     </button>

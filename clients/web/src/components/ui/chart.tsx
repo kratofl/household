@@ -100,7 +100,7 @@ function ChartTooltipContent({
   if (!active || !payload?.length) return null
 
   return (
-    <div className="glass min-w-32 rounded-sm px-3 py-2 text-footnote text-label">
+    <div className="floating min-w-32 rounded-md px-3 py-2 text-footnote text-label shadow-(--shadow-e3)">
       {label ? <div className="mb-1 font-medium">{label}</div> : null}
       <div className="space-y-1">
         {payload.map((item) => {

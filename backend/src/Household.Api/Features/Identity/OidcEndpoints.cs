@@ -12,7 +12,7 @@ namespace Household.Api.Features.Identity;
 ///
 /// A provider account reaches a Household account in one of two ways: a signed-in user links it
 /// (start with <c>link: true</c>), or an unknown provider user signs in and is registered as
-/// pending for an admin to approve, like a password registration.
+/// pending for an admin to approve.
 /// </summary>
 public static class OidcEndpoints
 {
@@ -43,13 +43,13 @@ public static class OidcEndpoints
         if (!settings.Enabled) return NotConfigured();
         string redirectUri = request.RedirectUri ?? "";
         if (!Uri.TryCreate(redirectUri, UriKind.Absolute, out Uri? redirect) || redirect.Scheme is not ("http" or "https"))
-            return HttpResults.Problem(422, "Validation failed", "redirectUri must be an absolute http(s) URL");
+            return HttpResults.Problem(422, "Validation failed", "redirectUri must be an absolute http(s) URL", "invalid_redirect");
 
         Guid? linkUserId = null;
         if (request.Link)
         {
             CurrentUser? current = await identity.CurrentUserAsync(context, cancellationToken);
-            if (current is null) return HttpResults.Problem(401, "Unauthorized", "Sign in before linking an account");
+            if (current is null) return HttpResults.Problem(401, "Unauthorized", "Sign in before linking an account", "sign_in_required");
             linkUserId = current.Id;
         }
 
@@ -119,14 +119,14 @@ public static class OidcEndpoints
         {
             return Unavailable(settings);
         }
-        if (person is null) return HttpResults.Problem(401, "Login failed", $"{settings.Name} did not confirm the login");
+        if (person is null) return HttpResults.Problem(401, "Login failed", $"{settings.Name} did not confirm the login", "provider_login_failed");
 
         User? owner = await database.Users.SingleOrDefaultAsync(
             x => x.OidcIssuer == person.Issuer && x.OidcSubject == person.Subject, cancellationToken);
         if (login.LinkUserId is { } linkUserId)
             return await Link(linkUserId, owner, person, settings, database, cancellationToken);
         if (owner is null) return await RegisterPending(person, settings, database, cancellationToken);
-        if (owner.Status != UserStatuses.Active) return HttpResults.Problem(403, "User inactive", "User is not active");
+        if (owner.Status != UserStatuses.Active) return HttpResults.Problem(403, "User inactive", "User is not active", "user_inactive");
         return Results.Ok(await IdentitySessions.StartAsync(database, owner.Id, now, cancellationToken));
     }
 
@@ -139,7 +139,7 @@ public static class OidcEndpoints
         CancellationToken cancellationToken)
     {
         if (owner is not null && owner.Id != userId)
-            return HttpResults.Problem(409, "Already linked", $"This {settings.Name} account is already linked to another user");
+            return HttpResults.Problem(409, "Already linked", $"This {settings.Name} account is already linked to another user", "provider_already_linked");
         User user = await database.Users.SingleAsync(x => x.Id == userId, cancellationToken);
         user.OidcIssuer = person.Issuer;
         user.OidcSubject = person.Subject;
@@ -148,7 +148,7 @@ public static class OidcEndpoints
     }
 
     /// <summary>
-    /// An unknown provider user gets a pending account, like a password registration. It never takes
+    /// An unknown provider user gets a pending account. It never takes
     /// over an existing account with the same name or email: that one has to sign in and link.
     /// </summary>
     private static async Task<IResult> RegisterPending(
@@ -160,10 +160,10 @@ public static class OidcEndpoints
         string email = person.Email?.Trim().ToLowerInvariant() ?? "";
         string name = (person.PreferredUsername ?? email.Split('@')[0]).Trim().ToLowerInvariant();
         if (email.Length == 0 || name.Length == 0)
-            return HttpResults.Problem(422, "Validation failed", $"{settings.Name} did not share an email address");
+            return HttpResults.Problem(422, "Validation failed", $"{settings.Name} did not share an email address", "provider_email_missing");
 
         IResult taken = HttpResults.Problem(409, "Account exists",
-            $"An account with this name or email already exists. Sign in with your password and link {settings.Name} under Account.");
+            $"An account with this name or email already exists. Sign in with your password and link {settings.Name} under Account.", "provider_account_exists");
         if (await database.Users.AnyAsync(x => x.Name == name || x.Email == email, cancellationToken)) return taken;
         database.Users.Add(new User
         {
@@ -182,17 +182,17 @@ public static class OidcEndpoints
         {
             return taken;
         }
-        return HttpResults.Problem(403, "User inactive", "Your account was created and waits for an administrator to activate it");
+        return HttpResults.Problem(403, "User inactive", "Your account was created and waits for an administrator to activate it", "account_pending");
     }
 
     private static string NewSecret() => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
 
-    private static IResult NotConfigured() => HttpResults.Problem(404, "Not configured", "OIDC login is not configured");
+    private static IResult NotConfigured() => HttpResults.Problem(404, "Not configured", "OIDC login is not configured", "provider_not_configured");
 
-    private static IResult Expired() => HttpResults.Problem(400, "Login expired", "This login has expired or was already used. Start again.");
+    private static IResult Expired() => HttpResults.Problem(400, "Login expired", "This login has expired or was already used. Start again.", "login_expired");
 
     private static IResult Unavailable(OidcSettings settings) =>
-        HttpResults.Problem(502, "Provider unavailable", $"{settings.Name} could not be reached");
+        HttpResults.Problem(502, "Provider unavailable", $"{settings.Name} could not be reached", "provider_unavailable");
 
     private sealed record OidcOffer(bool Enabled, string? Name);
 

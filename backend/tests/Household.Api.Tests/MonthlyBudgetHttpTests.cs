@@ -116,6 +116,129 @@ public sealed class MonthlyBudgetHttpTests(LegacyParityFixture fixture) : IClass
         Assert.Equal(2, (await this.State(client)).Revision);
     }
 
+    [Fact]
+    public async Task Category_appearance_is_assigned_persisted_validated_and_user_owned()
+    {
+        using HttpClient client = this.Fixture.Client;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.TimelineAccessToken);
+        List<MonthlyCategoryRow> categories = [];
+        for (int index = 0; index < 5; index++)
+        {
+            using HttpResponseMessage created = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory($"Color {index}"));
+            categories.Add(await Read<MonthlyCategoryRow>(created));
+        }
+        Assert.Equal(5, categories.Select(category => category.Color).Distinct().Count());
+        MonthlyCategoryRow category = categories[0];
+        using HttpResponseMessage updated = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}",
+            new SaveMonthlyCategory("Groceries", Color: "purple", Icon: "cart"));
+        Assert.Equal("cart", (await Read<MonthlyCategoryRow>(updated)).Icon);
+        // Older clients omit appearance during rename/archive; their requests must preserve it.
+        using HttpResponseMessage archived = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Food", true));
+        Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
+        MonthlyCategoryRow saved = Assert.Single((await this.State(client)).Categories, row => row.Id == category.Id);
+        Assert.Equal("purple", saved.Color);
+        Assert.Equal("cart", saved.Icon);
+        Assert.True(saved.Archived);
+        using HttpResponseMessage restored = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Food"));
+        Assert.False((await Read<MonthlyCategoryRow>(restored)).Archived);
+        using HttpResponseMessage invalid = await client.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Food", Color: "invalid"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalid.StatusCode);
+        using HttpResponseMessage invalidIcon = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory("Bad icon", Icon: "invalid"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, invalidIcon.StatusCode);
+        using HttpClient other = this.Fixture.Client;
+        other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.LedgerAccessToken);
+        using HttpResponseMessage foreign = await other.PatchAsJsonAsync($"/api/v1/budget/monthly/categories/{category.Id}", new SaveMonthlyCategory("Foreign", Color: "blue"));
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+    }
+
+    [Fact]
+    public async Task History_lists_the_last_six_periods_oldest_first_as_they_closed()
+    {
+        using HttpClient client = this.Fixture.Client;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.IncomeAccessToken);
+        using HttpResponseMessage groceriesResponse = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory("Lebensmittel"));
+        MonthlyCategoryRow groceries = await Read<MonthlyCategoryRow>(groceriesResponse);
+        using HttpResponseMessage leisureResponse = await client.PostAsJsonAsync("/api/v1/budget/monthly/categories", new SaveMonthlyCategory("Freizeit"));
+        MonthlyCategoryRow leisure = await Read<MonthlyCategoryRow>(leisureResponse);
+        // 3000 income - 500 groceries reserve leaves 2500 fun per period.
+        MonthlyPlan plan = new(300000, 0, 0, [], [new(groceries.Id, 50000)]);
+        this.Fixture.Clock.UtcNow = new DateTimeOffset(2026, 1, 15, 12, 0, 0, TimeSpan.Zero);
+        try
+        {
+            using HttpResponseMessage setup = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan", new SaveMonthlyPlan(0, plan, 0, "Europe/Berlin"));
+            Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
+        }
+        finally { this.Fixture.Clock.UtcNow = LegacyParityFixture.Now; }
+
+        (DateOnly Date, Guid Category, long Cents)[] expenses =
+        [
+            (new(2026, 1, 10), leisure.Id, 10000),
+            (new(2026, 2, 10), leisure.Id, 20000),
+            (new(2026, 3, 10), leisure.Id, 30000),
+            // April overspends fun and empties the reserve, so May starts 100 short.
+            (new(2026, 4, 10), leisure.Id, 260000),
+            (new(2026, 4, 12), groceries.Id, 50000),
+            (new(2026, 5, 5), leisure.Id, 5000),
+            (new(2026, 7, 10), leisure.Id, 12345),
+        ];
+        foreach ((DateOnly date, Guid category, long cents) in expenses)
+        {
+            using HttpResponseMessage added = await client.PostAsJsonAsync("/api/v1/budget/monthly/expenses",
+                new AddMonthlyExpense($"history-{date:yyyy-MM-dd}-{cents}", date, "Ausgabe", category, cents, null));
+            Assert.Equal(HttpStatusCode.OK, added.StatusCode);
+        }
+
+        MonthlyBudgetState current = await this.State(client);
+        MonthlyPeriodResult[] lastSix =
+            [
+                new MonthlyPeriodResult(new(2026, 2, 1), new(2026, 2, 28), 250000, 230000),
+                new MonthlyPeriodResult(new(2026, 3, 1), new(2026, 3, 31), 250000, 220000),
+                new MonthlyPeriodResult(new(2026, 4, 1), new(2026, 4, 30), 250000, -10000),
+                new MonthlyPeriodResult(new(2026, 5, 1), new(2026, 5, 31), 240000, 235000),
+                new MonthlyPeriodResult(new(2026, 6, 1), new(2026, 6, 30), 250000, 250000),
+                new MonthlyPeriodResult(new(2026, 7, 1), new(2026, 7, 31), 250000, 237655),
+            ];
+        Assert.Equal(lastSix, current.History);
+        Assert.Equal(237655, current.Summary?.FunRemainingCents);
+
+        // Looking back ends the history at the selected period, valued as of that date.
+        using HttpResponseMessage pastResponse = await client.GetAsync("/api/v1/budget/monthly/?date=2026-04-11");
+        MonthlyBudgetState past = await Read<MonthlyBudgetState>(pastResponse);
+        MonthlyPeriodResult[] untilApril =
+            [
+                new MonthlyPeriodResult(new(2026, 1, 1), new(2026, 1, 31), 250000, 240000),
+                new MonthlyPeriodResult(new(2026, 2, 1), new(2026, 2, 28), 250000, 230000),
+                new MonthlyPeriodResult(new(2026, 3, 1), new(2026, 3, 31), 250000, 220000),
+                new MonthlyPeriodResult(new(2026, 4, 1), new(2026, 4, 30), 250000, -10000),
+            ];
+        Assert.Equal(untilApril, past.History);
+    }
+
+    [Fact]
+    public async Task Subscriptions_name_a_merchant_and_a_description_but_only_merchants_the_user_can_see()
+    {
+        using HttpClient client = this.Fixture.Client;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.TimelineAccessToken);
+        using HttpResponseMessage cinemaResponse = await client.PostAsJsonAsync("/api/v1/budget/merchants", new SaveMerchant("Kinoabo Müller"));
+        MerchantView cinema = await Read<MerchantView>(cinemaResponse);
+        using HttpClient other = this.Fixture.Client;
+        other.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", LegacyParityFixture.LedgerAccessToken);
+        using HttpResponseMessage foreignResponse = await other.PostAsJsonAsync("/api/v1/budget/merchants", new SaveMerchant("Fremdes Abo"));
+        MerchantView foreign = await Read<MerchantView>(foreignResponse);
+
+        MonthlyCost streaming = new(Guid.NewGuid(), "Streaming", 1399, "monthly", null, null, cinema.Id, "Familienabo");
+        MonthlyPlan plan = new(300000, 0, 0, [streaming], []);
+        using HttpResponseMessage rejected = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan",
+            new SaveMonthlyPlan(0, plan with { Costs = [streaming with { MerchantId = foreign.Id }] }, 0, "Europe/Berlin"));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, rejected.StatusCode);
+
+        using HttpResponseMessage setup = await client.PutAsJsonAsync("/api/v1/budget/monthly/plan", new SaveMonthlyPlan(0, plan, 0, "Europe/Berlin"));
+        MonthlyBudgetState state = await Read<MonthlyBudgetState>(setup);
+        Assert.Equal(streaming, Assert.Single(state.CurrentPlan?.Costs ?? []));
+        MonthlyCostDue due = Assert.Single(state.Summary?.Costs ?? []);
+        Assert.Equal((cinema.Id, "Familienabo"), (due.MerchantId, due.Description));
+    }
+
     private async Task<MonthlyBudgetState> State(HttpClient client)
     {
         using HttpResponseMessage response = await client.GetAsync("/api/v1/budget/monthly/");

@@ -1,8 +1,9 @@
 "use client"
 
-// Label + control pair; injects a shared id into the child control.
+// A stacked field: the label above its control, as in sheets and forms. It gives the
+// control a shared id so the label names it.
 
-import { type ReactElement, type ReactNode, cloneElement, isValidElement, useId } from "react"
+import { type ReactElement, cloneElement, useId } from "react"
 import { Label } from "@/components/ui/label"
 
 export function Field({
@@ -10,13 +11,14 @@ export function Field({
   children,
 }: {
   label: string
-  children: ReactNode
+  /** One control that takes an `id`, e.g. an Input. */
+  children: ReactElement<{ id?: string }>
 }) {
   const id = useId()
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      {isValidElement(children) ? cloneElement(children as ReactElement<{ id?: string }>, { id }) : children}
+      {cloneElement(children, { id })}
     </div>
   )
 }

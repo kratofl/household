@@ -1,7 +1,3 @@
-// Icon and tint for a category tile. Categories carry no visual
-// metadata yet, so the glyph comes from keywords in the name and the tint
-// from the shared tile hash. Both are presentation only.
-
 import {
   IconBabyCarriage,
   IconBottle,
@@ -43,6 +39,16 @@ const glyphs: [RegExp, Glyph][] = [
   [/reise|urlaub|flug|hotel/i, IconPlane],
 ]
 
-export function categoryVisual(name: string): { icon: Glyph; tone: Tone } {
-  return { icon: glyphs.find(([pattern]) => pattern.test(name))?.[1] ?? IconTag, tone: tileTone(name) }
+export const categoryColors = ["brand", "green", "blue", "purple", "yellow"] as const
+export const categoryIcons = {
+  tag: IconTag, cart: IconShoppingCart, home: IconHome, car: IconCar,
+  fuel: IconGasStation, food: IconToolsKitchen2, shirt: IconShirt, movie: IconMovie,
+  bottle: IconBottle, laptop: IconDeviceLaptop, gift: IconGift, heart: IconHeart,
+  baby: IconBabyCarriage, paw: IconPaw, plane: IconPlane,
+}
+
+export function categoryVisual(name: string, appearance?: { color: string; icon: string }): { icon: Glyph; tone: Tone } {
+  const icon = Object.entries(categoryIcons).find(([key]) => key === appearance?.icon)?.[1]
+  const tone = categoryColors.find(color => color === appearance?.color)
+  return { icon: icon ?? glyphs.find(([pattern]) => pattern.test(name))?.[1] ?? IconTag, tone: tone ?? tileTone(name) }
 }
